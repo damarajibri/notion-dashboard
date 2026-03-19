@@ -75,9 +75,16 @@ tr:hover td{background:#1a2a4e}
 <div id="tab-tasks" class="tab-content">
   <div class="card full" style="max-width:1200px;margin:0 auto 25px">
     <h2>📈 Daily Task Resolve Progress</h2>
-    <div style="text-align:center;margin-bottom:15px">
+    <div style="text-align:center;margin-bottom:15px;display:flex;justify-content:center;gap:10px;align-items:center;flex-wrap:wrap">
       <select id="dailyFilter" onchange="renderDailyResolve(DATA)" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
         <option value="all">👥 All Members</option>
+      </select>
+      <select id="dailyRange" onchange="renderDailyResolve(DATA)" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="7">Last 7 days</option>
+        <option value="14">Last 14 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="all">All time</option>
       </select>
     </div>
     <canvas id="dailyResolveChart"></canvas>
@@ -222,10 +229,18 @@ function renderDailyResolve(d) {
   if(charts.dailyResolve) charts.dailyResolve.destroy();
   const sel = document.getElementById('dailyFilter');
   const filter = sel.value;
+  const range = document.getElementById('dailyRange').value;
 
   // Populate dropdown once
   if(sel.options.length <= 1) {
     d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o); });
+  }
+
+  // Date range
+  let minDate = '0000-00-00';
+  if(range !== 'all') {
+    const dt = new Date(); dt.setDate(dt.getDate() - parseInt(range));
+    minDate = dt.toISOString().slice(0,10);
   }
 
   // Filter tasks by assignee
@@ -237,7 +252,7 @@ function renderDailyResolve(d) {
     if(t.done_date) dailyDone[t.done_date] = (dailyDone[t.done_date]||0) + 1;
     if(t.created) dailyCreated[t.created] = (dailyCreated[t.created]||0) + 1;
   });
-  const allDays = [...new Set([...Object.keys(dailyDone), ...Object.keys(dailyCreated)])].sort();
+  const allDays = [...new Set([...Object.keys(dailyDone), ...Object.keys(dailyCreated)])].sort().filter(day => day >= minDate);
   let cumDone = 0;
   const days = [], active = [], cumDoneArr = [];
   allDays.forEach(day => {
