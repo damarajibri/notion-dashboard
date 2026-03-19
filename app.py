@@ -8,6 +8,7 @@ TOKEN = os.environ.get('NOTION_TOKEN', '')
 TASKS_DB = '2c3a31d192f481d68c65d0f289ebd111'
 PROJECTS_DB = '2c3a31d192f48104ba5fecc8ee9c66d1'
 PERSONEL_DB = '2c4a31d192f480aab819f688af756ed1'
+SPK_DB = '2c5a31d192f4803a86e4fb50b19df8dc'
 HEADERS = {
     'Authorization': f'Bearer {TOKEN}',
     'Notion-Version': '2022-06-28',
@@ -63,6 +64,38 @@ def extract_task(r, personel):
         'progress': int(progress*100) if progress is not None else None
     }
 
+def extract_spk(r, personel):
+    props = r['properties']
+    no_spk = props.get('No SPK',{}).get('title',[])
+    no_spk = no_spk[0]['plain_text'] if no_spk else ''
+    proj = props.get('Project Name',{}).get('rich_text',[])
+    proj_name = proj[0]['plain_text'] if proj else ''
+    vendor = props.get('Vendor',{}).get('select',{})
+    vendor_name = vendor.get('name','') if vendor else '-'
+    status = props.get('Status',{}).get('select',{})
+    status_name = status.get('name','') if status else '-'
+    jt = props.get('Jatuh Tempo',{}).get('date',{})
+    jatuh_tempo = jt.get('start','')[:10] if jt and jt.get('start') else ''
+    sisa = props.get('Sisa Hari',{}).get('formula',{})
+    sisa_hari = sisa.get('number') if sisa else None
+    nilai = props.get('Nilai Kontrak SPK',{}).get('number')
+    notes = props.get('Notes',{}).get('rich_text',[])
+    notes_text = notes[0]['plain_text'] if notes else ''
+    uid = props.get('id',{}).get('unique_id',{})
+    spk_id = f"{uid.get('prefix','')}-{uid.get('number','')}" if uid else ''
+    pic = []
+    pic_rollup = props.get('PIC Perpanjangan',{}).get('rollup',{}).get('array',[])
+    for item in pic_rollup:
+        if item.get('type') == 'relation':
+            for rel in item.get('relation',[]):
+                name = personel.get(rel['id'],'?')
+                if name not in pic: pic.append(name)
+    return {
+        'spk_id': spk_id, 'no_spk': no_spk, 'project': proj_name, 'vendor': vendor_name,
+        'status': status_name, 'jatuh_tempo': jatuh_tempo, 'sisa_hari': sisa_hari,
+        'nilai': nilai, 'notes': notes_text, 'pic': pic
+    }
+
 def extract_project(r, personel):
     props = r['properties']
     title = ''
@@ -107,8 +140,10 @@ def api_data():
     personel = get_personel()
     raw_tasks = query_all(TASKS_DB)
     raw_projects = query_all(PROJECTS_DB)
+    raw_spk = query_all(SPK_DB)
     tasks = [extract_task(r, personel) for r in raw_tasks]
     projects = [extract_project(r, personel) for r in raw_projects]
+    spk = [extract_spk(r, personel) for r in raw_spk]
 
     # Task stats
     task_status = defaultdict(int)
@@ -167,7 +202,8 @@ def api_data():
         'overdue': overdue, 'on_track': on_track, 'no_due': no_due,
         'proj_status': dict(proj_status),
         'proj_person': {k: dict(v) for k,v in proj_person.items()},
-        'daily': daily
+        'daily': daily,
+        'spk': spk
     })
 
 if __name__ == '__main__':

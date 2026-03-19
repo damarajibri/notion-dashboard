@@ -38,9 +38,9 @@ tr:hover td{background:var(--row-hover)}
 .b-ip{background:#0f3460;color:#4cc9f0}.b-ns{background:#533483;color:#e7b416}.b-done{background:#1a4a2e;color:#2eb872}.b-pend{background:#4a3a1e;color:#e7b416}.b-high{background:#e94560}.b-med{background:#e7b416;color:#000}
 .footer{text-align:center;margin-top:30px;color:var(--text2);font-size:12px}
 .loading{text-align:center;padding:60px;color:var(--text2);font-size:16px}
-#search,#searchProj{background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;width:400px;margin:0 auto 20px;display:block;font-size:14px;outline:none;transition:border .2s,box-shadow .2s}
-#search:focus,#searchProj:focus{border-color:var(--accent);box-shadow:0 0 8px rgba(233,69,96,.3)}
-#search::placeholder,#searchProj::placeholder{color:var(--text2)}
+#search,#searchProj,#searchSpk{background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;width:400px;margin:0 auto 20px;display:block;font-size:14px;outline:none;transition:border .2s,box-shadow .2s}
+#search:focus,#searchProj:focus,#searchSpk:focus{border-color:var(--accent);box-shadow:0 0 8px rgba(233,69,96,.3)}
+#search::placeholder,#searchProj::placeholder,#searchSpk::placeholder{color:var(--text2)}
 .period-toggle{display:flex;justify-content:center;gap:10px;margin-bottom:20px}
 .ptab{padding:8px 20px;border-radius:8px;cursor:pointer;background:var(--card);color:var(--text2);border:1px solid var(--card-border);font-size:13px}
 .ptab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -64,6 +64,7 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
   <div class="tab" onclick="switchTab('projects')">🏗️ Projects</div>
   <div class="tab" onclick="switchTab('people')">👤 People</div>
   <div class="tab" onclick="switchTab('achievements')">🏆 Achievements</div>
+  <div class="tab" onclick="switchTab('spk')">📄 SPK</div>
 </div>
 
 <!-- OVERVIEW TAB -->
@@ -188,6 +189,32 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
   </div>
 </div>
 
+<!-- SPK TAB -->
+<div id="tab-spk" class="tab-content">
+  <input type="text" id="searchSpk" placeholder="🔍 Search SPK..." oninput="applySpkFilters()">
+  <div class="kpi-row" id="kpi-spk"></div>
+  <div class="card full">
+    <h2>📄 All SPK</h2>
+    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:15px;flex-wrap:wrap">
+      <select id="filterSpkStatus" onchange="applySpkFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="all">📊 All Status</option>
+      </select>
+      <select id="filterSpkVendor" onchange="applySpkFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="all">🏢 All Vendor</option>
+      </select>
+      <select id="filterSpkDue" onchange="applySpkFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="all">📅 All Jatuh Tempo</option>
+        <option value="7">≤ 1 Minggu</option>
+        <option value="14">≤ 2 Minggu</option>
+        <option value="30">≤ 1 Bulan</option>
+        <option value="90">≤ 3 Bulan</option>
+        <option value="overdue">Sudah Lewat</option>
+      </select>
+    </div>
+    <div class="scroll-table"><table id="spkTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
 <div class="footer">Notion Dashboard — Auto-refresh available</div>
 
 <script>
@@ -237,7 +264,7 @@ function makeSortable(table) {
 }
 
 function statusBadge(s) {
-  const cls = {'In Progress':'b-ip','Not Started':'b-ns','Done':'b-done','Pending':'b-pend','Planning':'b-ns','Archived':'gray'};
+  const cls = {'In Progress':'b-ip','Not Started':'b-ns','Done':'b-done','Pending':'b-pend','Planning':'b-ns','Archived':'gray','Active':'b-ip','Terminated':'gray','Expired':'b-high'};
   return '<span class="badge '+(cls[s]||'')+'">'+(s||'-')+'</span>';
 }
 
@@ -551,11 +578,71 @@ function renderAchievements(d) {
   makeSortable(table);
 }
 
+function renderSpk(d) {
+  const ssel = document.getElementById('filterSpkStatus');
+  const vsel = document.getElementById('filterSpkVendor');
+  if(ssel.options.length <= 1) {
+    const statuses = [...new Set(d.spk.map(s=>s.status).filter(Boolean))].sort();
+    statuses.forEach(s => { const o=document.createElement('option'); o.value=s; o.textContent=s; ssel.appendChild(o); });
+    const vendors = [...new Set(d.spk.map(s=>s.vendor).filter(Boolean))].sort();
+    vendors.forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; vsel.appendChild(o); });
+  }
+  // KPI
+  const total = d.spk.length;
+  const active = d.spk.filter(s=>s.status==='Active').length;
+  const expired = d.spk.filter(s=>s.sisa_hari!==null && s.sisa_hari<0).length;
+  const soon = d.spk.filter(s=>s.sisa_hari!==null && s.sisa_hari>=0 && s.sisa_hari<=30).length;
+  document.getElementById('kpi-spk').innerHTML = [
+    ['blue',total,'Total SPK'],['green',active,'Active'],['red',expired,'Expired'],['yellow',soon,'≤ 30 Hari']
+  ].map(([c,n,l])=>'<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
+  applySpkFilters();
+}
+
+function fmtRp(n) {
+  if(n===null||n===undefined) return '-';
+  return 'Rp '+n.toLocaleString('id-ID');
+}
+
+function sisaBadge(n) {
+  if(n===null||n===undefined) return '-';
+  const cls = n<0?'red':n<=30?'yellow':'green';
+  return '<span class="'+cls+'">'+n+' hari</span>';
+}
+
+function applySpkFilters() {
+  if(!DATA) return;
+  const query = document.getElementById('searchSpk').value.toLowerCase();
+  const status = document.getElementById('filterSpkStatus').value;
+  const vendor = document.getElementById('filterSpkVendor').value;
+  const due = document.getElementById('filterSpkDue').value;
+  const today = new Date().toISOString().slice(0,10);
+
+  let spk = [...DATA.spk];
+  if(status !== 'all') spk = spk.filter(s => s.status === status);
+  if(vendor !== 'all') spk = spk.filter(s => s.vendor === vendor);
+  if(due === 'overdue') spk = spk.filter(s => s.jatuh_tempo && s.jatuh_tempo < today);
+  else if(due !== 'all') {
+    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
+    const max = dt.toISOString().slice(0,10);
+    spk = spk.filter(s => s.jatuh_tempo && s.jatuh_tempo <= max && s.jatuh_tempo >= today);
+  }
+  if(query) spk = spk.filter(s => (s.no_spk+s.project+s.vendor+s.notes).toLowerCase().includes(query));
+
+  spk.sort((a,b) => (a.sisa_hari??999) - (b.sisa_hari??999));
+
+  const table = document.getElementById('spkTable');
+  table.querySelector('thead tr').innerHTML = ['#','ID','No SPK','Project','Vendor','Status','Jatuh Tempo','Sisa Hari','Nilai Kontrak','PIC','Notes'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('tbody').innerHTML = spk.map((s,i) =>
+    '<tr><td>'+(i+1)+'</td><td>'+s.spk_id+'</td><td>'+s.no_spk+'</td><td>'+s.project+'</td><td>'+s.vendor+'</td><td>'+statusBadge(s.status)+'</td><td>'+(s.jatuh_tempo||'-')+'</td><td>'+sisaBadge(s.sisa_hari)+'</td><td>'+fmtRp(s.nilai)+'</td><td>'+(s.pic.join(', ')||'-')+'</td><td>'+s.notes+'</td></tr>'
+  ).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--text2);padding:30px">No SPK match filters</td></tr>';
+  makeSortable(table);
+}
+
 function loadData() {
   document.getElementById('lastUpdate').textContent = 'Loading...';
   fetch('/api/data').then(r=>r.json()).then(d=>{
     DATA = d;
-    renderKPI(d); renderCharts(d); renderDailyResolve(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d);
+    renderKPI(d); renderCharts(d); renderDailyResolve(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d); renderSpk(d);
     document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date().toLocaleTimeString();
   }).catch(e=>{
     document.getElementById('lastUpdate').textContent = 'Error: '+e.message;
