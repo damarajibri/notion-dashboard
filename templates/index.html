@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>EXO Dashboard - Realtime</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#1a1a2e;color:#eee;margin:0;padding:20px}
+h1{text-align:center;color:#e94560;margin-bottom:5px}
+.subtitle{text-align:center;color:#a8a8b3;margin-bottom:10px}
+.refresh-bar{text-align:center;margin-bottom:20px}
+.refresh-bar button{background:#e94560;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px}
+.refresh-bar button:hover{background:#c73650}
+.refresh-bar span{color:#a8a8b3;font-size:12px;margin-left:10px}
+.tabs{display:flex;justify-content:center;gap:10px;margin-bottom:25px}
+.tab{padding:8px 20px;border-radius:8px;cursor:pointer;background:#16213e;color:#a8a8b3;border:1px solid #0f3460;font-size:13px}
+.tab.active{background:#e94560;color:#fff;border-color:#e94560}
+.tab-content{display:none}.tab-content.active{display:block}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:25px;max-width:1200px;margin:0 auto}
+.full{grid-column:1/-1}
+.card{background:#16213e;border-radius:16px;padding:25px;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.card h2{color:#e94560;text-align:center;margin:0 0 15px;font-size:15px}
+.kpi-row{display:flex;justify-content:center;gap:20px;margin-bottom:25px;flex-wrap:wrap}
+.kpi{background:#16213e;border-radius:16px;padding:15px 25px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.3);min-width:90px}
+.kpi .num{font-size:28px;font-weight:bold}.kpi .label{color:#a8a8b3;font-size:11px;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#0f3460;color:#eee;padding:8px 6px;text-align:left;position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap}
+th:hover{background:#1a4a80}
+td{padding:7px 6px;border-bottom:1px solid #0f3460}
+tr:hover td{background:#1a2a4e}
+.scroll-table{max-height:500px;overflow-y:auto}
+.prog-bar{background:#0f3460;border-radius:8px;height:16px;overflow:hidden;min-width:60px}
+.prog-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold}
+.green{color:#2eb872}.red{color:#e94560}.yellow{color:#e7b416}.blue{color:#4cc9f0}.gray{color:#a8a8b3}
+.badge{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px}
+.b-ip{background:#0f3460;color:#4cc9f0}.b-ns{background:#533483;color:#e7b416}.b-done{background:#1a4a2e;color:#2eb872}.b-pend{background:#4a3a1e;color:#e7b416}.b-high{background:#e94560}.b-med{background:#e7b416;color:#000}
+.footer{text-align:center;margin-top:30px;color:#555;font-size:12px}
+.loading{text-align:center;padding:60px;color:#a8a8b3;font-size:16px}
+#search,#searchProj{background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;width:400px;margin:0 auto 20px;display:block;font-size:14px;outline:none;transition:border .2s,box-shadow .2s}
+#search:focus,#searchProj:focus{border-color:#e94560;box-shadow:0 0 8px rgba(233,69,96,.3)}
+#search::placeholder,#searchProj::placeholder{color:#6a6a8a}
+.period-toggle{display:flex;justify-content:center;gap:10px;margin-bottom:20px}
+.ptab{padding:8px 20px;border-radius:8px;cursor:pointer;background:#16213e;color:#a8a8b3;border:1px solid #0f3460;font-size:13px}
+.ptab.active{background:#e94560;color:#fff;border-color:#e94560}
+.ptab:hover{background:#1a4a80}
+</style>
+</head><body>
+<h1>🌕 EXO Dashboard — Realtime</h1>
+<p class="subtitle">Projects & Tasks EXO | Data from Notion API</p>
+<div class="refresh-bar">
+  <button onclick="loadData()">🔄 Refresh Data</button>
+  <span id="lastUpdate">Loading...</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('overview')">📊 Overview</div>
+  <div class="tab" onclick="switchTab('tasks')">📋 Tasks</div>
+  <div class="tab" onclick="switchTab('projects')">🏗️ Projects</div>
+  <div class="tab" onclick="switchTab('people')">👤 People</div>
+  <div class="tab" onclick="switchTab('achievements')">🏆 Achievements</div>
+</div>
+
+<!-- OVERVIEW TAB -->
+<div id="tab-overview" class="tab-content active">
+  <div class="kpi-row" id="kpi-overview"></div>
+  <div class="grid">
+    <div class="card"><h2>📈 Monthly: Created vs Completed vs Backlog</h2><canvas id="monthlyChart"></canvas></div>
+    <div class="card"><h2>⏰ Due Date Health</h2><canvas id="overdueChart"></canvas></div>
+    <div class="card"><h2>📊 Task Status</h2><canvas id="taskStatusChart"></canvas></div>
+    <div class="card"><h2>🏗️ Project Status</h2><canvas id="projStatusChart"></canvas></div>
+  </div>
+</div>
+
+<!-- TASKS TAB -->
+<div id="tab-tasks" class="tab-content">
+  <input type="text" id="search" placeholder="🔍 Search tasks..." oninput="filterTable('tasksTable',this.value)">
+  <div class="card full">
+    <h2>📋 All Active Tasks</h2>
+    <div class="scroll-table"><table id="tasksTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<!-- PROJECTS TAB -->
+<div id="tab-projects" class="tab-content">
+  <input type="text" id="searchProj" placeholder="🔍 Search projects..." oninput="filterTable('projTable',this.value)">
+  <div class="card full">
+    <h2>🏗️ All Projects</h2>
+    <div class="scroll-table"><table id="projTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<!-- PEOPLE TAB -->
+<div id="tab-people" class="tab-content">
+  <div class="grid">
+    <div class="card"><h2>🏆 Task Completion Rate</h2><canvas id="personRateChart"></canvas></div>
+    <div class="card"><h2>📦 Tasks Done vs Open</h2><canvas id="personDoneChart"></canvas></div>
+    <div class="card full"><h2>🏗️ Projects per Person</h2><canvas id="personProjChart"></canvas></div>
+  </div>
+</div>
+
+<!-- ACHIEVEMENTS TAB -->
+<div id="tab-achievements" class="tab-content">
+  <div class="period-toggle">
+    <button class="ptab active" onclick="switchPeriod('daily',this)">📅 Daily</button>
+    <button class="ptab" onclick="switchPeriod('weekly',this)">📆 Weekly</button>
+    <button class="ptab" onclick="switchPeriod('monthly',this)">🗓️ Monthly</button>
+  </div>
+  <div class="kpi-row" id="kpi-achieve"></div>
+  <div class="grid">
+    <div class="card full"><h2 id="achieveChartTitle">🏆 Achievements per Person</h2><canvas id="achieveChart"></canvas></div>
+    <div class="card full">
+      <h2 id="achieveTableTitle">📋 Achievement Details</h2>
+      <div class="scroll-table"><table id="achieveTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">Notion Dashboard — Auto-refresh available</div>
+
+<script>
+let DATA = null;
+const charts = {};
+
+function switchTab(name) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function filterTable(tableId, query) {
+  const rows = document.querySelectorAll('#'+tableId+' tbody tr');
+  query = query.toLowerCase();
+  rows.forEach(r => { r.style.display = r.textContent.toLowerCase().includes(query) ? '' : 'none'; });
+}
+
+function makeSortable(table) {
+  table.querySelectorAll('th').forEach((th, idx) => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => {
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const asc = th.dataset.sort !== 'asc'; th.dataset.sort = asc ? 'asc' : 'desc';
+      table.querySelectorAll('th').forEach(h => { if(h!==th) delete h.dataset.sort; });
+      rows.sort((a,b) => {
+        let av = (a.children[idx]||{}).textContent||'', bv = (b.children[idx]||{}).textContent||'';
+        let an = parseFloat(av.replace(/[^0-9.\-]/g,'')), bn = parseFloat(bv.replace(/[^0-9.\-]/g,''));
+        if(!isNaN(an)&&!isNaN(bn)) return asc ? an-bn : bn-an;
+        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
+      rows.forEach(r => tbody.appendChild(r));
+      th.textContent = th.textContent.replace(/ [▲▼]/,'') + (asc?' ▲':' ▼');
+    });
+  });
+}
+
+function statusBadge(s) {
+  const cls = {'In Progress':'b-ip','Not Started':'b-ns','Done':'b-done','Pending':'b-pend','Planning':'b-ns','Archived':'gray'};
+  return '<span class="badge '+(cls[s]||'')+'">'+(s||'-')+'</span>';
+}
+
+function progBar(val) {
+  if(val===null||val===undefined) return '<div class="prog-bar"><div class="prog-fill" style="width:100%;background:#555">-</div></div>';
+  const color = val>=100?'#2eb872':val>=50?'#e7b416':'#e94560';
+  return '<div class="prog-bar"><div class="prog-fill" style="width:'+Math.max(val,5)+'%;background:'+color+'">'+val+'%</div></div>';
+}
+
+function renderKPI(d) {
+  const total = d.tasks.length, done = d.task_status['Done']||0, open = total-done;
+  const tp = d.projects.length, pd = d.proj_status['Done']||0;
+  document.getElementById('kpi-overview').innerHTML = [
+    ['blue',total,'Total Tasks'],['green',done,'Tasks Done'],['yellow',open,'Tasks Open'],
+    ['red',d.overdue,'Overdue'],['gray',d.no_due,'No Due Date'],
+    ['blue',tp,'Total Projects'],['green',pd,'Projects Done']
+  ].map(([c,n,l])=>'<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
+}
+
+function renderCharts(d) {
+  Object.values(charts).forEach(c=>c.destroy());
+  const ml = d.monthly.map(m=>m.month), mc = d.monthly.map(m=>m.created), md = d.monthly.map(m=>m.done), mb = d.monthly.map(m=>m.backlog);
+  charts.monthly = new Chart(document.getElementById('monthlyChart'),{type:'bar',data:{labels:ml,datasets:[
+    {label:'Created',data:mc,backgroundColor:'#4cc9f0',borderRadius:6},
+    {label:'Completed',data:md,backgroundColor:'#2eb872',borderRadius:6},
+    {label:'Backlog',data:mb,type:'line',borderColor:'#e7b416',tension:.3,fill:false,pointRadius:5}
+  ]},options:{scales:{y:{beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}},x:{ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}}},plugins:{legend:{labels:{color:'#eee'}}}}});
+
+  charts.overdue = new Chart(document.getElementById('overdueChart'),{type:'doughnut',data:{labels:['Overdue ('+d.overdue+')','On Track ('+d.on_track+')','No Due ('+d.no_due+')'],datasets:[{data:[d.overdue,d.on_track,d.no_due],backgroundColor:['#e94560','#2eb872','#a8a8b3'],borderColor:'#16213e',borderWidth:3}]},options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:12}}}}});
+
+  const ts = d.task_status;
+  charts.taskStatus = new Chart(document.getElementById('taskStatusChart'),{type:'doughnut',data:{labels:Object.keys(ts),datasets:[{data:Object.values(ts),backgroundColor:['#2eb872','#e7b416','#4cc9f0','#e94560','#555'],borderColor:'#16213e',borderWidth:3}]},options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:12}}}}});
+
+  const ps = d.proj_status;
+  charts.projStatus = new Chart(document.getElementById('projStatusChart'),{type:'doughnut',data:{labels:Object.keys(ps),datasets:[{data:Object.values(ps),backgroundColor:['#e7b416','#4cc9f0','#2eb872'],borderColor:'#16213e',borderWidth:3}]},options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:12}}}}});
+
+  // People charts
+  const persons = Object.keys(d.person_total).sort((a,b)=>(d.person_total[b]||0)-(d.person_total[a]||0));
+  const pDone = persons.map(p=>d.person_done[p]||0), pTotal = persons.map(p=>d.person_total[p]||0);
+  const pRate = pDone.map((v,i)=>pTotal[i]?Math.round(v/pTotal[i]*100):0);
+
+  charts.personRate = new Chart(document.getElementById('personRateChart'),{type:'bar',data:{labels:persons,datasets:[{label:'%',data:pRate,backgroundColor:pRate.map(r=>r>=60?'#2eb872':r>=30?'#e7b416':'#e94560'),borderRadius:6}]},options:{indexAxis:'y',scales:{x:{beginAtZero:true,max:100,ticks:{color:'#a8a8b3',callback:v=>v+'%'},grid:{color:'#0f3460'}},y:{ticks:{color:'#eee'},grid:{display:false}}},plugins:{legend:{display:false}}}});
+
+  charts.personDone = new Chart(document.getElementById('personDoneChart'),{type:'bar',data:{labels:persons,datasets:[{label:'Done',data:pDone,backgroundColor:'#2eb872',borderRadius:6},{label:'Open',data:pTotal.map((t,i)=>t-pDone[i]),backgroundColor:'#0f3460',borderRadius:6}]},options:{indexAxis:'y',scales:{x:{stacked:true,beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}},y:{stacked:true,ticks:{color:'#eee'},grid:{display:false}}},plugins:{legend:{labels:{color:'#eee'}}}}});
+
+  const pp = d.proj_person, ppPersons = Object.keys(pp).sort((a,b)=>{const sa=Object.values(pp[a]).reduce((x,y)=>x+y,0),sb=Object.values(pp[b]).reduce((x,y)=>x+y,0);return sb-sa;});
+  charts.personProj = new Chart(document.getElementById('personProjChart'),{type:'bar',data:{labels:ppPersons,datasets:[
+    {label:'In Progress',data:ppPersons.map(p=>(pp[p]||{})['In Progress']||0),backgroundColor:'#4cc9f0',borderRadius:4},
+    {label:'Planning',data:ppPersons.map(p=>(pp[p]||{})['Planning']||0),backgroundColor:'#e7b416',borderRadius:4},
+    {label:'Done',data:ppPersons.map(p=>(pp[p]||{})['Done']||0),backgroundColor:'#2eb872',borderRadius:4}
+  ]},options:{scales:{x:{stacked:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}},y:{stacked:true,beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}}},plugins:{legend:{labels:{color:'#eee'}}}}});
+}
+
+function renderTasksTable(d) {
+  const table = document.getElementById('tasksTable');
+  const thead = table.querySelector('thead tr');
+  thead.innerHTML = ['#','Task','Status','Assignee','Due','Progress','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
+  const tbody = table.querySelector('tbody');
+  const active = d.tasks.filter(t=>t.status!=='Done').sort((a,b)=>{const o={'In Progress':0,'Not Started':1,'Pending':2,'Archived':3};return (o[a.status]||5)-(o[b.status]||5);});
+  tbody.innerHTML = active.map((t,i)=>'<tr><td>'+(i+1)+'</td><td>'+t.name+'</td><td>'+statusBadge(t.status)+'</td><td>'+(t.assignees.join(', ')||'-')+'</td><td>'+(t.due||'-')+'</td><td>'+progBar(t.progress)+'</td><td>'+t.edited+'</td></tr>').join('');
+  makeSortable(table);
+}
+
+function renderProjectsTable(d) {
+  const table = document.getElementById('projTable');
+  const thead = table.querySelector('thead tr');
+  thead.innerHTML = ['#','Project','Status','Assignee','Completion','Docs','Priority','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
+  const tbody = table.querySelector('tbody');
+  const sorted = d.projects.sort((a,b)=>{const o={'In Progress':0,'Planning':1,'Done':2};return (o[a.status]||5)-(o[b.status]||5);});
+  tbody.innerHTML = sorted.map((p,i)=>{
+    const pri = p.priority!=='-'?'<span class="badge '+(p.priority==='High'?'b-high':'b-med')+'">'+p.priority+'</span>':'-';
+    return '<tr><td>'+(i+1)+'</td><td>'+p.title+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.assignees.join(', ')||'-')+'</td><td>'+progBar(p.completion)+'</td><td>'+p.docs+'</td><td>'+pri+'</td><td>'+p.edited+'</td></tr>';
+  }).join('');
+  makeSortable(table);
+}
+
+let currentPeriod = 'daily';
+
+function switchPeriod(period, btn) {
+  currentPeriod = period;
+  document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if(DATA) renderAchievements(DATA);
+}
+
+function getWeek(dateStr) {
+  const d = new Date(dateStr);
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+  return d.getFullYear() + '-W' + String(week).padStart(2,'0');
+}
+
+function periodKey(dateStr, period) {
+  if(!dateStr) return null;
+  if(period === 'daily') return dateStr;
+  if(period === 'weekly') return getWeek(dateStr);
+  return dateStr.slice(0,7);
+}
+
+function periodLabel(period) {
+  return {daily:'Today',weekly:'This Week',monthly:'This Month'}[period];
+}
+
+function currentPeriodKey(period) {
+  const now = new Date();
+  const today = now.toISOString().slice(0,10);
+  if(period === 'daily') return today;
+  if(period === 'weekly') return getWeek(today);
+  return today.slice(0,7);
+}
+
+function renderAchievements(d) {
+  const period = currentPeriod;
+  const curKey = currentPeriodKey(period);
+
+  // Collect achievements: tasks done + projects status changes (using edited date as proxy)
+  const personAchieve = {}; // person -> {tasks_done:[], projects_active:[]}
+  const allItems = []; // flat list for table
+
+  d.tasks.forEach(t => {
+    if(t.status !== 'Done' || !t.done_date) return;
+    const pk = periodKey(t.done_date, period);
+    t.assignees.forEach(a => {
+      if(!personAchieve[a]) personAchieve[a] = {};
+      if(!personAchieve[a][pk]) personAchieve[a][pk] = {tasks:0, projects:0};
+      personAchieve[a][pk].tasks++;
+    });
+    allItems.push({type:'Task', name:t.name, person:t.assignees.join(', ')||'-', date:t.done_date, period_key:pk, status:'Done'});
+  });
+
+  d.projects.forEach(p => {
+    if(p.status !== 'Done') return;
+    const pk = periodKey(p.edited, period);
+    p.assignees.forEach(a => {
+      if(!personAchieve[a]) personAchieve[a] = {};
+      if(!personAchieve[a][pk]) personAchieve[a][pk] = {tasks:0, projects:0};
+      personAchieve[a][pk].projects++;
+    });
+    allItems.push({type:'Project', name:p.title, person:p.assignees.join(', ')||'-', date:p.edited, period_key:pk, status:'Done'});
+  });
+
+  // Also count tasks with progress updates (edited in current period, status In Progress)
+  d.tasks.forEach(t => {
+    if(t.status === 'Done') return;
+    const pk = periodKey(t.edited, period);
+    if(pk === curKey) {
+      allItems.push({type:'Task (Updated)', name:t.name, person:t.assignees.join(', ')||'-', date:t.edited, period_key:pk, status:t.status});
+    }
+  });
+
+  d.projects.forEach(p => {
+    if(p.status === 'Done') return;
+    const pk = periodKey(p.edited, period);
+    if(pk === curKey) {
+      allItems.push({type:'Project (Updated)', name:p.title, person:p.assignees.join(', ')||'-', date:p.edited, period_key:pk, status:p.status});
+    }
+  });
+
+  // KPI for current period
+  const curItems = allItems.filter(i => i.period_key === curKey);
+  const tasksDone = curItems.filter(i => i.type === 'Task').length;
+  const projDone = curItems.filter(i => i.type === 'Project').length;
+  const tasksUpdated = curItems.filter(i => i.type === 'Task (Updated)').length;
+  const projUpdated = curItems.filter(i => i.type === 'Project (Updated)').length;
+
+  document.getElementById('kpi-achieve').innerHTML = [
+    ['green', tasksDone, 'Tasks Completed ' + periodLabel(period)],
+    ['blue', projDone, 'Projects Completed ' + periodLabel(period)],
+    ['yellow', tasksUpdated, 'Tasks Updated ' + periodLabel(period)],
+    ['yellow', projUpdated, 'Projects Updated ' + periodLabel(period)]
+  ].map(([c,n,l]) => '<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
+
+  // Chart: per person achievements in current period
+  if(charts.achieve) charts.achieve.destroy();
+  const persons = d.personel.sort();
+  const pTasks = persons.map(p => (personAchieve[p]||{})[curKey]?.tasks || 0);
+  const pProjs = persons.map(p => (personAchieve[p]||{})[curKey]?.projects || 0);
+
+  charts.achieve = new Chart(document.getElementById('achieveChart'), {
+    type: 'bar', data: { labels: persons, datasets: [
+      {label: 'Tasks Done', data: pTasks, backgroundColor: '#2eb872', borderRadius: 6},
+      {label: 'Projects Done', data: pProjs, backgroundColor: '#4cc9f0', borderRadius: 6}
+    ]}, options: { scales: {
+      x: {ticks:{color:'#a8a8b3'}, grid:{color:'#0f3460'}},
+      y: {beginAtZero:true, ticks:{color:'#a8a8b3',stepSize:1}, grid:{color:'#0f3460'}}
+    }, plugins: {legend:{labels:{color:'#eee'}}}}
+  });
+
+  document.getElementById('achieveChartTitle').textContent = '🏆 Achievements per Person — ' + curKey;
+
+  // Table: all items in current period
+  const table = document.getElementById('achieveTable');
+  table.querySelector('thead tr').innerHTML = ['#','Type','Name','Person','Date','Status'].map(h=>'<th>'+h+'</th>').join('');
+  const sorted = curItems.sort((a,b) => b.date.localeCompare(a.date));
+  table.querySelector('tbody').innerHTML = sorted.map((item,i) =>
+    '<tr><td>'+(i+1)+'</td><td>'+item.type+'</td><td>'+item.name+'</td><td>'+item.person+'</td><td>'+item.date+'</td><td>'+statusBadge(item.status)+'</td></tr>'
+  ).join('') || '<tr><td colspan="6" style="text-align:center;color:#a8a8b3;padding:30px">No achievements in this period</td></tr>';
+  document.getElementById('achieveTableTitle').textContent = '📋 Achievement Details — ' + curKey;
+  makeSortable(table);
+}
+
+function loadData() {
+  document.getElementById('lastUpdate').textContent = 'Loading...';
+  fetch('/api/data').then(r=>r.json()).then(d=>{
+    DATA = d;
+    renderKPI(d); renderCharts(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d);
+    document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date().toLocaleTimeString();
+  }).catch(e=>{
+    document.getElementById('lastUpdate').textContent = 'Error: '+e.message;
+  });
+}
+
+loadData();
+setInterval(loadData, 300000); // auto-refresh every 5 min
+</script>
+</body></html>
