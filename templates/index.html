@@ -75,6 +75,11 @@ tr:hover td{background:#1a2a4e}
 <div id="tab-tasks" class="tab-content">
   <div class="card full" style="max-width:1200px;margin:0 auto 25px">
     <h2>📈 Daily Task Resolve Progress</h2>
+    <div style="text-align:center;margin-bottom:15px">
+      <select id="dailyFilter" onchange="renderDailyResolve(DATA)" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="all">👥 All Members</option>
+      </select>
+    </div>
     <canvas id="dailyResolveChart"></canvas>
   </div>
   <input type="text" id="search" placeholder="🔍 Search tasks..." oninput="filterTable('tasksTable',this.value)">
@@ -215,12 +220,37 @@ function renderCharts(d) {
 
 function renderDailyResolve(d) {
   if(charts.dailyResolve) charts.dailyResolve.destroy();
-  const days = d.daily.map(x=>x.date), active = d.daily.map(x=>x.active), cumDone = d.daily.map(x=>x.done_cumul);
+  const sel = document.getElementById('dailyFilter');
+  const filter = sel.value;
+
+  // Populate dropdown once
+  if(sel.options.length <= 1) {
+    d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o); });
+  }
+
+  // Filter tasks by assignee
+  const tasks = filter === 'all' ? d.tasks : d.tasks.filter(t => t.assignees.includes(filter));
+
+  // Build daily data from filtered tasks
+  const dailyDone = {}, dailyCreated = {};
+  tasks.forEach(t => {
+    if(t.done_date) dailyDone[t.done_date] = (dailyDone[t.done_date]||0) + 1;
+    if(t.created) dailyCreated[t.created] = (dailyCreated[t.created]||0) + 1;
+  });
+  const allDays = [...new Set([...Object.keys(dailyDone), ...Object.keys(dailyCreated)])].sort();
+  let cumDone = 0;
+  const days = [], active = [], cumDoneArr = [];
+  allDays.forEach(day => {
+    const act = tasks.filter(t => t.created <= day && (t.status !== 'Done' || (t.done_date && t.done_date > day))).length;
+    cumDone += (dailyDone[day]||0);
+    days.push(day); active.push(act); cumDoneArr.push(cumDone);
+  });
+
   charts.dailyResolve = new Chart(document.getElementById('dailyResolveChart'),{
     type:'bar',
     data:{labels:days,datasets:[
       {label:'Total Task Active',data:active,backgroundColor:'rgba(15,52,96,0.85)',borderRadius:4,order:2},
-      {label:'Total Task Done (cumulative)',data:cumDone,type:'line',borderColor:'#2eb872',backgroundColor:'rgba(46,184,114,0.15)',tension:.3,fill:true,pointRadius:3,pointBackgroundColor:'#2eb872',borderWidth:2,order:1}
+      {label:'Total Task Done (cumulative)',data:cumDoneArr,type:'line',borderColor:'#2eb872',backgroundColor:'rgba(46,184,114,0.15)',tension:.3,fill:true,pointRadius:3,pointBackgroundColor:'#2eb872',borderWidth:2,order:1}
     ]},
     options:{
       scales:{
