@@ -90,10 +90,17 @@ def extract_spk(r, personel):
             for rel in item.get('relation',[]):
                 name = personel.get(rel['id'],'?')
                 if name not in pic: pic.append(name)
+    has_perpanjangan = len(props.get('Projects Perpanjangan',{}).get('relation',[])) > 0
+    status_perp_arr = props.get('Status Project Perpanjangan',{}).get('rollup',{}).get('array',[])
+    status_perp = ''
+    for item in status_perp_arr:
+        if item.get('type') == 'status' and item.get('status'):
+            status_perp = item['status'].get('name','')
     return {
         'spk_id': spk_id, 'no_spk': no_spk, 'project': proj_name, 'vendor': vendor_name,
         'status': status_name, 'jatuh_tempo': jatuh_tempo, 'sisa_hari': sisa_hari,
-        'nilai': nilai, 'notes': notes_text, 'pic': pic
+        'nilai': nilai, 'notes': notes_text, 'pic': pic,
+        'perpanjangan': has_perpanjangan, 'status_perpanjangan': status_perp
     }
 
 def extract_project(r, personel):

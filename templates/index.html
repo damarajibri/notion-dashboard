@@ -631,10 +631,13 @@ function applySpkFilters() {
   spk.sort((a,b) => (a.sisa_hari??999) - (b.sisa_hari??999));
 
   const table = document.getElementById('spkTable');
-  table.querySelector('thead tr').innerHTML = ['#','ID','No SPK','Project','Vendor','Status','Jatuh Tempo','Sisa Hari','Nilai Kontrak','PIC','Notes'].map(h=>'<th>'+h+'</th>').join('');
-  table.querySelector('tbody').innerHTML = spk.map((s,i) =>
-    '<tr><td>'+(i+1)+'</td><td>'+s.spk_id+'</td><td>'+s.no_spk+'</td><td>'+s.project+'</td><td>'+s.vendor+'</td><td>'+statusBadge(s.status)+'</td><td>'+(s.jatuh_tempo||'-')+'</td><td>'+sisaBadge(s.sisa_hari)+'</td><td>'+fmtRp(s.nilai)+'</td><td>'+(s.pic.join(', ')||'-')+'</td><td>'+s.notes+'</td></tr>'
-  ).join('') || '<tr><td colspan="11" style="text-align:center;color:var(--text2);padding:30px">No SPK match filters</td></tr>';
+  table.querySelector('thead tr').innerHTML = ['#','ID','No SPK','Project','Vendor','Status','Jatuh Tempo','Sisa Hari','Perpanjangan','Nilai Kontrak','PIC','Notes'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('tbody').innerHTML = spk.map((s,i) => {
+    let perp = '-';
+    if(s.perpanjangan) perp = s.status_perpanjangan ? statusBadge(s.status_perpanjangan) : '<span class="badge b-pend">Diproses</span>';
+    else if(s.sisa_hari!==null && s.sisa_hari<=90) perp = '<span class="badge" style="background:#e94560;color:#fff">Belum Ada</span>';
+    return '<tr><td>'+(i+1)+'</td><td>'+s.spk_id+'</td><td>'+s.no_spk+'</td><td>'+s.project+'</td><td>'+s.vendor+'</td><td>'+statusBadge(s.status)+'</td><td>'+(s.jatuh_tempo||'-')+'</td><td>'+sisaBadge(s.sisa_hari)+'</td><td>'+perp+'</td><td>'+fmtRp(s.nilai)+'</td><td>'+(s.pic.join(', ')||'-')+'</td><td>'+s.notes+'</td></tr>';
+  }).join('') || '<tr><td colspan="12" style="text-align:center;color:var(--text2);padding:30px">No SPK match filters</td></tr>';
   makeSortable(table);
 }
 
