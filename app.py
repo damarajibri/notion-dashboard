@@ -134,6 +134,21 @@ def api_data():
         cum_c += created_monthly[m]; cum_d += done_monthly[m]
         monthly.append({'month': m, 'created': created_monthly[m], 'done': done_monthly[m], 'backlog': cum_c - cum_d})
 
+    # Daily task resolve progress
+    from datetime import datetime, timedelta
+    daily_done = defaultdict(int)
+    daily_created = defaultdict(int)
+    for t in tasks:
+        if t['done_date']: daily_done[t['done_date']] += 1
+        if t['created']: daily_created[t['created']] += 1
+    all_days = sorted(set(list(daily_done.keys()) + list(daily_created.keys())))
+    daily = []
+    cum_done = 0
+    for day in all_days:
+        active = sum(1 for t in tasks if t['created'] <= day and (t['status'] != 'Done' or (t['done_date'] and t['done_date'] > day)))
+        cum_done += daily_done[day]
+        daily.append({'date': day, 'active': active, 'done_cumul': cum_done, 'done_day': daily_done[day]})
+
     # Project stats
     proj_status = defaultdict(int)
     proj_person = defaultdict(lambda: defaultdict(int))
@@ -147,7 +162,8 @@ def api_data():
         'person_done': dict(person_done), 'person_total': dict(person_total),
         'overdue': overdue, 'on_track': on_track, 'no_due': no_due,
         'proj_status': dict(proj_status),
-        'proj_person': {k: dict(v) for k,v in proj_person.items()}
+        'proj_person': {k: dict(v) for k,v in proj_person.items()},
+        'daily': daily
     })
 
 if __name__ == '__main__':

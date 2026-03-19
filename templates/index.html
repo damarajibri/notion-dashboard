@@ -73,6 +73,10 @@ tr:hover td{background:#1a2a4e}
 
 <!-- TASKS TAB -->
 <div id="tab-tasks" class="tab-content">
+  <div class="card full" style="max-width:1200px;margin:0 auto 25px">
+    <h2>📈 Daily Task Resolve Progress</h2>
+    <canvas id="dailyResolveChart"></canvas>
+  </div>
   <input type="text" id="search" placeholder="🔍 Search tasks..." oninput="filterTable('tasksTable',this.value)">
   <div class="card full">
     <h2>📋 All Active Tasks</h2>
@@ -207,6 +211,25 @@ function renderCharts(d) {
     {label:'Planning',data:ppPersons.map(p=>(pp[p]||{})['Planning']||0),backgroundColor:'#e7b416',borderRadius:4},
     {label:'Done',data:ppPersons.map(p=>(pp[p]||{})['Done']||0),backgroundColor:'#2eb872',borderRadius:4}
   ]},options:{scales:{x:{stacked:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}},y:{stacked:true,beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}}},plugins:{legend:{labels:{color:'#eee'}}}}});
+}
+
+function renderDailyResolve(d) {
+  if(charts.dailyResolve) charts.dailyResolve.destroy();
+  const days = d.daily.map(x=>x.date), active = d.daily.map(x=>x.active), cumDone = d.daily.map(x=>x.done_cumul);
+  charts.dailyResolve = new Chart(document.getElementById('dailyResolveChart'),{
+    type:'bar',
+    data:{labels:days,datasets:[
+      {label:'Total Task Active',data:active,backgroundColor:'rgba(15,52,96,0.85)',borderRadius:4,order:2},
+      {label:'Total Task Done (cumulative)',data:cumDone,type:'line',borderColor:'#2eb872',backgroundColor:'rgba(46,184,114,0.15)',tension:.3,fill:true,pointRadius:3,pointBackgroundColor:'#2eb872',borderWidth:2,order:1}
+    ]},
+    options:{
+      scales:{
+        x:{ticks:{color:'#a8a8b3',maxRotation:45,autoSkip:true,maxTicksLimit:30},grid:{color:'#0f3460'}},
+        y:{beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'},title:{display:true,text:'Tasks',color:'#a8a8b3'}}
+      },
+      plugins:{legend:{labels:{color:'#eee'}},tooltip:{mode:'index',intersect:false}}
+    }
+  });
 }
 
 function renderTasksTable(d) {
@@ -361,7 +384,7 @@ function loadData() {
   document.getElementById('lastUpdate').textContent = 'Loading...';
   fetch('/api/data').then(r=>r.json()).then(d=>{
     DATA = d;
-    renderKPI(d); renderCharts(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d);
+    renderKPI(d); renderCharts(d); renderDailyResolve(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d);
     document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date().toLocaleTimeString();
   }).catch(e=>{
     document.getElementById('lastUpdate').textContent = 'Error: '+e.message;
