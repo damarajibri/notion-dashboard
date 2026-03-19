@@ -121,9 +121,37 @@ tr:hover td{background:#1a2a4e}
 
 <!-- PROJECTS TAB -->
 <div id="tab-projects" class="tab-content">
-  <input type="text" id="searchProj" placeholder="🔍 Search projects..." oninput="filterTable('projTable',this.value)">
+  <input type="text" id="searchProj" placeholder="🔍 Search projects..." oninput="applyProjFilters()">
   <div class="card full">
     <h2>🏗️ All Projects</h2>
+    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:15px;flex-wrap:wrap">
+      <select id="filterProjStatus" onchange="applyProjFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="all">📊 All Status</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Planning">Planning</option>
+        <option value="Done">Done</option>
+      </select>
+      <select id="filterProjAssignee" onchange="applyProjFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="all">👥 All Assignee</option>
+      </select>
+      <select id="filterProjDue" onchange="applyProjFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="all">📅 All Due Date</option>
+        <option value="7">Due ≤ 1 Minggu</option>
+        <option value="14">Due ≤ 2 Minggu</option>
+        <option value="21">Due ≤ 3 Minggu</option>
+        <option value="30">Due ≤ 1 Bulan</option>
+        <option value="60">Due ≤ 2 Bulan</option>
+        <option value="90">Due ≤ 3 Bulan</option>
+        <option value="overdue">Overdue</option>
+        <option value="nodue">No Due Date</option>
+      </select>
+      <select id="filterProjPriority" onchange="applyProjFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="all">⚡ All Priority</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </select>
+    </div>
     <div class="scroll-table"><table id="projTable"><thead><tr></tr></thead><tbody></tbody></table></div>
   </div>
 </div>
@@ -341,15 +369,45 @@ function applyTaskFilters() {
 }
 
 function renderProjectsTable(d) {
+  const asel = document.getElementById('filterProjAssignee');
+  if(asel.options.length <= 1) {
+    d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; asel.appendChild(o); });
+  }
+  applyProjFilters();
+}
+
+function applyProjFilters() {
+  if(!DATA) return;
+  const query = document.getElementById('searchProj').value.toLowerCase();
+  const status = document.getElementById('filterProjStatus').value;
+  const assignee = document.getElementById('filterProjAssignee').value;
+  const due = document.getElementById('filterProjDue').value;
+  const priority = document.getElementById('filterProjPriority').value;
+  const today = new Date().toISOString().slice(0,10);
+
+  let maxDue = null;
+  if(['7','14','21','30','60','90'].includes(due)) {
+    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
+    maxDue = dt.toISOString().slice(0,10);
+  }
+
+  let projects = [...DATA.projects];
+  if(status !== 'all') projects = projects.filter(p => p.status === status);
+  if(assignee !== 'all') projects = projects.filter(p => p.assignees.includes(assignee));
+  if(priority !== 'all') projects = projects.filter(p => p.priority === priority);
+  if(due === 'overdue') projects = projects.filter(p => p.due && p.due < today);
+  else if(due === 'nodue') projects = projects.filter(p => !p.due);
+  else if(maxDue) projects = projects.filter(p => p.due && p.due <= maxDue);
+  if(query) projects = projects.filter(p => (p.title+p.assignees.join(',')).toLowerCase().includes(query));
+
+  projects.sort((a,b) => {const o={'In Progress':0,'Planning':1,'Done':2};return (o[a.status]||5)-(o[b.status]||5);});
+
   const table = document.getElementById('projTable');
-  const thead = table.querySelector('thead tr');
-  thead.innerHTML = ['#','Project','Status','Assignee','Completion','Docs','Priority','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
-  const tbody = table.querySelector('tbody');
-  const sorted = d.projects.sort((a,b)=>{const o={'In Progress':0,'Planning':1,'Done':2};return (o[a.status]||5)-(o[b.status]||5);});
-  tbody.innerHTML = sorted.map((p,i)=>{
+  table.querySelector('thead tr').innerHTML = ['#','Project','Status','Assignee','Due','Completion','Docs','Priority','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('tbody').innerHTML = projects.map((p,i) => {
     const pri = p.priority!=='-'?'<span class="badge '+(p.priority==='High'?'b-high':'b-med')+'">'+p.priority+'</span>':'-';
-    return '<tr><td>'+(i+1)+'</td><td>'+p.title+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.assignees.join(', ')||'-')+'</td><td>'+progBar(p.completion)+'</td><td>'+p.docs+'</td><td>'+pri+'</td><td>'+p.edited+'</td></tr>';
-  }).join('');
+    return '<tr><td>'+(i+1)+'</td><td>'+p.title+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.assignees.join(', ')||'-')+'</td><td>'+(p.due||'-')+'</td><td>'+progBar(p.completion)+'</td><td>'+p.docs+'</td><td>'+pri+'</td><td>'+p.edited+'</td></tr>';
+  }).join('') || '<tr><td colspan="9" style="text-align:center;color:#a8a8b3;padding:30px">No projects match filters</td></tr>';
   makeSortable(table);
 }
 

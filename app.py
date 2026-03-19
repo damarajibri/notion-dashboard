@@ -87,11 +87,15 @@ def extract_project(r, personel):
         val = props.get(df,{})
         if val.get('type') == 'status' and val.get('status',{}).get('name','') in ('Done','Complete'): doc_done += 1
         elif val.get('type') == 'checkbox' and val.get('checkbox'): doc_done += 1
+    dates = props.get('Dates',{}).get('date',{})
+    due = ''
+    if dates and dates.get('end'): due = dates['end'][:10]
+    elif dates and dates.get('start'): due = dates['start'][:10]
     return {
         'title': title, 'status': status_name, 'priority': priority_name,
         'assignees': assignees, 'completion': comp_val, 'docs': f'{doc_done}/9',
         'doc_done': doc_done, 'created': r['created_time'][:10],
-        'edited': r['last_edited_time'][:10]
+        'edited': r['last_edited_time'][:10], 'due': due
     }
 
 @app.route('/')
