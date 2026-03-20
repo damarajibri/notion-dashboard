@@ -133,11 +133,13 @@ def extract_project(r, personel):
     due = ''
     if dates and dates.get('end'): due = dates['end'][:10]
     elif dates and dates.get('start'): due = dates['start'][:10]
+    spk_baru_ids = [rel['id'] for rel in props.get('SPK baru',{}).get('relation',[])]
     return {
         'title': title, 'status': status_name, 'priority': priority_name,
         'assignees': assignees, 'completion': comp_val, 'docs': f'{doc_done}/9',
         'doc_done': doc_done, 'created': r['created_time'][:10],
-        'edited': r['last_edited_time'][:10], 'due': due
+        'edited': r['last_edited_time'][:10], 'due': due,
+        'spk_baru_ids': spk_baru_ids
     }
 
 @app.route('/')
@@ -184,6 +186,11 @@ def api_data():
         baru_ids = spk_baru_map.get(s.get('_id'), [])
         s['spk_baru'] = [spk_map.get(bid, bid[:8]) for bid in baru_ids]
         del s['perp_ids'], s['status_perpanjangan'], s['_id']
+
+    # Resolve SPK baru for projects
+    for p in projects:
+        p['spk_baru'] = [spk_map.get(sid, sid[:8]) for sid in p.get('spk_baru_ids',[])]
+        del p['spk_baru_ids']
 
     # Task stats
     task_status = defaultdict(int)
