@@ -80,8 +80,8 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
 
 <!-- TASKS TAB -->
 <div id="tab-tasks" class="tab-content">
-  <div style="display:flex;justify-content:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
-    <input type="text" id="search" placeholder="🔍 Search tasks..." oninput="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none;width:200px">
+  <div style="display:flex;justify-content:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;max-width:1200px;margin-left:auto;margin-right:auto;margin-bottom:20px">
+    <input type="text" id="search" placeholder="🔍 Search tasks..." oninput="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none;width:180px;text-align:center">
     <select id="filterStatus" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
       <option value="all">📊 All Status</option>
       <option value="In Progress">In Progress</option>
