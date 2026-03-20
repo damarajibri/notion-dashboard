@@ -662,7 +662,7 @@ function applySpkFilters() {
   spk.sort((a,b) => (a.sisa_hari??999) - (b.sisa_hari??999));
 
   const table = document.getElementById('spkTable');
-  table.querySelector('thead tr').innerHTML = ['#','ID','No SPK','Project','Vendor','Status','Jatuh Tempo','Sisa Hari','SPK Perpanjangan','SPK Baru','Nilai Kontrak','PIC','Notes'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('thead tr').innerHTML = ['#','ID','No SPK','Project','Vendor','Status','Jatuh Tempo','Sisa Hari','Project Perpanjangan','SPK Baru','Nilai Kontrak','PIC','Notes'].map(h=>'<th>'+h+'</th>').join('');
   table.querySelector('tbody').innerHTML = spk.map((s,i) => {
     let perp = '-';
     if(s.perpanjangan && s.perpanjangan.length > 0) {
