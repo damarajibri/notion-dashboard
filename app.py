@@ -91,16 +91,17 @@ def extract_spk(r, personel):
                 name = personel.get(rel['id'],'?')
                 if name not in pic: pic.append(name)
     has_perpanjangan = len(props.get('Projects Perpanjangan',{}).get('relation',[])) > 0
+    perp_ids = [rel['id'] for rel in props.get('Projects Perpanjangan',{}).get('relation',[])]
     status_perp_arr = props.get('Status Project Perpanjangan',{}).get('rollup',{}).get('array',[])
-    status_perp = ''
+    status_perp = []
     for item in status_perp_arr:
         if item.get('type') == 'status' and item.get('status'):
-            status_perp = item['status'].get('name','')
+            status_perp.append(item['status'].get('name',''))
     return {
         'spk_id': spk_id, 'no_spk': no_spk, 'project': proj_name, 'vendor': vendor_name,
         'status': status_name, 'jatuh_tempo': jatuh_tempo, 'sisa_hari': sisa_hari,
         'nilai': nilai, 'notes': notes_text, 'pic': pic,
-        'perpanjangan': has_perpanjangan, 'status_perpanjangan': status_perp
+        'perp_ids': perp_ids, 'status_perpanjangan': status_perp
     }
 
 def extract_project(r, personel):
@@ -151,6 +152,18 @@ def api_data():
     tasks = [extract_task(r, personel) for r in raw_tasks]
     projects = [extract_project(r, personel) for r in raw_projects]
     spk = [extract_spk(r, personel) for r in raw_spk]
+
+    # Build project ID -> title map for SPK perpanjangan
+    proj_map = {}
+    for r in raw_projects:
+        title = ''
+        for v in r['properties'].values():
+            if v.get('type') == 'title' and v.get('title'):
+                title = v['title'][0]['plain_text']; break
+        proj_map[r['id']] = title
+    for s in spk:
+        s['perpanjangan'] = [{'title': proj_map.get(pid,'?'), 'status': s['status_perpanjangan'][i] if i < len(s['status_perpanjangan']) else ''} for i, pid in enumerate(s['perp_ids'])]
+        del s['perp_ids'], s['status_perpanjangan']
 
     # Task stats
     task_status = defaultdict(int)
