@@ -165,6 +165,18 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
 
 <!-- PEOPLE TAB -->
 <div id="tab-people" class="tab-content">
+  <div style="text-align:center;margin-bottom:20px">
+    <select id="peopleRange" onchange="renderPeopleCharts(DATA)" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+      <option value="all">📅 All Time</option>
+      <option value="1">Today</option>
+      <option value="7">Last 7 Days</option>
+      <option value="this_month">This Month</option>
+      <option value="last_month">Last Month</option>
+      <option value="last_2_month">Last 2 Months</option>
+      <option value="last_3_month">Last 3 Months</option>
+      <option value="90">Last 90 Days</option>
+    </select>
+  </div>
   <div class="grid">
     <div class="card"><h2>🏆 Task Completion Rate</h2><canvas id="personRateChart"></canvas></div>
     <div class="card"><h2>📦 Tasks Done vs Open</h2><canvas id="personDoneChart"></canvas></div>
@@ -301,16 +313,49 @@ function renderCharts(d) {
   const ps = d.proj_status;
   charts.projStatus = new Chart(document.getElementById('projStatusChart'),{type:'doughnut',data:{labels:Object.keys(ps),datasets:[{data:Object.values(ps),backgroundColor:['#e7b416','#4cc9f0','#2eb872'],borderColor:'#16213e',borderWidth:3}]},options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:12}}}}});
 
-  // People charts
-  const persons = Object.keys(d.person_total).sort((a,b)=>(d.person_total[b]||0)-(d.person_total[a]||0));
-  const pDone = persons.map(p=>d.person_done[p]||0), pTotal = persons.map(p=>d.person_total[p]||0);
+  // People charts rendered separately with time filter
+}
+
+function getPeopleMinDate() {
+  const range = document.getElementById('peopleRange').value;
+  if(range === 'all') return null;
+  const now = new Date();
+  if(range === 'this_month') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  if(range === 'last_month') { const d=new Date(now.getFullYear(), now.getMonth()-1, 1); return d.toISOString().slice(0,10); }
+  if(range === 'last_2_month') { const d=new Date(now.getFullYear(), now.getMonth()-2, 1); return d.toISOString().slice(0,10); }
+  if(range === 'last_3_month') { const d=new Date(now.getFullYear(), now.getMonth()-3, 1); return d.toISOString().slice(0,10); }
+  const d = new Date(); d.setDate(d.getDate() - parseInt(range));
+  return d.toISOString().slice(0,10);
+}
+
+function renderPeopleCharts(d) {
+  if(charts.personRate) charts.personRate.destroy();
+  if(charts.personDone) charts.personDone.destroy();
+  if(charts.personProj) charts.personProj.destroy();
+
+  const minDate = getPeopleMinDate();
+  const tasks = minDate ? d.tasks.filter(t => t.created >= minDate || t.edited >= minDate || (t.done_date && t.done_date >= minDate)) : d.tasks;
+  const projects = minDate ? d.projects.filter(p => p.created >= minDate || p.edited >= minDate) : d.projects;
+
+  const personDone = {}, personTotal = {};
+  tasks.forEach(t => {
+    t.assignees.forEach(a => {
+      personTotal[a] = (personTotal[a]||0) + 1;
+      if(t.status === 'Done') personDone[a] = (personDone[a]||0) + 1;
+    });
+  });
+
+  const persons = Object.keys(personTotal).sort((a,b)=>(personTotal[b]||0)-(personTotal[a]||0));
+  const pDone = persons.map(p=>personDone[p]||0), pTotal = persons.map(p=>personTotal[p]||0);
   const pRate = pDone.map((v,i)=>pTotal[i]?Math.round(v/pTotal[i]*100):0);
 
   charts.personRate = new Chart(document.getElementById('personRateChart'),{type:'bar',data:{labels:persons,datasets:[{label:'%',data:pRate,backgroundColor:pRate.map(r=>r>=60?'#2eb872':r>=30?'#e7b416':'#e94560'),borderRadius:6}]},options:{indexAxis:'y',scales:{x:{beginAtZero:true,max:100,ticks:{color:'#a8a8b3',callback:v=>v+'%'},grid:{color:'#0f3460'}},y:{ticks:{color:'#eee'},grid:{display:false}}},plugins:{legend:{display:false}}}});
 
   charts.personDone = new Chart(document.getElementById('personDoneChart'),{type:'bar',data:{labels:persons,datasets:[{label:'Done',data:pDone,backgroundColor:'#2eb872',borderRadius:6},{label:'Open',data:pTotal.map((t,i)=>t-pDone[i]),backgroundColor:'#0f3460',borderRadius:6}]},options:{indexAxis:'y',scales:{x:{stacked:true,beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}},y:{stacked:true,ticks:{color:'#eee'},grid:{display:false}}},plugins:{legend:{labels:{color:'#eee'}}}}});
 
-  const pp = d.proj_person, ppPersons = Object.keys(pp).sort((a,b)=>{const sa=Object.values(pp[a]).reduce((x,y)=>x+y,0),sb=Object.values(pp[b]).reduce((x,y)=>x+y,0);return sb-sa;});
+  const pp = {};
+  projects.forEach(p => { p.assignees.forEach(a => { if(!pp[a]) pp[a]={}; pp[a][p.status] = (pp[a][p.status]||0)+1; }); });
+  const ppPersons = Object.keys(pp).sort((a,b)=>{const sa=Object.values(pp[a]).reduce((x,y)=>x+y,0),sb=Object.values(pp[b]).reduce((x,y)=>x+y,0);return sb-sa;});
   charts.personProj = new Chart(document.getElementById('personProjChart'),{type:'bar',data:{labels:ppPersons,datasets:[
     {label:'In Progress',data:ppPersons.map(p=>(pp[p]||{})['In Progress']||0),backgroundColor:'#4cc9f0',borderRadius:4},
     {label:'Planning',data:ppPersons.map(p=>(pp[p]||{})['Planning']||0),backgroundColor:'#e7b416',borderRadius:4},
@@ -650,7 +695,7 @@ function loadData() {
   document.getElementById('lastUpdate').textContent = 'Loading...';
   fetch('/api/data').then(r=>r.json()).then(d=>{
     DATA = d;
-    renderKPI(d); renderCharts(d); renderDailyResolve(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d); renderSpk(d);
+    renderKPI(d); renderCharts(d); renderPeopleCharts(d); renderDailyResolve(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d); renderSpk(d);
     document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date().toLocaleTimeString();
   }).catch(e=>{
     document.getElementById('lastUpdate').textContent = 'Error: '+e.message;
