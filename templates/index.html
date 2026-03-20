@@ -61,7 +61,7 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
 <div class="tabs">
   <div class="tab active" onclick="switchTab('overview')">📊 Overview</div>
   <div class="tab" onclick="switchTab('tasks')">📋 Tasks</div>
-  <div class="tab" onclick="switchTab('projects')">🏗️ Projects</div>
+  <div class="tab" onclick="switchTab('projects')">🏗️ Projects Submission</div>
   <div class="tab" onclick="switchTab('people')">👤 People</div>
   <div class="tab" onclick="switchTab('achievements')">🏆 Achievements</div>
   <div class="tab" onclick="switchTab('spk')">📄 SPK</div>
@@ -130,7 +130,7 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
 <div id="tab-projects" class="tab-content">
   <input type="text" id="searchProj" placeholder="🔍 Search projects..." oninput="applyProjFilters()">
   <div class="card full">
-    <h2>🏗️ All Projects</h2>
+    <h2>🏗️ All Projects Submission</h2>
     <div style="display:flex;justify-content:center;gap:10px;margin-bottom:15px;flex-wrap:wrap">
       <select id="filterProjStatus" onchange="applyProjFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
         <option value="all">📊 All Status</option>
