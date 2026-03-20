@@ -101,7 +101,8 @@ def extract_spk(r, personel):
         'spk_id': spk_id, 'no_spk': no_spk, 'project': proj_name, 'vendor': vendor_name,
         'status': status_name, 'jatuh_tempo': jatuh_tempo, 'sisa_hari': sisa_hari,
         'nilai': nilai, 'notes': notes_text, 'pic': pic,
-        'perp_ids': perp_ids, 'status_perpanjangan': status_perp
+        'perp_ids': perp_ids, 'status_perpanjangan': status_perp,
+        '_id': r['id']
     }
 
 def extract_project(r, personel):
@@ -161,9 +162,28 @@ def api_data():
             if v.get('type') == 'title' and v.get('title'):
                 title = v['title'][0]['plain_text']; break
         proj_map[r['id']] = title
+
+    # Build SPK ID -> No SPK map
+    spk_map = {}
+    for s in spk:
+        spk_map[s.get('_id','')] = s['no_spk']
+
+    # Build SPK sebelumnya -> SPK baru map from Projects
+    spk_baru_map = {}  # old_spk_id -> [new_spk_id, ...]
+    for r in raw_projects:
+        p = r['properties']
+        spk_seb = [rel['id'] for rel in p.get('SPK sebelumnya',{}).get('relation',[])]
+        spk_bar = [rel['id'] for rel in p.get('SPK baru',{}).get('relation',[])]
+        if spk_bar:
+            for old_id in spk_seb:
+                spk_baru_map.setdefault(old_id, []).extend(spk_bar)
+
     for s in spk:
         s['perpanjangan'] = [{'title': proj_map.get(pid,'?'), 'status': s['status_perpanjangan'][i] if i < len(s['status_perpanjangan']) else ''} for i, pid in enumerate(s['perp_ids'])]
-        del s['perp_ids'], s['status_perpanjangan']
+        # Resolve SPK baru
+        baru_ids = spk_baru_map.get(s.get('_id'), [])
+        s['spk_baru'] = [spk_map.get(bid, bid[:8]) for bid in baru_ids]
+        del s['perp_ids'], s['status_perpanjangan'], s['_id']
 
     # Task stats
     task_status = defaultdict(int)
