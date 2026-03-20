@@ -80,51 +80,46 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
 
 <!-- TASKS TAB -->
 <div id="tab-tasks" class="tab-content">
+  <div style="display:flex;justify-content:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
+    <input type="text" id="search" placeholder="🔍 Search tasks..." oninput="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none;width:200px">
+    <select id="filterStatus" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+      <option value="all">📊 All Status</option>
+      <option value="In Progress">In Progress</option>
+      <option value="Not Started">Not Started</option>
+      <option value="Pending">Pending</option>
+      <option value="Archived">Archived</option>
+    </select>
+    <select id="filterAssignee" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+      <option value="all">👥 All Assignee</option>
+    </select>
+    <select id="filterDue" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+      <option value="all">📅 All Due Date</option>
+      <option value="7">Due ≤ 1 Minggu</option>
+      <option value="14">Due ≤ 2 Minggu</option>
+      <option value="21">Due ≤ 3 Minggu</option>
+      <option value="30">Due ≤ 1 Bulan</option>
+      <option value="60">Due ≤ 2 Bulan</option>
+      <option value="90">Due ≤ 3 Bulan</option>
+      <option value="overdue">Overdue</option>
+      <option value="nodue">No Due Date</option>
+    </select>
+    <select id="dailyRange" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+      <option value="7">Last 7 Days</option>
+      <option value="this_week">This Week</option>
+      <option value="14">Last 2 Weeks</option>
+      <option value="this_month" selected>This Month</option>
+      <option value="last_month">Last Month</option>
+      <option value="90">Last 3 Months</option>
+      <option value="this_year">This Year</option>
+      <option value="all">All Time</option>
+    </select>
+  </div>
   <div class="card full" style="max-width:1200px;margin:0 auto 25px">
     <h2>📈 Daily Task Resolve Progress</h2>
-    <div style="text-align:center;margin-bottom:15px;display:flex;justify-content:center;gap:10px;align-items:center;flex-wrap:wrap">
-      <select id="dailyFilter" onchange="renderDailyResolve(DATA)" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">👥 All Members</option>
-      </select>
-      <select id="dailyRange" onchange="renderDailyResolve(DATA)" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="7">Last 7 Days</option>
-        <option value="this_week">This Week</option>
-        <option value="14">Last 2 Weeks</option>
-        <option value="this_month" selected>This Month</option>
-        <option value="last_month">Last Month</option>
-        <option value="90">Last 3 Months</option>
-        <option value="this_year">This Year</option>
-        <option value="all">All Time</option>
-      </select>
-    </div>
     <canvas id="dailyResolveChart"></canvas>
   </div>
-  <input type="text" id="search" placeholder="🔍 Search tasks..." oninput="applyTaskFilters()">
   <div class="card full">
     <h2>📋 All Active Tasks</h2>
-    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:15px;flex-wrap:wrap">
-      <select id="filterStatus" onchange="applyTaskFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">📊 All Status</option>
-        <option value="In Progress">In Progress</option>
-        <option value="Not Started">Not Started</option>
-        <option value="Pending">Pending</option>
-        <option value="Archived">Archived</option>
-      </select>
-      <select id="filterAssignee" onchange="applyTaskFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">👥 All Assignee</option>
-      </select>
-      <select id="filterDue" onchange="applyTaskFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">📅 All Due Date</option>
-        <option value="7">Due ≤ 1 Minggu</option>
-        <option value="14">Due ≤ 2 Minggu</option>
-        <option value="21">Due ≤ 3 Minggu</option>
-        <option value="30">Due ≤ 1 Bulan</option>
-        <option value="60">Due ≤ 2 Bulan</option>
-        <option value="90">Due ≤ 3 Bulan</option>
-        <option value="overdue">Overdue</option>
-        <option value="nodue">No Due Date</option>
-      </select>
-    </div>
     <div class="scroll-table"><table id="tasksTable"><thead><tr></tr></thead><tbody></tbody></table></div>
   </div>
 </div>
@@ -376,25 +371,35 @@ function calcMinDate(range) {
   return d.toISOString().slice(0,10);
 }
 
-function renderDailyResolve(d) {
-  if(charts.dailyResolve) charts.dailyResolve.destroy();
-  const sel = document.getElementById('dailyFilter');
-  const filter = sel.value;
+function getFilteredTasks() {
+  if(!DATA) return [];
+  const query = document.getElementById('search').value.toLowerCase();
+  const status = document.getElementById('filterStatus').value;
+  const assignee = document.getElementById('filterAssignee').value;
+  const due = document.getElementById('filterDue').value;
   const range = document.getElementById('dailyRange').value;
+  const today = new Date().toISOString().slice(0,10);
 
-  // Populate dropdown once
-  if(sel.options.length <= 1) {
-    d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; sel.appendChild(o); });
+  let tasks = [...DATA.tasks];
+  if(status !== 'all') tasks = tasks.filter(t => t.status === status);
+  if(assignee !== 'all') tasks = tasks.filter(t => t.assignees.includes(assignee));
+  if(due === 'overdue') tasks = tasks.filter(t => t.due && t.due < today);
+  else if(due === 'nodue') tasks = tasks.filter(t => !t.due);
+  else if(['7','14','21','30','60','90'].includes(due)) {
+    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
+    const maxDue = dt.toISOString().slice(0,10);
+    tasks = tasks.filter(t => t.due && t.due <= maxDue);
   }
+  if(query) tasks = tasks.filter(t => (t.name+t.assignees.join(',')).toLowerCase().includes(query));
+  return {tasks, minDate: range !== 'all' ? calcMinDate(range) : '0000-00-00'};
+}
 
-  // Date range
-  let minDate = '0000-00-00';
-  if(range !== 'all') minDate = calcMinDate(range);
+function applyAllTaskFilters() {
+  if(!DATA) return;
+  const {tasks, minDate} = getFilteredTasks();
 
-  // Filter tasks by assignee
-  const tasks = filter === 'all' ? d.tasks : d.tasks.filter(t => t.assignees.includes(filter));
-
-  // Build daily data from filtered tasks
+  // Chart
+  if(charts.dailyResolve) charts.dailyResolve.destroy();
   const dailyDone = {}, dailyCreated = {};
   tasks.forEach(t => {
     if(t.done_date) dailyDone[t.done_date] = (dailyDone[t.done_date]||0) + 1;
@@ -408,61 +413,31 @@ function renderDailyResolve(d) {
     cumDone += (dailyDone[day]||0);
     days.push(day); active.push(act); cumDoneArr.push(cumDone);
   });
-
   charts.dailyResolve = new Chart(document.getElementById('dailyResolveChart'),{
-    type:'bar',
-    data:{labels:days,datasets:[
+    type:'bar',data:{labels:days,datasets:[
       {label:'Total Task Active',data:active,backgroundColor:'rgba(15,52,96,0.85)',borderRadius:4,order:2},
       {label:'Total Task Done (cumulative)',data:cumDoneArr,type:'line',borderColor:'#2eb872',backgroundColor:'rgba(46,184,114,0.15)',tension:.3,fill:true,pointRadius:3,pointBackgroundColor:'#2eb872',borderWidth:2,order:1}
-    ]},
-    options:{
-      scales:{
-        x:{ticks:{color:'#a8a8b3',maxRotation:45,autoSkip:true,maxTicksLimit:30},grid:{color:'#0f3460'}},
-        y:{beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'},title:{display:true,text:'Tasks',color:'#a8a8b3'}}
-      },
-      plugins:{legend:{labels:{color:'#eee'}},tooltip:{mode:'index',intersect:false}}
-    }
+    ]},options:{scales:{
+      x:{ticks:{color:'#a8a8b3',maxRotation:45,autoSkip:true,maxTicksLimit:30},grid:{color:'#0f3460'}},
+      y:{beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'},title:{display:true,text:'Tasks',color:'#a8a8b3'}}
+    },plugins:{legend:{labels:{color:'#eee'}},tooltip:{mode:'index',intersect:false}}}
   });
+
+  // Table
+  const activeTasks = tasks.filter(t => t.status !== 'Done').sort((a,b) => {const o={'In Progress':0,'Not Started':1,'Pending':2,'Archived':3};return (o[a.status]||5)-(o[b.status]||5);});
+  const table = document.getElementById('tasksTable');
+  table.querySelector('thead tr').innerHTML = ['#','Task','Status','Assignee','Due','Progress','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('tbody').innerHTML = activeTasks.map((t,i)=>'<tr><td>'+(i+1)+'</td><td>'+t.name+'</td><td>'+statusBadge(t.status)+'</td><td>'+(t.assignees.join(', ')||'-')+'</td><td>'+(t.due||'-')+'</td><td>'+progBar(t.progress)+'</td><td>'+t.edited+'</td></tr>').join('')
+    || '<tr><td colspan="7" style="text-align:center;color:#a8a8b3;padding:30px">No tasks match filters</td></tr>';
+  makeSortable(table);
 }
 
 function renderTasksTable(d) {
-  // Populate assignee dropdown once
   const asel = document.getElementById('filterAssignee');
   if(asel.options.length <= 1) {
     d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; asel.appendChild(o); });
   }
-  applyTaskFilters();
-}
-
-function applyTaskFilters() {
-  if(!DATA) return;
-  const query = document.getElementById('search').value.toLowerCase();
-  const status = document.getElementById('filterStatus').value;
-  const assignee = document.getElementById('filterAssignee').value;
-  const due = document.getElementById('filterDue').value;
-  const today = new Date().toISOString().slice(0,10);
-
-  let maxDue = null;
-  if(['7','14','21','30','60','90'].includes(due)) {
-    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
-    maxDue = dt.toISOString().slice(0,10);
-  }
-
-  let tasks = DATA.tasks.filter(t => t.status !== 'Done');
-  if(status !== 'all') tasks = tasks.filter(t => t.status === status);
-  if(assignee !== 'all') tasks = tasks.filter(t => t.assignees.includes(assignee));
-  if(due === 'overdue') tasks = tasks.filter(t => t.due && t.due < today);
-  else if(due === 'nodue') tasks = tasks.filter(t => !t.due);
-  else if(maxDue) tasks = tasks.filter(t => t.due && t.due <= maxDue);
-  if(query) tasks = tasks.filter(t => (t.name+t.assignees.join(',')).toLowerCase().includes(query));
-
-  tasks.sort((a,b) => {const o={'In Progress':0,'Not Started':1,'Pending':2,'Archived':3};return (o[a.status]||5)-(o[b.status]||5);});
-
-  const table = document.getElementById('tasksTable');
-  table.querySelector('thead tr').innerHTML = ['#','Task','Status','Assignee','Due','Progress','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
-  table.querySelector('tbody').innerHTML = tasks.map((t,i)=>'<tr><td>'+(i+1)+'</td><td>'+t.name+'</td><td>'+statusBadge(t.status)+'</td><td>'+(t.assignees.join(', ')||'-')+'</td><td>'+(t.due||'-')+'</td><td>'+progBar(t.progress)+'</td><td>'+t.edited+'</td></tr>').join('')
-    || '<tr><td colspan="7" style="text-align:center;color:#a8a8b3;padding:30px">No tasks match filters</td></tr>';
-  makeSortable(table);
+  applyAllTaskFilters();
 }
 
 function renderProjectsTable(d) {
@@ -705,7 +680,7 @@ function loadData() {
   document.getElementById('lastUpdate').textContent = 'Loading...';
   fetch('/api/data').then(r=>r.json()).then(d=>{
     DATA = d;
-    renderKPI(d); renderCharts(d); renderPeopleCharts(d); renderDailyResolve(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d); renderSpk(d);
+    renderKPI(d); renderCharts(d); renderPeopleCharts(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d); renderSpk(d);
     document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date().toLocaleTimeString();
   }).catch(e=>{
     document.getElementById('lastUpdate').textContent = 'Error: '+e.message;
