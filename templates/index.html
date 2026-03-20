@@ -87,11 +87,14 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
         <option value="all">👥 All Members</option>
       </select>
       <select id="dailyRange" onchange="renderDailyResolve(DATA)" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="7">Last 7 days</option>
-        <option value="14">Last 14 days</option>
-        <option value="30" selected>Last 30 days</option>
-        <option value="90">Last 90 days</option>
-        <option value="all">All time</option>
+        <option value="7">Last 7 Days</option>
+        <option value="this_week">This Week</option>
+        <option value="14">Last 2 Weeks</option>
+        <option value="this_month" selected>This Month</option>
+        <option value="last_month">Last Month</option>
+        <option value="90">Last 3 Months</option>
+        <option value="this_year">This Year</option>
+        <option value="all">All Time</option>
       </select>
     </div>
     <canvas id="dailyResolveChart"></canvas>
@@ -220,6 +223,10 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
         <option value="14">≤ 2 Minggu</option>
         <option value="30">≤ 1 Bulan</option>
         <option value="90">≤ 3 Bulan</option>
+        <option value="180">≤ 6 Bulan</option>
+        <option value="210">≤ 7 Bulan</option>
+        <option value="240">≤ 8 Bulan</option>
+        <option value="270">≤ 9 Bulan</option>
         <option value="overdue">Sudah Lewat</option>
       </select>
     </div>
@@ -319,13 +326,7 @@ function renderCharts(d) {
 function getPeopleMinDate() {
   const range = document.getElementById('peopleRange').value;
   if(range === 'all') return null;
-  const now = new Date();
-  if(range === 'this_month') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
-  if(range === 'last_month') { const d=new Date(now.getFullYear(), now.getMonth()-1, 1); return d.toISOString().slice(0,10); }
-  if(range === 'last_2_month') { const d=new Date(now.getFullYear(), now.getMonth()-2, 1); return d.toISOString().slice(0,10); }
-  if(range === 'last_3_month') { const d=new Date(now.getFullYear(), now.getMonth()-3, 1); return d.toISOString().slice(0,10); }
-  const d = new Date(); d.setDate(d.getDate() - parseInt(range));
-  return d.toISOString().slice(0,10);
+  return calcMinDate(range);
 }
 
 function renderPeopleCharts(d) {
@@ -363,6 +364,18 @@ function renderPeopleCharts(d) {
   ]},options:{scales:{x:{stacked:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}},y:{stacked:true,beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}}},plugins:{legend:{labels:{color:'#eee'}}}}});
 }
 
+function calcMinDate(range) {
+  const now = new Date();
+  if(range === 'this_week') { const d=new Date(now); d.setDate(d.getDate()-d.getDay()); return d.toISOString().slice(0,10); }
+  if(range === 'this_month') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  if(range === 'last_month') return new Date(now.getFullYear(), now.getMonth()-1, 1).toISOString().slice(0,10);
+  if(range === 'last_2_month') return new Date(now.getFullYear(), now.getMonth()-2, 1).toISOString().slice(0,10);
+  if(range === 'last_3_month') return new Date(now.getFullYear(), now.getMonth()-3, 1).toISOString().slice(0,10);
+  if(range === 'this_year') return now.getFullYear()+'-01-01';
+  const d = new Date(); d.setDate(d.getDate() - parseInt(range));
+  return d.toISOString().slice(0,10);
+}
+
 function renderDailyResolve(d) {
   if(charts.dailyResolve) charts.dailyResolve.destroy();
   const sel = document.getElementById('dailyFilter');
@@ -376,10 +389,7 @@ function renderDailyResolve(d) {
 
   // Date range
   let minDate = '0000-00-00';
-  if(range !== 'all') {
-    const dt = new Date(); dt.setDate(dt.getDate() - parseInt(range));
-    minDate = dt.toISOString().slice(0,10);
-  }
+  if(range !== 'all') minDate = calcMinDate(range);
 
   // Filter tasks by assignee
   const tasks = filter === 'all' ? d.tasks : d.tasks.filter(t => t.assignees.includes(filter));
