@@ -226,6 +226,7 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
       </select>
       <select id="filterSpkPic" onchange="applySpkFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
         <option value="all">👤 All PIC</option>
+        <option value="empty">⚠️ Belum Ada PIC</option>
       </select>
     </div>
     <div class="scroll-table"><table id="spkTable"><thead><tr></tr></thead><tbody></tbody></table></div>
@@ -658,7 +659,8 @@ function applySpkFilters() {
   let spk = [...DATA.spk];
   if(status !== 'all') spk = spk.filter(s => s.status === status);
   if(vendor !== 'all') spk = spk.filter(s => s.vendor === vendor);
-  if(pic !== 'all') spk = spk.filter(s => s.pic.includes(pic));
+  if(pic === 'empty') spk = spk.filter(s => !s.pic || s.pic.length === 0);
+  else if(pic !== 'all') spk = spk.filter(s => s.pic.includes(pic));
   if(due === 'overdue') spk = spk.filter(s => s.jatuh_tempo && s.jatuh_tempo < today);
   else if(due !== 'all') {
     const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
