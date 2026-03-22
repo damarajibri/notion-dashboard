@@ -224,6 +224,9 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
         <option value="270">≤ 9 Bulan</option>
         <option value="overdue">Sudah Lewat</option>
       </select>
+      <select id="filterSpkPic" onchange="applySpkFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+        <option value="all">👤 All PIC</option>
+      </select>
     </div>
     <div class="scroll-table"><table id="spkTable"><thead><tr></tr></thead><tbody></tbody></table></div>
   </div>
@@ -612,11 +615,14 @@ function renderAchievements(d) {
 function renderSpk(d) {
   const ssel = document.getElementById('filterSpkStatus');
   const vsel = document.getElementById('filterSpkVendor');
+  const psel = document.getElementById('filterSpkPic');
   if(ssel.options.length <= 1) {
     const statuses = [...new Set(d.spk.map(s=>s.status).filter(Boolean))].sort();
     statuses.forEach(s => { const o=document.createElement('option'); o.value=s; o.textContent=s; ssel.appendChild(o); });
     const vendors = [...new Set(d.spk.map(s=>s.vendor).filter(Boolean))].sort();
     vendors.forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; vsel.appendChild(o); });
+    const pics = [...new Set(d.spk.flatMap(s=>s.pic))].filter(Boolean).sort();
+    pics.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; psel.appendChild(o); });
   }
   // KPI
   const total = d.spk.length;
@@ -646,11 +652,13 @@ function applySpkFilters() {
   const status = document.getElementById('filterSpkStatus').value;
   const vendor = document.getElementById('filterSpkVendor').value;
   const due = document.getElementById('filterSpkDue').value;
+  const pic = document.getElementById('filterSpkPic').value;
   const today = new Date().toISOString().slice(0,10);
 
   let spk = [...DATA.spk];
   if(status !== 'all') spk = spk.filter(s => s.status === status);
   if(vendor !== 'all') spk = spk.filter(s => s.vendor === vendor);
+  if(pic !== 'all') spk = spk.filter(s => s.pic.includes(pic));
   if(due === 'overdue') spk = spk.filter(s => s.jatuh_tempo && s.jatuh_tempo < today);
   else if(due !== 'all') {
     const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
