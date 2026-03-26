@@ -479,12 +479,13 @@ function applyProjFilters() {
   projects.sort((a,b) => {const o={'In Progress':0,'Planning':1,'Done':2};return (o[a.status]||5)-(o[b.status]||5);});
 
   const table = document.getElementById('projTable');
-  table.querySelector('thead tr').innerHTML = ['#','Project','Status','Assignee','Due','Completion','Docs','Priority','SPK Baru','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('thead tr').innerHTML = ['#','Project','Status','Assignee','Due','Remaining Days','Completion','Docs','Priority','SPK Baru','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
   table.querySelector('tbody').innerHTML = projects.map((p,i) => {
     const pri = p.priority!=='-'?'<span class="badge '+(p.priority==='High'?'b-high':'b-med')+'">'+p.priority+'</span>':'-';
     const spkb = p.spk_baru && p.spk_baru.length > 0 ? p.spk_baru.join('<br>') : '-';
-    return '<tr><td>'+(i+1)+'</td><td>'+p.title+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.assignees.join(', ')||'-')+'</td><td>'+(p.due||'-')+'</td><td>'+progBar(p.completion)+'</td><td>'+p.docs+'</td><td>'+pri+'</td><td>'+spkb+'</td><td>'+p.edited+'</td></tr>';
-  }).join('') || '<tr><td colspan="10" style="text-align:center;color:#a8a8b3;padding:30px">No projects match filters</td></tr>';
+    const rd = p.remaining_days!==null&&p.remaining_days!==undefined ? sisaBadge(p.remaining_days) : '-';
+    return '<tr><td>'+(i+1)+'</td><td>'+p.title+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.assignees.join(', ')||'-')+'</td><td>'+(p.due||'-')+'</td><td>'+rd+'</td><td>'+progBar(p.completion)+'</td><td>'+p.docs+'</td><td>'+pri+'</td><td>'+spkb+'</td><td>'+p.edited+'</td></tr>';
+  }).join('') || '<tr><td colspan="11" style="text-align:center;color:#a8a8b3;padding:30px">No projects match filters</td></tr>';
   makeSortable(table);
 }
 

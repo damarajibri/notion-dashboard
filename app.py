@@ -200,6 +200,14 @@ def api_data():
                 p['due'] = dates[0]
         del p['spk_baru_ids'], p['spk_seb_ids']
 
+    from datetime import datetime
+    today_dt = datetime.now().date()
+    for p in projects:
+        if p['due']:
+            p['remaining_days'] = (datetime.strptime(p['due'], '%Y-%m-%d').date() - today_dt).days
+        else:
+            p['remaining_days'] = None
+
     # Task stats
     task_status = defaultdict(int)
     created_monthly, done_monthly = defaultdict(int), defaultdict(int)
