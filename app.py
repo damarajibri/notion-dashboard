@@ -134,12 +134,13 @@ def extract_project(r, personel):
     if dates and dates.get('end'): due = dates['end'][:10]
     elif dates and dates.get('start'): due = dates['start'][:10]
     spk_baru_ids = [rel['id'] for rel in props.get('SPK baru',{}).get('relation',[])]
+    spk_seb_ids = [rel['id'] for rel in props.get('SPK sebelumnya',{}).get('relation',[])]
     return {
         'title': title, 'status': status_name, 'priority': priority_name,
         'assignees': assignees, 'completion': comp_val, 'docs': f'{doc_done}/9',
         'doc_done': doc_done, 'created': r['created_time'][:10],
         'edited': r['last_edited_time'][:10], 'due': due,
-        'spk_baru_ids': spk_baru_ids
+        'spk_baru_ids': spk_baru_ids, 'spk_seb_ids': spk_seb_ids
     }
 
 @app.route('/')
@@ -180,6 +181,9 @@ def api_data():
             for old_id in spk_seb:
                 spk_baru_map.setdefault(old_id, []).extend(spk_bar)
 
+    # Build SPK ID -> jatuh_tempo map (before _id is deleted)
+    spk_jt_map = {s.get('_id',''): s['jatuh_tempo'] for s in spk if s.get('_id')}
+
     for s in spk:
         s['perpanjangan'] = [{'title': proj_map.get(pid,'?'), 'status': s['status_perpanjangan'][i] if i < len(s['status_perpanjangan']) else ''} for i, pid in enumerate(s['perp_ids'])]
         # Resolve SPK baru
@@ -187,10 +191,14 @@ def api_data():
         s['spk_baru'] = [spk_map.get(bid, bid[:8]) for bid in baru_ids]
         del s['perp_ids'], s['status_perpanjangan'], s['_id']
 
-    # Resolve SPK baru for projects
+    # Resolve SPK baru and due from SPK sebelumnya for projects
     for p in projects:
         p['spk_baru'] = [spk_map.get(sid, sid[:8]) for sid in p.get('spk_baru_ids',[])]
-        del p['spk_baru_ids']
+        if not p['due'] and p.get('spk_seb_ids'):
+            dates = sorted(filter(None, [spk_jt_map.get(sid) for sid in p['spk_seb_ids']]))
+            if dates:
+                p['due'] = dates[0]
+        del p['spk_baru_ids'], p['spk_seb_ids']
 
     # Task stats
     task_status = defaultdict(int)
