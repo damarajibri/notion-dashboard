@@ -43,6 +43,15 @@ def get_personel():
                 p[r['id']] = v['title'][0]['plain_text']
     return p
 
+def get_page_title(page_id):
+    try:
+        data = notion_get(f'https://api.notion.com/v1/pages/{page_id}')
+        for v in data.get('properties',{}).values():
+            if v.get('type') == 'title' and v.get('title'):
+                return v['title'][0]['plain_text']
+    except: pass
+    return '?'
+
 def extract_task(r, personel):
     props = r['properties']
     title = props.get('Task name',{}).get('title',[])
@@ -64,15 +73,23 @@ def extract_task(r, personel):
         'progress': int(progress*100) if progress is not None else None
     }
 
+_title_cache = {}
+
+def resolve_title(page_id, personel):
+    if page_id in personel: return personel[page_id]
+    if page_id not in _title_cache:
+        _title_cache[page_id] = get_page_title(page_id)
+    return _title_cache[page_id]
+
 def extract_spk(r, personel):
     props = r['properties']
     no_spk = props.get('No SPK',{}).get('title',[])
     no_spk = no_spk[0]['plain_text'] if no_spk else ''
     proj = props.get('Project Name',{}).get('rich_text',[])
     proj_name = proj[0]['plain_text'] if proj else ''
-    vendor = props.get('Vendor',{}).get('select') or {}
-    vendor_name = vendor.get('name') or '-'
-    status = props.get('Status',{}).get('select') or {}
+    vendor_rel = props.get('Vendor',{}).get('relation',[])
+    vendor_name = ', '.join(resolve_title(v['id'], personel) for v in vendor_rel) if vendor_rel else '-'
+    status = props.get('Status',{}).get('status') or {}
     status_name = status.get('name') or '-'
     jt = props.get('Jatuh Tempo',{}).get('date',{})
     jatuh_tempo = jt.get('start','')[:10] if jt and jt.get('start') else ''
