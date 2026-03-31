@@ -70,10 +70,10 @@ def extract_spk(r, personel):
     no_spk = no_spk[0]['plain_text'] if no_spk else ''
     proj = props.get('Project Name',{}).get('rich_text',[])
     proj_name = proj[0]['plain_text'] if proj else ''
-    vendor = props.get('Vendor',{}).get('select',{})
-    vendor_name = vendor.get('name','') if vendor else '-'
-    status = props.get('Status',{}).get('select',{})
-    status_name = status.get('name','') if status else '-'
+    vendor = props.get('Vendor',{}).get('select') or {}
+    vendor_name = vendor.get('name') or '-'
+    status = props.get('Status',{}).get('select') or {}
+    status_name = status.get('name') or '-'
     jt = props.get('Jatuh Tempo',{}).get('date',{})
     jatuh_tempo = jt.get('start','')[:10] if jt and jt.get('start') else ''
     sisa = props.get('Sisa Hari',{}).get('formula',{})
