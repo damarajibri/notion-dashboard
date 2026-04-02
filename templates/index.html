@@ -722,16 +722,20 @@ function showProjDetail(idx) {
   const p = window._filteredProjects[idx];
   if(!p) return;
   document.getElementById('projModalTitle').textContent = p.title;
+  const pri = p.priority!=='-'?'<span class="badge '+(p.priority==='High'?'b-high':'b-med')+'">'+p.priority+'</span>':'-';
+  const rd = p.remaining_days!==null&&p.remaining_days!==undefined ? sisaBadge(p.remaining_days) : '-';
+  const spkb = p.spk_baru&&p.spk_baru.length ? p.spk_baru.join(', ') : '-';
+  const docs = p.doc_detail ? Object.entries(p.doc_detail).map(([k,v])=>v+' '+k).join('<br>') : p.docs;
   const rows = [
+    ['Project', p.title],
     ['Status', statusBadge(p.status)],
-    ['Priority', p.priority||'-'],
     ['Assignee', p.assignees.join(', ')||'-'],
-    ['Due Date', p.due||'-'],
-    ['Remaining Days', p.remaining_days!==null&&p.remaining_days!==undefined ? sisaBadge(p.remaining_days) : '-'],
+    ['Due', p.due||'-'],
+    ['Remaining Days', rd],
     ['Completion', progBar(p.completion)],
-    ['Documents', p.docs],
-    ['SPK Baru', p.spk_baru&&p.spk_baru.length ? p.spk_baru.join(', ') : '-'],
-    ['Created', p.created||'-'],
+    ['Docs ('+p.docs+')', docs],
+    ['Priority', pri],
+    ['SPK Baru', spkb],
     ['Last Edit', p.edited||'-']
   ];
   document.getElementById('projModalBody').innerHTML = rows.map(([l,v])=>'<div class="modal-row"><div class="label">'+l+'</div><div class="value">'+v+'</div></div>').join('');
