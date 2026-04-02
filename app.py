@@ -142,10 +142,14 @@ def extract_project(r, personel):
         comp_val = round(comp['rollup']['number']*100)
     doc_fields = ['TOR','FS (Feasibility Study)','Izin Prinsip','Izin Anggaran','Penilaian Teknis','PI (Pakta Integritas)','TPRA (Third Party Risk Assesment)','BenchMark','Aanwidjzing']
     doc_done = 0
+    doc_detail = {}
     for df in doc_fields:
         val = props.get(df,{})
-        if val.get('type') == 'status' and val.get('status',{}).get('name','') in ('Done','Complete'): doc_done += 1
-        elif val.get('type') == 'checkbox' and val.get('checkbox'): doc_done += 1
+        done = False
+        if val.get('type') == 'status' and val.get('status',{}).get('name','') in ('Done','Complete'): done = True
+        elif val.get('type') == 'checkbox' and val.get('checkbox'): done = True
+        if done: doc_done += 1
+        doc_detail[df] = '✅' if done else '❌'
     dates = props.get('Dates',{}).get('date',{})
     due = ''
     if dates and dates.get('end'): due = dates['end'][:10]
@@ -155,7 +159,7 @@ def extract_project(r, personel):
     return {
         'title': title, 'status': status_name, 'priority': priority_name,
         'assignees': assignees, 'completion': comp_val, 'docs': f'{doc_done}/9',
-        'doc_done': doc_done, 'created': r['created_time'][:10],
+        'doc_done': doc_done, 'doc_detail': doc_detail, 'created': r['created_time'][:10],
         'edited': r['last_edited_time'][:10], 'due': due,
         'spk_baru_ids': spk_baru_ids, 'spk_seb_ids': spk_seb_ids
     }
