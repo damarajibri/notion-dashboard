@@ -48,6 +48,17 @@ tr:hover td{background:var(--row-hover)}
 select{background:var(--input-bg)!important;border:1px solid var(--input-border)!important;color:var(--text)!important}
 .theme-toggle{position:fixed;top:15px;right:20px;background:var(--card);border:1px solid var(--card-border);color:var(--text);padding:8px 14px;border-radius:10px;cursor:pointer;font-size:16px;z-index:99;box-shadow:0 2px 10px var(--shadow)}
 .theme-toggle:hover{background:var(--th-hover)}
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:100;justify-content:center;align-items:center}
+.modal-overlay.active{display:flex}
+.modal{background:var(--card);border-radius:16px;padding:30px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.4);position:relative}
+.modal h2{color:var(--accent);margin:0 0 20px;font-size:18px}
+.modal-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer}
+.modal-close:hover{color:var(--accent)}
+.modal-row{display:flex;padding:8px 0;border-bottom:1px solid var(--card-border);font-size:13px}
+.modal-row .label{color:var(--text2);width:140px;flex-shrink:0}
+.modal-row .value{color:var(--text);flex:1}
+.action-btn{background:none;border:none;cursor:pointer;font-size:16px;padding:4px 8px;border-radius:6px}
+.action-btn:hover{background:var(--th-hover)}
 </style>
 </head><body>
 <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</button>
@@ -230,6 +241,14 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
       </select>
     </div>
     <div class="scroll-table"><table id="spkTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="projModal" onclick="if(event.target===this)closeProjModal()">
+  <div class="modal">
+    <button class="modal-close" onclick="closeProjModal()">✕</button>
+    <h2 id="projModalTitle">Project Detail</h2>
+    <div id="projModalBody"></div>
   </div>
 </div>
 
@@ -479,13 +498,14 @@ function applyProjFilters() {
   projects.sort((a,b) => {const o={'In Progress':0,'Planning':1,'Done':2};return (o[a.status]||5)-(o[b.status]||5);});
 
   const table = document.getElementById('projTable');
-  table.querySelector('thead tr').innerHTML = ['#','Project','Status','Assignee','Due','Remaining Days','Completion','Docs','Priority','SPK Baru','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('thead tr').innerHTML = ['#','Project','Status','Assignee','Due','Remaining Days','Completion','Docs','Priority','SPK Baru','Last Edit','Action'].map(h=>'<th>'+h+'</th>').join('');
   table.querySelector('tbody').innerHTML = projects.map((p,i) => {
     const pri = p.priority!=='-'?'<span class="badge '+(p.priority==='High'?'b-high':'b-med')+'">'+p.priority+'</span>':'-';
     const spkb = p.spk_baru && p.spk_baru.length > 0 ? p.spk_baru.join('<br>') : '-';
     const rd = p.remaining_days!==null&&p.remaining_days!==undefined ? sisaBadge(p.remaining_days) : '-';
-    return '<tr><td>'+(i+1)+'</td><td>'+p.title+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.assignees.join(', ')||'-')+'</td><td>'+(p.due||'-')+'</td><td>'+rd+'</td><td>'+progBar(p.completion)+'</td><td>'+p.docs+'</td><td>'+pri+'</td><td>'+spkb+'</td><td>'+p.edited+'</td></tr>';
-  }).join('') || '<tr><td colspan="11" style="text-align:center;color:#a8a8b3;padding:30px">No projects match filters</td></tr>';
+    return '<tr><td>'+(i+1)+'</td><td>'+p.title+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.assignees.join(', ')||'-')+'</td><td>'+(p.due||'-')+'</td><td>'+rd+'</td><td>'+progBar(p.completion)+'</td><td>'+p.docs+'</td><td>'+pri+'</td><td>'+spkb+'</td><td>'+p.edited+'</td><td><button class="action-btn" onclick="showProjDetail('+i+')">🔍</button></td></tr>';
+  }).join('') || '<tr><td colspan="12" style="text-align:center;color:#a8a8b3;padding:30px">No projects match filters</td></tr>';
+  window._filteredProjects = projects;
   makeSortable(table);
 }
 
@@ -697,6 +717,28 @@ function loadData() {
     document.getElementById('lastUpdate').textContent = 'Error: '+e.message;
   });
 }
+
+function showProjDetail(idx) {
+  const p = window._filteredProjects[idx];
+  if(!p) return;
+  document.getElementById('projModalTitle').textContent = p.title;
+  const rows = [
+    ['Status', statusBadge(p.status)],
+    ['Priority', p.priority||'-'],
+    ['Assignee', p.assignees.join(', ')||'-'],
+    ['Due Date', p.due||'-'],
+    ['Remaining Days', p.remaining_days!==null&&p.remaining_days!==undefined ? sisaBadge(p.remaining_days) : '-'],
+    ['Completion', progBar(p.completion)],
+    ['Documents', p.docs],
+    ['SPK Baru', p.spk_baru&&p.spk_baru.length ? p.spk_baru.join(', ') : '-'],
+    ['Created', p.created||'-'],
+    ['Last Edit', p.edited||'-']
+  ];
+  document.getElementById('projModalBody').innerHTML = rows.map(([l,v])=>'<div class="modal-row"><div class="label">'+l+'</div><div class="value">'+v+'</div></div>').join('');
+  document.getElementById('projModal').classList.add('active');
+}
+function closeProjModal() { document.getElementById('projModal').classList.remove('active'); }
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeProjModal(); });
 
 loadData();
 setInterval(loadData, 300000); // auto-refresh every 5 min
