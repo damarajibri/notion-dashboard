@@ -58,7 +58,7 @@ def extract_task(r, personel):
     name = title[0]['plain_text'] if title else ''
     status = props.get('Status',{}).get('status',{})
     status_name = status.get('name','') if status else ''
-    due = props.get('due',{}).get('date',{})
+    due = props.get('Due Date',{}).get('date',{})
     due_start = due.get('start','')[:10] if due and due.get('start') else ''
     comp = props.get('Completed on',{}).get('date',{})
     comp_date = comp.get('start','')[:10] if comp else ''
