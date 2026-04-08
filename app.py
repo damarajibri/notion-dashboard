@@ -65,12 +65,15 @@ def extract_task(r, personel):
     rel = props.get('Assignee relation',{}).get('relation',[])
     assignees = [personel.get(a['id'],'?') for a in rel]
     progress = props.get('Progress',{}).get('number')
+    tags_raw = props.get('Tags',{}).get('multi_select',[])
+    tags = [t['name'] for t in tags_raw] if tags_raw else []
     return {
         'name': name, 'status': status_name, 'due': due_start,
         'assignees': assignees, 'created': r['created_time'][:10],
         'edited': r['last_edited_time'][:10],
         'done_date': comp_date or (r['last_edited_time'][:10] if status_name == 'Done' else ''),
-        'progress': int(progress*100) if progress is not None else None
+        'progress': int(progress*100) if progress is not None else None,
+        'tags': tags
     }
 
 _title_cache = {}
