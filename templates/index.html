@@ -114,6 +114,9 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
       <option value="overdue">Overdue</option>
       <option value="nodue">No Due Date</option>
     </select>
+    <select id="filterTag" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+      <option value="all">🏷️ All Tags</option>
+    </select>
     <select id="dailyRange" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
       <option value="7">Last 7 Days</option>
       <option value="this_week">This Week</option>
@@ -400,12 +403,14 @@ function getFilteredTasks() {
   const status = document.getElementById('filterStatus').value;
   const assignee = document.getElementById('filterAssignee').value;
   const due = document.getElementById('filterDue').value;
+  const tag = document.getElementById('filterTag').value;
   const range = document.getElementById('dailyRange').value;
   const today = new Date().toISOString().slice(0,10);
 
   let tasks = [...DATA.tasks];
   if(status !== 'all') tasks = tasks.filter(t => t.status === status);
   if(assignee !== 'all') tasks = tasks.filter(t => t.assignees.includes(assignee));
+  if(tag !== 'all') tasks = tasks.filter(t => t.tags && t.tags.includes(tag));
   if(due === 'overdue') tasks = tasks.filter(t => t.due && t.due < today);
   else if(due === 'nodue') tasks = tasks.filter(t => !t.due);
   else if(['7','14','21','30','60','90'].includes(due)) {
@@ -449,9 +454,9 @@ function applyAllTaskFilters() {
   // Table
   const activeTasks = tasks.filter(t => t.status !== 'Done').sort((a,b) => {const o={'In Progress':0,'Not Started':1,'Pending':2,'Archived':3};return (o[a.status]||5)-(o[b.status]||5);});
   const table = document.getElementById('tasksTable');
-  table.querySelector('thead tr').innerHTML = ['#','Task','Status','Assignee','Due','Progress','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
-  table.querySelector('tbody').innerHTML = activeTasks.map((t,i)=>'<tr><td>'+(i+1)+'</td><td>'+t.name+'</td><td>'+statusBadge(t.status)+'</td><td>'+(t.assignees.join(', ')||'-')+'</td><td>'+(t.due||'-')+'</td><td>'+progBar(t.progress)+'</td><td>'+t.edited+'</td></tr>').join('')
-    || '<tr><td colspan="7" style="text-align:center;color:#a8a8b3;padding:30px">No tasks match filters</td></tr>';
+  table.querySelector('thead tr').innerHTML = ['#','Task','Status','Assignee','Tags','Due','Progress','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('tbody').innerHTML = activeTasks.map((t,i)=>'<tr><td>'+(i+1)+'</td><td>'+t.name+'</td><td>'+statusBadge(t.status)+'</td><td>'+(t.assignees.join(', ')||'-')+'</td><td>'+((t.tags||[]).map(g=>'<span style="background:#1a4a80;color:#7ec8e3;padding:1px 7px;border-radius:8px;font-size:11px;margin:1px 2px;display:inline-block">'+g+'</span>').join('')||'-')+'</td><td>'+(t.due||'-')+'</td><td>'+progBar(t.progress)+'</td><td>'+t.edited+'</td></tr>').join('')
+    || '<tr><td colspan="8" style="text-align:center;color:#a8a8b3;padding:30px">No tasks match filters</td></tr>';
   makeSortable(table);
 }
 
@@ -459,6 +464,11 @@ function renderTasksTable(d) {
   const asel = document.getElementById('filterAssignee');
   if(asel.options.length <= 1) {
     d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; asel.appendChild(o); });
+  }
+  const tsel = document.getElementById('filterTag');
+  if(tsel.options.length <= 1) {
+    const allTags = [...new Set(d.tasks.flatMap(t => t.tags||[]))].sort();
+    allTags.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; tsel.appendChild(o); });
   }
   applyAllTaskFilters();
 }
