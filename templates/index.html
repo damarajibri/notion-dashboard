@@ -2,124 +2,129 @@
 <html><head>
 <meta charset="UTF-8">
 <title>EXO Dashboard - Realtime</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-*{box-sizing:border-box}
-:root{--bg:#1a1a2e;--card:#16213e;--card-border:#0f3460;--text:#eee;--text2:#a8a8b3;--th:#0f3460;--th-hover:#1a4a80;--row-hover:#1a2a4e;--input-bg:#0f3460;--input-border:#1a4a80;--shadow:rgba(0,0,0,.3);--accent:#e94560;--accent-hover:#c73650}
-[data-theme="light"]{--bg:#f0f2f5;--card:#fff;--card-border:#dde1e6;--text:#1a1a2e;--text2:#555;--th:#e8ecf0;--th-hover:#dde1e6;--row-hover:#f5f7fa;--input-bg:#fff;--input-border:#ccc;--shadow:rgba(0,0,0,.08);--accent:#e94560;--accent-hover:#c73650}
-body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;transition:background .3s,color .3s}
-h1{text-align:center;color:var(--accent);margin-bottom:5px}
-.subtitle{text-align:center;color:var(--text2);margin-bottom:10px}
-.refresh-bar{text-align:center;margin-bottom:20px}
-.refresh-bar button{background:var(--accent);color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:13px}
-.refresh-bar button:hover{background:var(--accent-hover)}
-.refresh-bar span{color:var(--text2);font-size:12px;margin-left:10px}
-.tabs{display:flex;justify-content:center;gap:10px;margin-bottom:25px}
-.tab{padding:8px 20px;border-radius:8px;cursor:pointer;background:var(--card);color:var(--text2);border:1px solid var(--card-border);font-size:13px}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#1a1a2e;--card:#16213e;--card-border:#0f3460;--text:#eee;--text2:#a8a8b3;--th:#0f3460;--th-hover:#1a4a80;--row-hover:#1a2a4e;--input-bg:#0f3460;--input-border:#1a4a80;--shadow:rgba(0,0,0,.3);--accent:#e94560;--accent-hover:#c73650;--green:#2eb872;--yellow:#e7b416;--blue:#4cc9f0;--red:#e94560}
+[data-theme="light"]{--bg:#f0f2f5;--card:#fff;--card-border:#dde1e6;--text:#1a1a2e;--text2:#555;--th:#e8ecf0;--th-hover:#dde1e6;--row-hover:#f5f7fa;--input-bg:#fff;--input-border:#ccc;--shadow:rgba(0,0,0,.08)}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);padding:20px;transition:background .3s,color .3s}
+h1{text-align:center;color:var(--accent);margin-bottom:5px;font-size:22px}
+.subtitle{text-align:center;color:var(--text2);margin-bottom:10px;font-size:13px}
+.refresh-bar{text-align:center;margin-bottom:20px;display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
+.btn{background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:8px;cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:5px}
+.btn:hover{background:var(--accent-hover)}
+.btn-outline{background:transparent;border:1px solid var(--card-border);color:var(--text2)}
+.btn-outline:hover{background:var(--th-hover);color:var(--text)}
+.btn-green{background:#1a4a2e;color:var(--green);border:1px solid var(--green)}
+.btn-green:hover{background:var(--green);color:#fff}
+.tabs{display:flex;justify-content:center;gap:8px;margin-bottom:25px;flex-wrap:wrap}
+.tab{padding:7px 18px;border-radius:8px;cursor:pointer;background:var(--card);color:var(--text2);border:1px solid var(--card-border);font-size:13px;transition:all .2s}
 .tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .tab-content{display:none}.tab-content.active{display:block}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:25px;max-width:1200px;margin:0 auto}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;max-width:1200px;margin:0 auto}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;max-width:1200px;margin:0 auto}
 .full{grid-column:1/-1}
-.card{background:var(--card);border-radius:16px;padding:25px;box-shadow:0 4px 20px var(--shadow)}
-.card h2{color:var(--accent);text-align:center;margin:0 0 15px;font-size:15px}
-.kpi-row{display:flex;justify-content:center;gap:20px;margin-bottom:25px;flex-wrap:wrap}
-.kpi{background:var(--card);border-radius:16px;padding:15px 25px;text-align:center;box-shadow:0 4px 20px var(--shadow);min-width:90px}
-.kpi .num{font-size:28px;font-weight:bold}.kpi .label{color:var(--text2);font-size:11px;margin-top:4px}
+.card{background:var(--card);border-radius:14px;padding:20px;box-shadow:0 4px 20px var(--shadow)}
+.card h2{color:var(--accent);text-align:center;margin-bottom:15px;font-size:14px}
+.kpi-row{display:flex;justify-content:center;gap:15px;margin-bottom:20px;flex-wrap:wrap}
+.kpi{background:var(--card);border-radius:14px;padding:14px 22px;text-align:center;box-shadow:0 4px 20px var(--shadow);min-width:90px;cursor:default;transition:transform .15s}
+.kpi:hover{transform:translateY(-2px)}
+.kpi .num{font-size:26px;font-weight:bold}.kpi .label{color:var(--text2);font-size:11px;margin-top:3px}
 table{width:100%;border-collapse:collapse;font-size:12px}
-th{background:var(--th);color:var(--text);padding:8px 6px;text-align:left;position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap}
+th{background:var(--th);color:var(--text);padding:8px 6px;text-align:left;position:sticky;top:0;cursor:pointer;user-select:none;white-space:nowrap;z-index:1}
 th:hover{background:var(--th-hover)}
-td{padding:7px 6px;border-bottom:1px solid var(--card-border)}
+td{padding:7px 6px;border-bottom:1px solid var(--card-border);vertical-align:middle}
 tr:hover td{background:var(--row-hover)}
-.scroll-table{max-height:500px;overflow-y:auto}
-.prog-bar{background:var(--card-border);border-radius:8px;height:16px;overflow:hidden;min-width:60px}
-.prog-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold}
-.green{color:#2eb872}.red{color:#e94560}.yellow{color:#e7b416}.blue{color:#4cc9f0}.gray{color:var(--text2)}
-.badge{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px}
-.b-ip{background:#0f3460;color:#4cc9f0}.b-ns{background:#533483;color:#e7b416}.b-done{background:#1a4a2e;color:#2eb872}.b-pend{background:#4a3a1e;color:#e7b416}.b-high{background:#e94560}.b-med{background:#e7b416;color:#000}
-.footer{text-align:center;margin-top:30px;color:var(--text2);font-size:12px}
-.loading{text-align:center;padding:60px;color:var(--text2);font-size:16px}
-#search,#searchProj,#searchSpk{background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;width:400px;margin:0 auto 20px;display:block;font-size:14px;outline:none;transition:border .2s,box-shadow .2s}
-#search:focus,#searchProj:focus,#searchSpk:focus{border-color:var(--accent);box-shadow:0 0 8px rgba(233,69,96,.3)}
-#search::placeholder,#searchProj::placeholder,#searchSpk::placeholder{color:var(--text2)}
-.period-toggle{display:flex;justify-content:center;gap:10px;margin-bottom:20px}
-.ptab{padding:8px 20px;border-radius:8px;cursor:pointer;background:var(--card);color:var(--text2);border:1px solid var(--card-border);font-size:13px}
+.scroll-table{max-height:480px;overflow-y:auto;border-radius:8px}
+.prog-bar{background:var(--card-border);border-radius:8px;height:15px;overflow:hidden;min-width:60px}
+.prog-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:#fff}
+.green{color:var(--green)}.red{color:var(--red)}.yellow{color:var(--yellow)}.blue{color:var(--blue)}.gray{color:var(--text2)}
+.badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:10px;font-weight:600}
+.b-ip{background:#0f3460;color:#4cc9f0}.b-ns{background:#533483;color:#e7b416}.b-done{background:#1a4a2e;color:#2eb872}.b-pend{background:#4a3a1e;color:#e7b416}.b-high{background:#e94560;color:#fff}.b-med{background:#e7b416;color:#000}.b-term{background:#333;color:#aaa}
+.filter-bar{display:flex;justify-content:center;gap:8px;margin-bottom:15px;flex-wrap:wrap;align-items:center;max-width:1200px;margin-left:auto;margin-right:auto;padding:12px;background:var(--card);border-radius:12px;border:1px solid var(--card-border);position:sticky;top:0;z-index:10}
+select,input[type=text]{background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:7px 12px;border-radius:8px;font-size:12px;outline:none;transition:border .2s}
+select:focus,input[type=text]:focus{border-color:var(--accent)}
+input[type=text]::placeholder{color:var(--text2)}
+.period-toggle{display:flex;justify-content:center;gap:8px;margin-bottom:15px}
+.ptab{padding:7px 18px;border-radius:8px;cursor:pointer;background:var(--card);color:var(--text2);border:1px solid var(--card-border);font-size:13px}
 .ptab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-.ptab:hover{background:var(--th-hover)}
-select{background:var(--input-bg)!important;border:1px solid var(--input-border)!important;color:var(--text)!important}
-.theme-toggle{position:fixed;top:15px;right:20px;background:var(--card);border:1px solid var(--card-border);color:var(--text);padding:8px 14px;border-radius:10px;cursor:pointer;font-size:16px;z-index:99;box-shadow:0 2px 10px var(--shadow)}
-.theme-toggle:hover{background:var(--th-hover)}
+.theme-toggle{position:fixed;top:15px;right:20px;background:var(--card);border:1px solid var(--card-border);color:var(--text);padding:7px 12px;border-radius:10px;cursor:pointer;font-size:15px;z-index:99;box-shadow:0 2px 10px var(--shadow)}
 .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:100;justify-content:center;align-items:center}
 .modal-overlay.active{display:flex}
-.modal{background:var(--card);border-radius:16px;padding:30px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.4);position:relative}
-.modal h2{color:var(--accent);margin:0 0 20px;font-size:18px}
-.modal-close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer}
+.modal{background:var(--card);border-radius:14px;padding:28px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.4);position:relative}
+.modal h2{color:var(--accent);margin-bottom:18px;font-size:17px}
+.modal-close{position:absolute;top:12px;right:14px;background:none;border:none;color:var(--text2);font-size:20px;cursor:pointer}
 .modal-close:hover{color:var(--accent)}
-.modal-row{display:flex;padding:8px 0;border-bottom:1px solid var(--card-border);font-size:13px}
-.modal-row .label{color:var(--text2);width:140px;flex-shrink:0}
-.modal-row .value{color:var(--text);flex:1}
-.action-btn{background:none;border:none;cursor:pointer;font-size:16px;padding:4px 8px;border-radius:6px}
+.modal-row{display:flex;padding:7px 0;border-bottom:1px solid var(--card-border);font-size:13px}
+.modal-row .lbl{color:var(--text2);width:140px;flex-shrink:0}
+.modal-row .val{color:var(--text);flex:1}
+.action-btn{background:none;border:none;cursor:pointer;font-size:15px;padding:3px 7px;border-radius:6px}
 .action-btn:hover{background:var(--th-hover)}
+.skeleton{background:linear-gradient(90deg,var(--card) 25%,var(--th) 50%,var(--card) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:8px;height:20px;margin:6px 0}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.loading-overlay{text-align:center;padding:60px;color:var(--text2)}
+.sisa-bar{display:flex;align-items:center;gap:6px;min-width:100px}
+.sisa-track{flex:1;background:var(--card-border);border-radius:4px;height:6px;overflow:hidden}
+.sisa-fill{height:100%;border-radius:4px;transition:width .3s}
+.footer{text-align:center;margin-top:30px;color:var(--text2);font-size:12px;padding:10px}
+.tag-chip{display:inline-block;padding:1px 7px;border-radius:8px;font-size:11px;margin:1px 2px;background:#1a4a80;color:#7ec8e3}
+.chart-clickable{cursor:pointer}
+.section-gap{margin-bottom:20px}
+canvas{max-height:320px}
 </style>
 </head><body>
 <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</button>
 <h1>🌕 EXO Dashboard — Realtime</h1>
 <p class="subtitle">Projects & Tasks EXO | Data from Notion API</p>
 <div class="refresh-bar">
-  <button onclick="loadData()">🔄 Refresh Data</button>
-  <span id="lastUpdate">Loading...</span>
+  <button class="btn" onclick="loadData()">🔄 Refresh</button>
+  <span id="lastUpdate" style="color:var(--text2);font-size:12px">Loading...</span>
 </div>
 
 <div class="tabs">
-  <div class="tab active" onclick="switchTab('overview')">📊 Overview</div>
-  <div class="tab" onclick="switchTab('tasks')">📋 Tasks</div>
-  <div class="tab" onclick="switchTab('projects')">🏗️ Projects Submission</div>
-  <div class="tab" onclick="switchTab('people')">👤 People</div>
-  <div class="tab" onclick="switchTab('achievements')">🏆 Achievements</div>
-  <div class="tab" onclick="switchTab('spk')">📄 SPK</div>
+  <div class="tab active" onclick="switchTab('overview',this)">📊 Overview</div>
+  <div class="tab" onclick="switchTab('tasks',this)">📋 Tasks</div>
+  <div class="tab" onclick="switchTab('projects',this)">🏗️ Projects</div>
+  <div class="tab" onclick="switchTab('spk',this)">📄 SPK</div>
+  <div class="tab" onclick="switchTab('people',this)">👤 People</div>
+  <div class="tab" onclick="switchTab('achievements',this)">🏆 Achievements</div>
 </div>
 
 <!-- OVERVIEW TAB -->
 <div id="tab-overview" class="tab-content active">
   <div class="kpi-row" id="kpi-overview"></div>
-  <div class="grid">
+  <div class="grid section-gap">
     <div class="card"><h2>📈 Monthly: Created vs Completed vs Backlog</h2><canvas id="monthlyChart"></canvas></div>
     <div class="card"><h2>⏰ Due Date Health</h2><canvas id="overdueChart"></canvas></div>
-    <div class="card"><h2>📊 Task Status</h2><canvas id="taskStatusChart"></canvas></div>
-    <div class="card"><h2>🏗️ Project Status</h2><canvas id="projStatusChart"></canvas></div>
+    <div class="card"><h2>📊 Task Status Distribution</h2><canvas id="taskStatusChart"></canvas></div>
+    <div class="card"><h2>🏗️ Project Status Distribution</h2><canvas id="projStatusChart"></canvas></div>
   </div>
 </div>
 
 <!-- TASKS TAB -->
 <div id="tab-tasks" class="tab-content">
-  <div style="display:flex;justify-content:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;max-width:1200px;margin-left:auto;margin-right:auto;margin-bottom:20px">
-    <input type="text" id="search" placeholder="🔍 Search tasks..." oninput="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none;width:180px;text-align:center">
-    <select id="filterStatus" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+  <div class="filter-bar" id="taskFilterBar">
+    <input type="text" id="search" placeholder="🔍 Search tasks..." oninput="applyAllTaskFilters()" style="width:160px">
+    <select id="filterStatus" onchange="applyAllTaskFilters()">
       <option value="all">📊 All Status</option>
       <option value="In Progress">In Progress</option>
       <option value="Not Started">Not Started</option>
       <option value="Pending">Pending</option>
       <option value="Archived">Archived</option>
     </select>
-    <select id="filterAssignee" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-      <option value="all">👥 All Assignee</option>
-    </select>
-    <select id="filterDue" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-      <option value="all">📅 All Due Date</option>
-      <option value="7">Due ≤ 1 Minggu</option>
-      <option value="14">Due ≤ 2 Minggu</option>
-      <option value="21">Due ≤ 3 Minggu</option>
-      <option value="30">Due ≤ 1 Bulan</option>
-      <option value="60">Due ≤ 2 Bulan</option>
-      <option value="90">Due ≤ 3 Bulan</option>
+    <select id="filterAssignee" onchange="applyAllTaskFilters()"><option value="all">👥 All Assignee</option></select>
+    <select id="filterDue" onchange="applyAllTaskFilters()">
+      <option value="all">📅 All Due</option>
+      <option value="7">≤ 1 Minggu</option>
+      <option value="14">≤ 2 Minggu</option>
+      <option value="30">≤ 1 Bulan</option>
+      <option value="90">≤ 3 Bulan</option>
       <option value="overdue">Overdue</option>
-      <option value="nodue">No Due Date</option>
+      <option value="nodue">No Due</option>
     </select>
-    <select id="filterTag" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-      <option value="all">🏷️ All Tags</option>
-    </select>
-    <select id="dailyRange" onchange="applyAllTaskFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+    <select id="filterTag" onchange="applyAllTaskFilters()"><option value="all">🏷️ All Tags</option></select>
+    <select id="dailyRange" onchange="applyAllTaskFilters()">
       <option value="7">Last 7 Days</option>
-      <option value="this_week">This Week</option>
       <option value="14">Last 2 Weeks</option>
       <option value="this_month" selected>This Month</option>
       <option value="last_month">Last Month</option>
@@ -127,65 +132,92 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
       <option value="this_year">This Year</option>
       <option value="all">All Time</option>
     </select>
+    <button class="btn btn-green" onclick="exportCSV('tasks')">⬇ CSV</button>
   </div>
-  <div class="card full" style="max-width:1200px;margin:0 auto 25px">
+  <div class="card full section-gap" style="max-width:1200px;margin:0 auto 20px">
     <h2>📈 Daily Task Resolve Progress</h2>
-    <canvas id="dailyResolveChart"></canvas>
+    <canvas id="dailyResolveChart" class="chart-clickable"></canvas>
   </div>
-  <div class="card full">
-    <h2>📋 All Active Tasks</h2>
+  <div class="card full" style="max-width:1200px;margin:0 auto">
+    <h2>📋 Active Tasks <span id="taskCount" style="color:var(--text2);font-size:12px"></span></h2>
     <div class="scroll-table"><table id="tasksTable"><thead><tr></tr></thead><tbody></tbody></table></div>
   </div>
 </div>
 
 <!-- PROJECTS TAB -->
 <div id="tab-projects" class="tab-content">
-  <input type="text" id="searchProj" placeholder="🔍 Search projects..." oninput="applyProjFilters()">
-  <div class="card full">
-    <h2>🏗️ All Projects Submission</h2>
-    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:15px;flex-wrap:wrap">
-      <select id="filterProjStatus" onchange="applyProjFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">📊 All Status</option>
-        <option value="In Progress">In Progress</option>
-        <option value="Planning">Planning</option>
-        <option value="Done">Done</option>
-      </select>
-      <select id="filterProjAssignee" onchange="applyProjFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">👥 All Assignee</option>
-      </select>
-      <select id="filterProjDue" onchange="applyProjFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">📅 All Due Date</option>
-        <option value="7">Due ≤ 1 Minggu</option>
-        <option value="14">Due ≤ 2 Minggu</option>
-        <option value="21">Due ≤ 3 Minggu</option>
-        <option value="30">Due ≤ 1 Bulan</option>
-        <option value="60">Due ≤ 2 Bulan</option>
-        <option value="90">Due ≤ 3 Bulan</option>
-        <option value="overdue">Overdue</option>
-        <option value="nodue">No Due Date</option>
-      </select>
-      <select id="filterProjPriority" onchange="applyProjFilters()" style="background:#0f3460;border:1px solid #1a4a80;color:#eee;padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">⚡ All Priority</option>
-        <option value="High">High</option>
-        <option value="Medium">Medium</option>
-        <option value="Low">Low</option>
-      </select>
-    </div>
+  <div class="filter-bar">
+    <input type="text" id="searchProj" placeholder="🔍 Search projects..." oninput="applyProjFilters()" style="width:160px">
+    <select id="filterProjStatus" onchange="applyProjFilters()">
+      <option value="all">📊 All Status</option>
+      <option value="In Progress">In Progress</option>
+      <option value="Planning">Planning</option>
+      <option value="Done">Done</option>
+    </select>
+    <select id="filterProjAssignee" onchange="applyProjFilters()"><option value="all">👥 All Assignee</option></select>
+    <select id="filterProjDue" onchange="applyProjFilters()">
+      <option value="all">📅 All Due</option>
+      <option value="7">≤ 1 Minggu</option>
+      <option value="14">≤ 2 Minggu</option>
+      <option value="30">≤ 1 Bulan</option>
+      <option value="90">≤ 3 Bulan</option>
+      <option value="overdue">Overdue</option>
+      <option value="nodue">No Due</option>
+    </select>
+    <select id="filterProjPriority" onchange="applyProjFilters()">
+      <option value="all">⚡ All Priority</option>
+      <option value="High">High</option>
+      <option value="Medium">Medium</option>
+      <option value="Low">Low</option>
+    </select>
+    <button class="btn btn-green" onclick="exportCSV('projects')">⬇ CSV</button>
+  </div>
+  <div class="card full" style="max-width:1200px;margin:0 auto">
+    <h2>🏗️ All Projects <span id="projCount" style="color:var(--text2);font-size:12px"></span></h2>
     <div class="scroll-table"><table id="projTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<!-- SPK TAB -->
+<div id="tab-spk" class="tab-content">
+  <div class="filter-bar">
+    <input type="text" id="searchSpk" placeholder="🔍 Search SPK..." oninput="applySpkFilters()" style="width:160px">
+    <select id="filterSpkStatus" onchange="applySpkFilters()"><option value="all">📊 All Status</option></select>
+    <select id="filterSpkVendor" onchange="applySpkFilters()"><option value="all">🏢 All Vendor</option></select>
+    <select id="filterSpkDue" onchange="applySpkFilters()">
+      <option value="all">📅 All Jatuh Tempo</option>
+      <option value="7">≤ 1 Minggu</option>
+      <option value="30">≤ 1 Bulan</option>
+      <option value="90">≤ 3 Bulan</option>
+      <option value="180">≤ 6 Bulan</option>
+      <option value="overdue">Sudah Lewat</option>
+    </select>
+    <select id="filterSpkPic" onchange="applySpkFilters()">
+      <option value="all">👤 All PIC</option>
+      <option value="empty">⚠️ Belum Ada PIC</option>
+    </select>
+    <button class="btn btn-green" onclick="exportCSV('spk')">⬇ CSV</button>
+  </div>
+  <div class="kpi-row" id="kpi-spk"></div>
+  <div class="grid-3 section-gap">
+    <div class="card"><h2>🏢 Nilai Kontrak per Vendor</h2><canvas id="spkVendorChart" class="chart-clickable"></canvas></div>
+    <div class="card"><h2>📊 Status SPK</h2><canvas id="spkStatusChart" class="chart-clickable"></canvas></div>
+    <div class="card"><h2>⏳ Jatuh Tempo Timeline</h2><canvas id="spkTimelineChart"></canvas></div>
+  </div>
+  <div class="card full" style="max-width:1200px;margin:0 auto">
+    <h2>📄 All SPK <span id="spkCount" style="color:var(--text2);font-size:12px"></span></h2>
+    <div class="scroll-table"><table id="spkTable"><thead><tr></tr></thead><tbody></tbody></table></div>
   </div>
 </div>
 
 <!-- PEOPLE TAB -->
 <div id="tab-people" class="tab-content">
-  <div style="text-align:center;margin-bottom:20px">
-    <select id="peopleRange" onchange="renderPeopleCharts(DATA)" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
+  <div style="text-align:center;margin-bottom:15px">
+    <select id="peopleRange" onchange="renderPeopleCharts(DATA)">
       <option value="all">📅 All Time</option>
-      <option value="1">Today</option>
       <option value="7">Last 7 Days</option>
       <option value="this_month">This Month</option>
       <option value="last_month">Last Month</option>
-      <option value="last_2_month">Last 2 Months</option>
-      <option value="last_3_month">Last 3 Months</option>
       <option value="90">Last 90 Days</option>
     </select>
   </div>
@@ -207,46 +239,16 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
   <div class="grid">
     <div class="card full"><h2 id="achieveChartTitle">🏆 Achievements per Person</h2><canvas id="achieveChart"></canvas></div>
     <div class="card full">
-      <h2 id="achieveTableTitle">📋 Achievement Details</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h2 id="achieveTableTitle" style="margin:0">📋 Achievement Details</h2>
+        <button class="btn btn-green" onclick="exportCSV('achievements')">⬇ CSV</button>
+      </div>
       <div class="scroll-table"><table id="achieveTable"><thead><tr></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 </div>
 
-<!-- SPK TAB -->
-<div id="tab-spk" class="tab-content">
-  <input type="text" id="searchSpk" placeholder="🔍 Search SPK..." oninput="applySpkFilters()">
-  <div class="kpi-row" id="kpi-spk"></div>
-  <div class="card full">
-    <h2>📄 All SPK</h2>
-    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:15px;flex-wrap:wrap">
-      <select id="filterSpkStatus" onchange="applySpkFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">📊 All Status</option>
-      </select>
-      <select id="filterSpkVendor" onchange="applySpkFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">🏢 All Vendor</option>
-      </select>
-      <select id="filterSpkDue" onchange="applySpkFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">📅 All Jatuh Tempo</option>
-        <option value="7">≤ 1 Minggu</option>
-        <option value="14">≤ 2 Minggu</option>
-        <option value="30">≤ 1 Bulan</option>
-        <option value="90">≤ 3 Bulan</option>
-        <option value="180">≤ 6 Bulan</option>
-        <option value="210">≤ 7 Bulan</option>
-        <option value="240">≤ 8 Bulan</option>
-        <option value="270">≤ 9 Bulan</option>
-        <option value="overdue">Sudah Lewat</option>
-      </select>
-      <select id="filterSpkPic" onchange="applySpkFilters()" style="background:var(--input-bg);border:1px solid var(--input-border);color:var(--text);padding:8px 14px;border-radius:10px;font-size:13px;outline:none">
-        <option value="all">👤 All PIC</option>
-        <option value="empty">⚠️ Belum Ada PIC</option>
-      </select>
-    </div>
-    <div class="scroll-table"><table id="spkTable"><thead><tr></tr></thead><tbody></tbody></table></div>
-  </div>
-</div>
-
+<!-- Project Detail Modal -->
 <div class="modal-overlay" id="projModal" onclick="if(event.target===this)closeProjModal()">
   <div class="modal">
     <button class="modal-close" onclick="closeProjModal()">✕</button>
@@ -255,506 +257,473 @@ select{background:var(--input-bg)!important;border:1px solid var(--input-border)
   </div>
 </div>
 
-<div class="footer">Notion Dashboard — Auto-refresh available</div>
-
+<div class="footer">EXO Dashboard — Auto-refresh every 5 min</div>
 <script>
 let DATA = null;
 const charts = {};
+const CHART_COLORS = ['#4cc9f0','#2eb872','#e7b416','#e94560','#a855f7','#f97316','#06b6d4','#84cc16'];
 
-function toggleTheme() {
-  const html = document.documentElement;
-  const isLight = html.getAttribute('data-theme') === 'light';
-  html.setAttribute('data-theme', isLight ? '' : 'light');
-  document.getElementById('themeBtn').textContent = isLight ? '🌙' : '☀️';
-  localStorage.setItem('theme', isLight ? 'dark' : 'light');
+// ── Theme ──────────────────────────────────────────────────────────────────
+function toggleTheme(){
+  const light = document.documentElement.getAttribute('data-theme')==='light';
+  document.documentElement.setAttribute('data-theme', light?'':'light');
+  document.getElementById('themeBtn').textContent = light?'🌙':'☀️';
+  localStorage.setItem('theme', light?'dark':'light');
 }
 (function(){const t=localStorage.getItem('theme');if(t==='light'){document.documentElement.setAttribute('data-theme','light');document.getElementById('themeBtn').textContent='☀️';}})();
 
-function switchTab(name) {
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+// ── Tab switching ──────────────────────────────────────────────────────────
+function switchTab(name, el){
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  event.target.classList.add('active');
+  (el||event.target).classList.add('active');
 }
 
-function filterTable(tableId, query) {
-  const rows = document.querySelectorAll('#'+tableId+' tbody tr');
-  query = query.toLowerCase();
-  rows.forEach(r => { r.style.display = r.textContent.toLowerCase().includes(query) ? '' : 'none'; });
+// ── Helpers ────────────────────────────────────────────────────────────────
+function calcMinDate(range){
+  const now = new Date();
+  if(range==='all') return '0000-00-00';
+  if(range==='this_week'){const d=new Date(now);d.setDate(d.getDate()-d.getDay());return d.toISOString().slice(0,10);}
+  if(range==='this_month') return new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);
+  if(range==='last_month') return new Date(now.getFullYear(),now.getMonth()-1,1).toISOString().slice(0,10);
+  if(range==='this_year') return now.getFullYear()+'-01-01';
+  const d=new Date();d.setDate(d.getDate()-parseInt(range));return d.toISOString().slice(0,10);
 }
 
-function makeSortable(table) {
-  table.querySelectorAll('th').forEach((th, idx) => {
-    th.style.cursor = 'pointer';
-    th.addEventListener('click', () => {
-      const tbody = table.querySelector('tbody');
-      const rows = Array.from(tbody.querySelectorAll('tr'));
-      const asc = th.dataset.sort !== 'asc'; th.dataset.sort = asc ? 'asc' : 'desc';
-      table.querySelectorAll('th').forEach(h => { if(h!==th) delete h.dataset.sort; });
-      rows.sort((a,b) => {
-        let av = (a.children[idx]||{}).textContent||'', bv = (b.children[idx]||{}).textContent||'';
-        let an = parseFloat(av.replace(/[^0-9.\-]/g,'')), bn = parseFloat(bv.replace(/[^0-9.\-]/g,''));
-        if(!isNaN(an)&&!isNaN(bn)) return asc ? an-bn : bn-an;
-        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
-      });
-      rows.forEach(r => tbody.appendChild(r));
-      th.textContent = th.textContent.replace(/ [▲▼]/,'') + (asc?' ▲':' ▼');
-    });
-  });
+function statusBadge(s){
+  const cls={'In Progress':'b-ip','Not Started':'b-ns','Done':'b-done','Pending':'b-pend','Planning':'b-ns','Archived':'b-term','Active':'b-ip','Terminated':'b-term','Expired':'b-high'};
+  return '<span class="badge '+(cls[s]||'b-ns')+'">'+(s||'-')+'</span>';
 }
 
-function statusBadge(s) {
-  const cls = {'In Progress':'b-ip','Not Started':'b-ns','Done':'b-done','Pending':'b-pend','Planning':'b-ns','Archived':'gray','Active':'b-ip','Terminated':'gray','Expired':'b-high'};
-  return '<span class="badge '+(cls[s]||'')+'">'+(s||'-')+'</span>';
-}
-
-function progBar(val) {
+function progBar(val){
   if(val===null||val===undefined) return '<div class="prog-bar"><div class="prog-fill" style="width:100%;background:#555">-</div></div>';
-  const color = val>=100?'#2eb872':val>=50?'#e7b416':'#e94560';
+  const color=val>=100?'#2eb872':val>=50?'#e7b416':'#e94560';
   return '<div class="prog-bar"><div class="prog-fill" style="width:'+Math.max(val,5)+'%;background:'+color+'">'+val+'%</div></div>';
 }
 
-function renderKPI(d) {
-  const total = d.tasks.length, done = d.task_status['Done']||0, open = total-done;
-  const tp = d.projects.length, pd = d.proj_status['Done']||0;
-  document.getElementById('kpi-overview').innerHTML = [
-    ['blue',total,'Total Tasks'],['green',done,'Tasks Done'],['yellow',open,'Tasks Open'],
-    ['red',d.overdue,'Overdue'],['gray',d.no_due,'No Due Date'],
-    ['blue',tp,'Total Projects'],['green',pd,'Projects Done']
-  ].map(([c,n,l])=>'<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
-}
-
-function renderCharts(d) {
-  Object.values(charts).forEach(c=>c.destroy());
-  const ml = d.monthly.map(m=>m.month), mc = d.monthly.map(m=>m.created), md = d.monthly.map(m=>m.done), mb = d.monthly.map(m=>m.backlog);
-  charts.monthly = new Chart(document.getElementById('monthlyChart'),{type:'bar',data:{labels:ml,datasets:[
-    {label:'Created',data:mc,backgroundColor:'#4cc9f0',borderRadius:6},
-    {label:'Completed',data:md,backgroundColor:'#2eb872',borderRadius:6},
-    {label:'Backlog',data:mb,type:'line',borderColor:'#e7b416',tension:.3,fill:false,pointRadius:5}
-  ]},options:{scales:{y:{beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}},x:{ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}}},plugins:{legend:{labels:{color:'#eee'}}}}});
-
-  charts.overdue = new Chart(document.getElementById('overdueChart'),{type:'doughnut',data:{labels:['Overdue ('+d.overdue+')','On Track ('+d.on_track+')','No Due ('+d.no_due+')'],datasets:[{data:[d.overdue,d.on_track,d.no_due],backgroundColor:['#e94560','#2eb872','#a8a8b3'],borderColor:'#16213e',borderWidth:3}]},options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:12}}}}});
-
-  const ts = d.task_status;
-  charts.taskStatus = new Chart(document.getElementById('taskStatusChart'),{type:'doughnut',data:{labels:Object.keys(ts),datasets:[{data:Object.values(ts),backgroundColor:['#2eb872','#e7b416','#4cc9f0','#e94560','#555'],borderColor:'#16213e',borderWidth:3}]},options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:12}}}}});
-
-  const ps = d.proj_status;
-  charts.projStatus = new Chart(document.getElementById('projStatusChart'),{type:'doughnut',data:{labels:Object.keys(ps),datasets:[{data:Object.values(ps),backgroundColor:['#e7b416','#4cc9f0','#2eb872'],borderColor:'#16213e',borderWidth:3}]},options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:12}}}}});
-
-  // People charts rendered separately with time filter
-}
-
-function getPeopleMinDate() {
-  const range = document.getElementById('peopleRange').value;
-  if(range === 'all') return null;
-  return calcMinDate(range);
-}
-
-function renderPeopleCharts(d) {
-  if(charts.personRate) charts.personRate.destroy();
-  if(charts.personDone) charts.personDone.destroy();
-  if(charts.personProj) charts.personProj.destroy();
-
-  const minDate = getPeopleMinDate();
-  const tasks = minDate ? d.tasks.filter(t => t.created >= minDate || t.edited >= minDate || (t.done_date && t.done_date >= minDate)) : d.tasks;
-  const projects = minDate ? d.projects.filter(p => p.created >= minDate || p.edited >= minDate) : d.projects;
-
-  const personDone = {}, personTotal = {};
-  tasks.forEach(t => {
-    t.assignees.forEach(a => {
-      personTotal[a] = (personTotal[a]||0) + 1;
-      if(t.status === 'Done') personDone[a] = (personDone[a]||0) + 1;
-    });
-  });
-
-  const persons = Object.keys(personTotal).sort((a,b)=>(personTotal[b]||0)-(personTotal[a]||0));
-  const pDone = persons.map(p=>personDone[p]||0), pTotal = persons.map(p=>personTotal[p]||0);
-  const pRate = pDone.map((v,i)=>pTotal[i]?Math.round(v/pTotal[i]*100):0);
-
-  charts.personRate = new Chart(document.getElementById('personRateChart'),{type:'bar',data:{labels:persons,datasets:[{label:'%',data:pRate,backgroundColor:pRate.map(r=>r>=60?'#2eb872':r>=30?'#e7b416':'#e94560'),borderRadius:6}]},options:{indexAxis:'y',scales:{x:{beginAtZero:true,max:100,ticks:{color:'#a8a8b3',callback:v=>v+'%'},grid:{color:'#0f3460'}},y:{ticks:{color:'#eee'},grid:{display:false}}},plugins:{legend:{display:false}}}});
-
-  charts.personDone = new Chart(document.getElementById('personDoneChart'),{type:'bar',data:{labels:persons,datasets:[{label:'Done',data:pDone,backgroundColor:'#2eb872',borderRadius:6},{label:'Open',data:pTotal.map((t,i)=>t-pDone[i]),backgroundColor:'#0f3460',borderRadius:6}]},options:{indexAxis:'y',scales:{x:{stacked:true,beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}},y:{stacked:true,ticks:{color:'#eee'},grid:{display:false}}},plugins:{legend:{labels:{color:'#eee'}}}}});
-
-  const pp = {};
-  projects.forEach(p => { p.assignees.forEach(a => { if(!pp[a]) pp[a]={}; pp[a][p.status] = (pp[a][p.status]||0)+1; }); });
-  const ppPersons = Object.keys(pp).sort((a,b)=>{const sa=Object.values(pp[a]).reduce((x,y)=>x+y,0),sb=Object.values(pp[b]).reduce((x,y)=>x+y,0);return sb-sa;});
-  charts.personProj = new Chart(document.getElementById('personProjChart'),{type:'bar',data:{labels:ppPersons,datasets:[
-    {label:'In Progress',data:ppPersons.map(p=>(pp[p]||{})['In Progress']||0),backgroundColor:'#4cc9f0',borderRadius:4},
-    {label:'Planning',data:ppPersons.map(p=>(pp[p]||{})['Planning']||0),backgroundColor:'#e7b416',borderRadius:4},
-    {label:'Done',data:ppPersons.map(p=>(pp[p]||{})['Done']||0),backgroundColor:'#2eb872',borderRadius:4}
-  ]},options:{scales:{x:{stacked:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}},y:{stacked:true,beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'}}},plugins:{legend:{labels:{color:'#eee'}}}}});
-}
-
-function calcMinDate(range) {
-  const now = new Date();
-  if(range === 'this_week') { const d=new Date(now); d.setDate(d.getDate()-d.getDay()); return d.toISOString().slice(0,10); }
-  if(range === 'this_month') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
-  if(range === 'last_month') return new Date(now.getFullYear(), now.getMonth()-1, 1).toISOString().slice(0,10);
-  if(range === 'last_2_month') return new Date(now.getFullYear(), now.getMonth()-2, 1).toISOString().slice(0,10);
-  if(range === 'last_3_month') return new Date(now.getFullYear(), now.getMonth()-3, 1).toISOString().slice(0,10);
-  if(range === 'this_year') return now.getFullYear()+'-01-01';
-  const d = new Date(); d.setDate(d.getDate() - parseInt(range));
-  return d.toISOString().slice(0,10);
-}
-
-function getFilteredTasks() {
-  if(!DATA) return [];
-  const query = document.getElementById('search').value.toLowerCase();
-  const status = document.getElementById('filterStatus').value;
-  const assignee = document.getElementById('filterAssignee').value;
-  const due = document.getElementById('filterDue').value;
-  const tag = document.getElementById('filterTag').value;
-  const range = document.getElementById('dailyRange').value;
-  const today = new Date().toISOString().slice(0,10);
-
-  let tasks = [...DATA.tasks];
-  if(status !== 'all') tasks = tasks.filter(t => t.status === status);
-  if(assignee !== 'all') tasks = tasks.filter(t => t.assignees.includes(assignee));
-  if(tag !== 'all') tasks = tasks.filter(t => t.tags && t.tags.includes(tag));
-  if(due === 'overdue') tasks = tasks.filter(t => t.due && t.due < today);
-  else if(due === 'nodue') tasks = tasks.filter(t => !t.due);
-  else if(['7','14','21','30','60','90'].includes(due)) {
-    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
-    const maxDue = dt.toISOString().slice(0,10);
-    tasks = tasks.filter(t => t.due && t.due <= maxDue);
-  }
-  if(query) tasks = tasks.filter(t => (t.name+t.assignees.join(',')).toLowerCase().includes(query));
-  return {tasks, minDate: range !== 'all' ? calcMinDate(range) : '0000-00-00'};
-}
-
-function applyAllTaskFilters() {
-  if(!DATA) return;
-  const {tasks, minDate} = getFilteredTasks();
-
-  // Chart
-  if(charts.dailyResolve) charts.dailyResolve.destroy();
-  const dailyDone = {}, dailyCreated = {};
-  tasks.forEach(t => {
-    if(t.done_date) dailyDone[t.done_date] = (dailyDone[t.done_date]||0) + 1;
-    if(t.created) dailyCreated[t.created] = (dailyCreated[t.created]||0) + 1;
-  });
-  const allDays = [...new Set([...Object.keys(dailyDone), ...Object.keys(dailyCreated)])].sort().filter(day => day >= minDate);
-  let cumDone = 0;
-  const days = [], active = [], cumDoneArr = [];
-  allDays.forEach(day => {
-    const act = tasks.filter(t => t.created <= day && (t.status !== 'Done' || (t.done_date && t.done_date > day))).length;
-    cumDone += (dailyDone[day]||0);
-    days.push(day); active.push(act); cumDoneArr.push(cumDone);
-  });
-  charts.dailyResolve = new Chart(document.getElementById('dailyResolveChart'),{
-    type:'bar',data:{labels:days,datasets:[
-      {label:'Total Task Active',data:active,backgroundColor:'rgba(15,52,96,0.85)',borderRadius:4,order:2},
-      {label:'Total Task Done (cumulative)',data:cumDoneArr,type:'line',borderColor:'#2eb872',backgroundColor:'rgba(46,184,114,0.15)',tension:.3,fill:true,pointRadius:3,pointBackgroundColor:'#2eb872',borderWidth:2,order:1}
-    ]},options:{scales:{
-      x:{ticks:{color:'#a8a8b3',maxRotation:45,autoSkip:true,maxTicksLimit:30},grid:{color:'#0f3460'}},
-      y:{beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'#0f3460'},title:{display:true,text:'Tasks',color:'#a8a8b3'}}
-    },plugins:{legend:{labels:{color:'#eee'}},tooltip:{mode:'index',intersect:false}}}
-  });
-
-  // Table
-  const activeTasks = tasks.filter(t => t.status !== 'Done').sort((a,b) => {const o={'In Progress':0,'Not Started':1,'Pending':2,'Archived':3};return (o[a.status]||5)-(o[b.status]||5);});
-  const table = document.getElementById('tasksTable');
-  table.querySelector('thead tr').innerHTML = ['#','Task','Status','Assignee','Tags','Due','Progress','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
-  table.querySelector('tbody').innerHTML = activeTasks.map((t,i)=>'<tr><td>'+(i+1)+'</td><td>'+t.name+'</td><td>'+statusBadge(t.status)+'</td><td>'+(t.assignees.join(', ')||'-')+'</td><td>'+((t.tags||[]).map(g=>'<span style="background:#1a4a80;color:#7ec8e3;padding:1px 7px;border-radius:8px;font-size:11px;margin:1px 2px;display:inline-block">'+g+'</span>').join('')||'-')+'</td><td>'+(t.due||'-')+'</td><td>'+progBar(t.progress)+'</td><td>'+t.edited+'</td></tr>').join('')
-    || '<tr><td colspan="8" style="text-align:center;color:#a8a8b3;padding:30px">No tasks match filters</td></tr>';
-  makeSortable(table);
-}
-
-function renderTasksTable(d) {
-  const asel = document.getElementById('filterAssignee');
-  if(asel.options.length <= 1) {
-    d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; asel.appendChild(o); });
-  }
-  const tsel = document.getElementById('filterTag');
-  if(tsel.options.length <= 1) {
-    const allTags = [...new Set(d.tasks.flatMap(t => t.tags||[]))].sort();
-    allTags.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; tsel.appendChild(o); });
-  }
-  applyAllTaskFilters();
-}
-
-function renderProjectsTable(d) {
-  const asel = document.getElementById('filterProjAssignee');
-  if(asel.options.length <= 1) {
-    d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; asel.appendChild(o); });
-  }
-  applyProjFilters();
-}
-
-function applyProjFilters() {
-  if(!DATA) return;
-  const query = document.getElementById('searchProj').value.toLowerCase();
-  const status = document.getElementById('filterProjStatus').value;
-  const assignee = document.getElementById('filterProjAssignee').value;
-  const due = document.getElementById('filterProjDue').value;
-  const priority = document.getElementById('filterProjPriority').value;
-  const today = new Date().toISOString().slice(0,10);
-
-  let maxDue = null;
-  if(['7','14','21','30','60','90'].includes(due)) {
-    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
-    maxDue = dt.toISOString().slice(0,10);
-  }
-
-  let projects = [...DATA.projects];
-  if(status !== 'all') projects = projects.filter(p => p.status === status);
-  if(assignee !== 'all') projects = projects.filter(p => p.assignees.includes(assignee));
-  if(priority !== 'all') projects = projects.filter(p => p.priority === priority);
-  if(due === 'overdue') projects = projects.filter(p => p.due && p.due < today);
-  else if(due === 'nodue') projects = projects.filter(p => !p.due);
-  else if(maxDue) projects = projects.filter(p => p.due && p.due <= maxDue);
-  if(query) projects = projects.filter(p => (p.title+p.assignees.join(',')).toLowerCase().includes(query));
-
-  projects.sort((a,b) => {const o={'In Progress':0,'Planning':1,'Done':2};return (o[a.status]||5)-(o[b.status]||5);});
-
-  const table = document.getElementById('projTable');
-  table.querySelector('thead tr').innerHTML = ['#','Project','Status','Assignee','Due','Remaining Days','Completion','Docs','Priority','SPK Baru','Last Edit','Action'].map(h=>'<th>'+h+'</th>').join('');
-  table.querySelector('tbody').innerHTML = projects.map((p,i) => {
-    const pri = p.priority!=='-'?'<span class="badge '+(p.priority==='High'?'b-high':'b-med')+'">'+p.priority+'</span>':'-';
-    const spkb = p.spk_baru && p.spk_baru.length > 0 ? p.spk_baru.join('<br>') : '-';
-    const rd = p.remaining_days!==null&&p.remaining_days!==undefined ? sisaBadge(p.remaining_days) : '-';
-    return '<tr><td>'+(i+1)+'</td><td>'+p.title+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.assignees.join(', ')||'-')+'</td><td>'+(p.due||'-')+'</td><td>'+rd+'</td><td>'+progBar(p.completion)+'</td><td>'+p.docs+'</td><td>'+pri+'</td><td>'+spkb+'</td><td>'+p.edited+'</td><td><button class="action-btn" onclick="showProjDetail('+i+')">🔍</button></td></tr>';
-  }).join('') || '<tr><td colspan="12" style="text-align:center;color:#a8a8b3;padding:30px">No projects match filters</td></tr>';
-  window._filteredProjects = projects;
-  makeSortable(table);
-}
-
-let currentPeriod = 'daily';
-
-function switchPeriod(period, btn) {
-  currentPeriod = period;
-  document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  if(DATA) renderAchievements(DATA);
-}
-
-function getWeek(dateStr) {
-  const d = new Date(dateStr);
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
-  return d.getFullYear() + '-W' + String(week).padStart(2,'0');
-}
-
-function periodKey(dateStr, period) {
-  if(!dateStr) return null;
-  if(period === 'daily') return dateStr;
-  if(period === 'weekly') return getWeek(dateStr);
-  return dateStr.slice(0,7);
-}
-
-function periodLabel(period) {
-  return {daily:'Today',weekly:'This Week',monthly:'This Month'}[period];
-}
-
-function currentPeriodKey(period) {
-  const now = new Date();
-  const today = now.toISOString().slice(0,10);
-  if(period === 'daily') return today;
-  if(period === 'weekly') return getWeek(today);
-  return today.slice(0,7);
-}
-
-function renderAchievements(d) {
-  const period = currentPeriod;
-  const curKey = currentPeriodKey(period);
-
-  // Collect achievements: tasks done + projects status changes (using edited date as proxy)
-  const personAchieve = {}; // person -> {tasks_done:[], projects_active:[]}
-  const allItems = []; // flat list for table
-
-  d.tasks.forEach(t => {
-    if(t.status !== 'Done' || !t.done_date) return;
-    const pk = periodKey(t.done_date, period);
-    t.assignees.forEach(a => {
-      if(!personAchieve[a]) personAchieve[a] = {};
-      if(!personAchieve[a][pk]) personAchieve[a][pk] = {tasks:0, projects:0};
-      personAchieve[a][pk].tasks++;
-    });
-    allItems.push({type:'Task', name:t.name, person:t.assignees.join(', ')||'-', date:t.done_date, period_key:pk, status:'Done'});
-  });
-
-  d.projects.forEach(p => {
-    if(p.status !== 'Done') return;
-    const pk = periodKey(p.edited, period);
-    p.assignees.forEach(a => {
-      if(!personAchieve[a]) personAchieve[a] = {};
-      if(!personAchieve[a][pk]) personAchieve[a][pk] = {tasks:0, projects:0};
-      personAchieve[a][pk].projects++;
-    });
-    allItems.push({type:'Project', name:p.title, person:p.assignees.join(', ')||'-', date:p.edited, period_key:pk, status:'Done'});
-  });
-
-  // Also count tasks with progress updates (edited in current period, status In Progress)
-  d.tasks.forEach(t => {
-    if(t.status === 'Done') return;
-    const pk = periodKey(t.edited, period);
-    if(pk === curKey) {
-      allItems.push({type:'Task (Updated)', name:t.name, person:t.assignees.join(', ')||'-', date:t.edited, period_key:pk, status:t.status});
-    }
-  });
-
-  d.projects.forEach(p => {
-    if(p.status === 'Done') return;
-    const pk = periodKey(p.edited, period);
-    if(pk === curKey) {
-      allItems.push({type:'Project (Updated)', name:p.title, person:p.assignees.join(', ')||'-', date:p.edited, period_key:pk, status:p.status});
-    }
-  });
-
-  // KPI for current period
-  const curItems = allItems.filter(i => i.period_key === curKey);
-  const tasksDone = curItems.filter(i => i.type === 'Task').length;
-  const projDone = curItems.filter(i => i.type === 'Project').length;
-  const tasksUpdated = curItems.filter(i => i.type === 'Task (Updated)').length;
-  const projUpdated = curItems.filter(i => i.type === 'Project (Updated)').length;
-
-  document.getElementById('kpi-achieve').innerHTML = [
-    ['green', tasksDone, 'Tasks Completed ' + periodLabel(period)],
-    ['blue', projDone, 'Projects Completed ' + periodLabel(period)],
-    ['yellow', tasksUpdated, 'Tasks Updated ' + periodLabel(period)],
-    ['yellow', projUpdated, 'Projects Updated ' + periodLabel(period)]
-  ].map(([c,n,l]) => '<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
-
-  // Chart: per person achievements in current period
-  if(charts.achieve) charts.achieve.destroy();
-  const persons = d.personel.sort();
-  const pTasks = persons.map(p => (personAchieve[p]||{})[curKey]?.tasks || 0);
-  const pProjs = persons.map(p => (personAchieve[p]||{})[curKey]?.projects || 0);
-
-  charts.achieve = new Chart(document.getElementById('achieveChart'), {
-    type: 'bar', data: { labels: persons, datasets: [
-      {label: 'Tasks Done', data: pTasks, backgroundColor: '#2eb872', borderRadius: 6},
-      {label: 'Projects Done', data: pProjs, backgroundColor: '#4cc9f0', borderRadius: 6}
-    ]}, options: { scales: {
-      x: {ticks:{color:'#a8a8b3'}, grid:{color:'#0f3460'}},
-      y: {beginAtZero:true, ticks:{color:'#a8a8b3',stepSize:1}, grid:{color:'#0f3460'}}
-    }, plugins: {legend:{labels:{color:'#eee'}}}}
-  });
-
-  document.getElementById('achieveChartTitle').textContent = '🏆 Achievements per Person — ' + curKey;
-
-  // Table: all items in current period
-  const table = document.getElementById('achieveTable');
-  table.querySelector('thead tr').innerHTML = ['#','Type','Name','Person','Date','Status'].map(h=>'<th>'+h+'</th>').join('');
-  const sorted = curItems.sort((a,b) => b.date.localeCompare(a.date));
-  table.querySelector('tbody').innerHTML = sorted.map((item,i) =>
-    '<tr><td>'+(i+1)+'</td><td>'+item.type+'</td><td>'+item.name+'</td><td>'+item.person+'</td><td>'+item.date+'</td><td>'+statusBadge(item.status)+'</td></tr>'
-  ).join('') || '<tr><td colspan="6" style="text-align:center;color:#a8a8b3;padding:30px">No achievements in this period</td></tr>';
-  document.getElementById('achieveTableTitle').textContent = '📋 Achievement Details — ' + curKey;
-  makeSortable(table);
-}
-
-function renderSpk(d) {
-  const ssel = document.getElementById('filterSpkStatus');
-  const vsel = document.getElementById('filterSpkVendor');
-  const psel = document.getElementById('filterSpkPic');
-  if(ssel.options.length <= 1) {
-    const statuses = [...new Set(d.spk.map(s=>s.status).filter(Boolean))].sort();
-    statuses.forEach(s => { const o=document.createElement('option'); o.value=s; o.textContent=s; ssel.appendChild(o); });
-    const vendors = [...new Set(d.spk.map(s=>s.vendor).filter(Boolean))].sort();
-    vendors.forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; vsel.appendChild(o); });
-    const pics = [...new Set(d.spk.flatMap(s=>s.pic))].filter(Boolean).sort();
-    pics.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; psel.appendChild(o); });
-  }
-  // KPI
-  const total = d.spk.length;
-  const active = d.spk.filter(s=>s.status==='Active').length;
-  const expired = d.spk.filter(s=>s.sisa_hari!==null && s.sisa_hari<0).length;
-  const soon = d.spk.filter(s=>s.sisa_hari!==null && s.sisa_hari>=0 && s.sisa_hari<=30).length;
-  document.getElementById('kpi-spk').innerHTML = [
-    ['blue',total,'Total SPK'],['green',active,'Active'],['red',expired,'Expired'],['yellow',soon,'≤ 30 Hari']
-  ].map(([c,n,l])=>'<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
-  applySpkFilters();
-}
-
-function fmtRp(n) {
+function fmtRp(n){
   if(n===null||n===undefined) return '-';
   return 'Rp '+n.toLocaleString('id-ID');
 }
 
-function sisaBadge(n) {
+function sisaBadge(n){
   if(n===null||n===undefined) return '-';
-  const cls = n<0?'red':n<=30?'yellow':'green';
-  return '<span class="'+cls+'">'+n+' hari</span>';
+  const cls=n<0?'red':n<=30?'yellow':'green';
+  const pct=Math.max(0,Math.min(100,n/365*100));
+  const fillColor=n<0?'#e94560':n<=30?'#e7b416':'#2eb872';
+  return '<div class="sisa-bar"><span class="'+cls+'" style="min-width:55px;font-size:11px">'+n+' hari</span><div class="sisa-track"><div class="sisa-fill" style="width:'+pct+'%;background:'+fillColor+'"></div></div></div>';
 }
 
-function applySpkFilters() {
-  if(!DATA) return;
-  const query = document.getElementById('searchSpk').value.toLowerCase();
-  const status = document.getElementById('filterSpkStatus').value;
-  const vendor = document.getElementById('filterSpkVendor').value;
-  const due = document.getElementById('filterSpkDue').value;
-  const pic = document.getElementById('filterSpkPic').value;
-  const today = new Date().toISOString().slice(0,10);
-
-  let spk = [...DATA.spk];
-  if(status !== 'all') spk = spk.filter(s => s.status === status);
-  if(vendor !== 'all') spk = spk.filter(s => s.vendor === vendor);
-  if(pic === 'empty') spk = spk.filter(s => !s.pic || s.pic.length === 0);
-  else if(pic !== 'all') spk = spk.filter(s => s.pic.includes(pic));
-  if(due === 'overdue') spk = spk.filter(s => s.jatuh_tempo && s.jatuh_tempo < today);
-  else if(due !== 'all') {
-    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
-    const max = dt.toISOString().slice(0,10);
-    spk = spk.filter(s => s.jatuh_tempo && s.jatuh_tempo <= max && s.jatuh_tempo >= today);
-  }
-  if(query) spk = spk.filter(s => (s.no_spk+s.project+s.vendor+s.notes).toLowerCase().includes(query));
-
-  spk.sort((a,b) => (a.sisa_hari??999) - (b.sisa_hari??999));
-
-  const table = document.getElementById('spkTable');
-  table.querySelector('thead tr').innerHTML = ['#','ID','No SPK','Project','Vendor','Status','Jatuh Tempo','Sisa Hari','Nilai Kontrak','Project Perpanjangan','SPK Baru','PIC Perpanjangan','Notes'].map(h=>'<th>'+h+'</th>').join('');
-  table.querySelector('tbody').innerHTML = spk.map((s,i) => {
-    let perp = '-';
-    if(s.perpanjangan && s.perpanjangan.length > 0) {
-      perp = s.perpanjangan.map(p => '<div style="margin:2px 0">'+p.title+' '+statusBadge(p.status)+'</div>').join('');
-    } else if(s.sisa_hari!==null && s.sisa_hari<=90) {
-      perp = '<span class="badge" style="background:#e94560;color:#fff">Belum Ada</span>';
-    }
-    const baru = s.spk_baru && s.spk_baru.length > 0 ? s.spk_baru.join('<br>') : '-';
-    return '<tr><td>'+(i+1)+'</td><td>'+s.spk_id+'</td><td>'+s.no_spk+'</td><td>'+s.project+'</td><td>'+s.vendor+'</td><td>'+statusBadge(s.status)+'</td><td>'+(s.jatuh_tempo||'-')+'</td><td>'+sisaBadge(s.sisa_hari)+'</td><td>'+fmtRp(s.nilai)+'</td><td>'+perp+'</td><td>'+baru+'</td><td>'+(s.pic.join(', ')||'-')+'</td><td>'+s.notes+'</td></tr>';
-  }).join('') || '<tr><td colspan="13" style="text-align:center;color:var(--text2);padding:30px">No SPK match filters</td></tr>';
-  makeSortable(table);
-}
-
-function loadData() {
-  document.getElementById('lastUpdate').textContent = 'Loading...';
-  fetch('/api/data').then(r=>r.json()).then(d=>{
-    DATA = d;
-    renderKPI(d); renderCharts(d); renderPeopleCharts(d); renderTasksTable(d); renderProjectsTable(d); renderAchievements(d); renderSpk(d);
-    document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date().toLocaleTimeString();
-  }).catch(e=>{
-    document.getElementById('lastUpdate').textContent = 'Error: '+e.message;
+function makeSortable(table){
+  table.querySelectorAll('th').forEach((th,idx)=>{
+    th.addEventListener('click',()=>{
+      const tbody=table.querySelector('tbody');
+      const rows=Array.from(tbody.querySelectorAll('tr'));
+      const asc=th.dataset.sort!=='asc';th.dataset.sort=asc?'asc':'desc';
+      table.querySelectorAll('th').forEach(h=>{if(h!==th)delete h.dataset.sort;h.textContent=h.textContent.replace(/ [▲▼]/,'');});
+      rows.sort((a,b)=>{
+        let av=(a.children[idx]||{}).textContent||'',bv=(b.children[idx]||{}).textContent||'';
+        let an=parseFloat(av.replace(/[^0-9.\-]/g,'')),bn=parseFloat(bv.replace(/[^0-9.\-]/g,''));
+        if(!isNaN(an)&&!isNaN(bn)) return asc?an-bn:bn-an;
+        return asc?av.localeCompare(bv):bv.localeCompare(av);
+      });
+      rows.forEach(r=>tbody.appendChild(r));
+      th.textContent=th.textContent+(asc?' ▲':' ▼');
+    });
   });
 }
 
-function showProjDetail(idx) {
-  const p = window._filteredProjects[idx];
-  if(!p) return;
-  document.getElementById('projModalTitle').textContent = p.title;
-  const pri = p.priority!=='-'?'<span class="badge '+(p.priority==='High'?'b-high':'b-med')+'">'+p.priority+'</span>':'-';
-  const rd = p.remaining_days!==null&&p.remaining_days!==undefined ? sisaBadge(p.remaining_days) : '-';
-  const spkb = p.spk_baru&&p.spk_baru.length ? p.spk_baru.join(', ') : '-';
-  const docs = p.doc_detail ? Object.entries(p.doc_detail).map(([k,v])=>v+' '+k).join('<br>') : p.docs;
-  const rows = [
-    ['Project', p.title],
-    ['Status', statusBadge(p.status)],
-    ['Assignee', p.assignees.join(', ')||'-'],
-    ['Due', p.due||'-'],
-    ['Remaining Days', rd],
-    ['Completion', progBar(p.completion)],
-    ['Docs ('+p.docs+')', docs],
-    ['Priority', pri],
-    ['SPK Baru', spkb],
-    ['Last Edit', p.edited||'-']
-  ];
-  document.getElementById('projModalBody').innerHTML = rows.map(([l,v])=>'<div class="modal-row"><div class="label">'+l+'</div><div class="value">'+v+'</div></div>').join('');
+// ── Chart defaults ─────────────────────────────────────────────────────────
+function chartDefaults(){
+  return {
+    scales:{
+      x:{ticks:{color:'#a8a8b3'},grid:{color:'rgba(15,52,96,0.5)'}},
+      y:{beginAtZero:true,ticks:{color:'#a8a8b3'},grid:{color:'rgba(15,52,96,0.5)'}}
+    },
+    plugins:{legend:{labels:{color:'#eee',boxWidth:12}},tooltip:{mode:'index',intersect:false}}
+  };
+}
+
+function destroyChart(key){if(charts[key]){charts[key].destroy();delete charts[key];}}
+
+// ── KPI ────────────────────────────────────────────────────────────────────
+function renderKPI(d){
+  const total=d.tasks.length,done=d.task_status['Done']||0,open=total-done;
+  const tp=d.projects.length,pd=d.proj_status['Done']||0;
+  const totalNilai=d.spk.reduce((s,x)=>s+(x.nilai||0),0);
+  document.getElementById('kpi-overview').innerHTML=[
+    ['blue',total,'Total Tasks'],['green',done,'Tasks Done'],['yellow',open,'Tasks Open'],
+    ['red',d.overdue,'Overdue'],['blue',tp,'Total Projects'],['green',pd,'Projects Done'],
+    ['yellow',d.spk.length,'Total SPK'],['green','Rp '+Math.round(totalNilai/1e9)+'M','Total Nilai SPK']
+  ].map(([c,n,l])=>'<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
+}
+
+// ── Overview Charts ────────────────────────────────────────────────────────
+function renderCharts(d){
+  ['monthly','overdue','taskStatus','projStatus'].forEach(destroyChart);
+  const def=chartDefaults();
+
+  const ml=d.monthly.map(m=>m.month);
+  charts.monthly=new Chart(document.getElementById('monthlyChart'),{type:'bar',data:{labels:ml,datasets:[
+    {label:'Created',data:d.monthly.map(m=>m.created),backgroundColor:'#4cc9f0',borderRadius:5},
+    {label:'Completed',data:d.monthly.map(m=>m.done),backgroundColor:'#2eb872',borderRadius:5},
+    {label:'Backlog',data:d.monthly.map(m=>m.backlog),type:'line',borderColor:'#e7b416',tension:.3,fill:false,pointRadius:4,borderWidth:2}
+  ]},options:{...def,onClick:(e,els)=>{if(els.length){const m=ml[els[0].index];filterTasksByMonth(m);}}}});
+
+  charts.overdue=new Chart(document.getElementById('overdueChart'),{type:'doughnut',data:{
+    labels:['Overdue ('+d.overdue+')','On Track ('+d.on_track+')','No Due ('+d.no_due+')'],
+    datasets:[{data:[d.overdue,d.on_track,d.no_due],backgroundColor:['#e94560','#2eb872','#a8a8b3'],borderColor:'#16213e',borderWidth:3}]
+  },options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:10}}},onClick:(e,els)=>{
+    if(!els.length) return;
+    const map=['overdue','all','nodue'];
+    document.getElementById('filterDue').value=map[els[0].index];
+    switchTab('tasks',document.querySelectorAll('.tab')[1]);
+    applyAllTaskFilters();
+  }}});
+
+  const ts=d.task_status;
+  charts.taskStatus=new Chart(document.getElementById('taskStatusChart'),{type:'doughnut',data:{
+    labels:Object.keys(ts),datasets:[{data:Object.values(ts),backgroundColor:CHART_COLORS,borderColor:'#16213e',borderWidth:3}]
+  },options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:10}}},onClick:(e,els)=>{
+    if(!els.length) return;
+    const s=Object.keys(ts)[els[0].index];
+    document.getElementById('filterStatus').value=s;
+    switchTab('tasks',document.querySelectorAll('.tab')[1]);
+    applyAllTaskFilters();
+  }}});
+
+  const ps=d.proj_status;
+  charts.projStatus=new Chart(document.getElementById('projStatusChart'),{type:'doughnut',data:{
+    labels:Object.keys(ps),datasets:[{data:Object.values(ps),backgroundColor:CHART_COLORS,borderColor:'#16213e',borderWidth:3}]
+  },options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:10}}},onClick:(e,els)=>{
+    if(!els.length) return;
+    const s=Object.keys(ps)[els[0].index];
+    document.getElementById('filterProjStatus').value=s;
+    switchTab('projects',document.querySelectorAll('.tab')[2]);
+    applyProjFilters();
+  }}});
+}
+
+function filterTasksByMonth(month){
+  // Switch to tasks tab and filter by that month
+  switchTab('tasks',document.querySelectorAll('.tab')[1]);
+  document.getElementById('dailyRange').value='all';
+  applyAllTaskFilters();
+}
+
+// ── SPK Charts ─────────────────────────────────────────────────────────────
+function renderSpkCharts(spk){
+  ['spkVendor','spkStatus','spkTimeline'].forEach(destroyChart);
+  const def=chartDefaults();
+
+  // Nilai per vendor (top 8)
+  const vendorNilai={};
+  spk.forEach(s=>{if(s.nilai&&s.vendor&&s.vendor!=='-') vendorNilai[s.vendor]=(vendorNilai[s.vendor]||0)+s.nilai;});
+  const sortedV=Object.entries(vendorNilai).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  charts.spkVendor=new Chart(document.getElementById('spkVendorChart'),{type:'bar',data:{
+    labels:sortedV.map(v=>v[0].length>15?v[0].slice(0,15)+'…':v[0]),
+    datasets:[{label:'Nilai (Rp)',data:sortedV.map(v=>v[1]),backgroundColor:CHART_COLORS,borderRadius:5}]
+  },options:{...def,indexAxis:'y',plugins:{...def.plugins,tooltip:{callbacks:{label:ctx=>'Rp '+ctx.raw.toLocaleString('id-ID')}}},
+    onClick:(e,els)=>{if(!els.length)return;const v=sortedV[els[0].index][0];document.getElementById('filterSpkVendor').value=v;applySpkFilters();}}});
+
+  // Status pie
+  const statusCount={};
+  spk.forEach(s=>{statusCount[s.status]=(statusCount[s.status]||0)+1;});
+  charts.spkStatus=new Chart(document.getElementById('spkStatusChart'),{type:'doughnut',data:{
+    labels:Object.keys(statusCount),datasets:[{data:Object.values(statusCount),backgroundColor:CHART_COLORS,borderColor:'#16213e',borderWidth:3}]
+  },options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:8}}},
+    onClick:(e,els)=>{if(!els.length)return;const s=Object.keys(statusCount)[els[0].index];document.getElementById('filterSpkStatus').value=s;applySpkFilters();}}});
+
+  // Jatuh tempo timeline (per bulan, berapa SPK jatuh tempo)
+  const jtMonthly={};
+  spk.forEach(s=>{if(s.jatuh_tempo){const m=s.jatuh_tempo.slice(0,7);jtMonthly[m]=(jtMonthly[m]||0)+1;}});
+  const jtMonths=Object.keys(jtMonthly).sort();
+  const today=new Date().toISOString().slice(0,7);
+  charts.spkTimeline=new Chart(document.getElementById('spkTimelineChart'),{type:'bar',data:{
+    labels:jtMonths,
+    datasets:[{label:'SPK Jatuh Tempo',data:jtMonths.map(m=>jtMonthly[m]),
+      backgroundColor:jtMonths.map(m=>m<today?'#e94560':m===today?'#e7b416':'#4cc9f0'),borderRadius:5}]
+  },options:{...def,plugins:{...def.plugins,legend:{display:false}}}});
+}
+
+// ── Tasks ──────────────────────────────────────────────────────────────────
+function getFilteredTasks(){
+  if(!DATA) return {tasks:[],minDate:'0000-00-00'};
+  const query=document.getElementById('search').value.toLowerCase();
+  const status=document.getElementById('filterStatus').value;
+  const assignee=document.getElementById('filterAssignee').value;
+  const due=document.getElementById('filterDue').value;
+  const tag=document.getElementById('filterTag').value;
+  const range=document.getElementById('dailyRange').value;
+  const today=new Date().toISOString().slice(0,10);
+  let tasks=[...DATA.tasks];
+  if(status!=='all') tasks=tasks.filter(t=>t.status===status);
+  if(assignee!=='all') tasks=tasks.filter(t=>t.assignees.includes(assignee));
+  if(tag!=='all') tasks=tasks.filter(t=>(t.tags||[]).includes(tag));
+  if(due==='overdue') tasks=tasks.filter(t=>t.due&&t.due<today);
+  else if(due==='nodue') tasks=tasks.filter(t=>!t.due);
+  else if(['7','14','21','30','60','90'].includes(due)){const dt=new Date();dt.setDate(dt.getDate()+parseInt(due));const mx=dt.toISOString().slice(0,10);tasks=tasks.filter(t=>t.due&&t.due<=mx);}
+  if(query) tasks=tasks.filter(t=>(t.name+t.assignees.join(',')).toLowerCase().includes(query));
+  return {tasks, minDate:range!=='all'?calcMinDate(range):'0000-00-00'};
+}
+
+function applyAllTaskFilters(){
+  if(!DATA) return;
+  const {tasks,minDate}=getFilteredTasks();
+  destroyChart('dailyResolve');
+  const dailyDone={},dailyCreated={};
+  tasks.forEach(t=>{if(t.done_date)dailyDone[t.done_date]=(dailyDone[t.done_date]||0)+1;if(t.created)dailyCreated[t.created]=(dailyCreated[t.created]||0)+1;});
+  const allDays=[...new Set([...Object.keys(dailyDone),...Object.keys(dailyCreated)])].sort().filter(d=>d>=minDate);
+  let cumDone=0;
+  const days=[],active=[],cumArr=[];
+  allDays.forEach(day=>{
+    const act=tasks.filter(t=>t.created<=day&&(t.status!=='Done'||(t.done_date&&t.done_date>day))).length;
+    cumDone+=(dailyDone[day]||0);
+    days.push(day);active.push(act);cumArr.push(cumDone);
+  });
+  const def=chartDefaults();
+  charts.dailyResolve=new Chart(document.getElementById('dailyResolveChart'),{type:'bar',data:{labels:days,datasets:[
+    {label:'Active Tasks',data:active,backgroundColor:'rgba(15,52,96,0.85)',borderRadius:4,order:2},
+    {label:'Done (cumulative)',data:cumArr,type:'line',borderColor:'#2eb872',backgroundColor:'rgba(46,184,114,0.12)',tension:.3,fill:true,pointRadius:3,borderWidth:2,order:1}
+  ]},options:{...def,scales:{x:{...def.scales.x,ticks:{...def.scales.x.ticks,maxRotation:45,autoSkip:true,maxTicksLimit:30}},y:def.scales.y}}});
+
+  const activeTasks=tasks.filter(t=>t.status!=='Done').sort((a,b)=>{const o={'In Progress':0,'Not Started':1,'Pending':2,'Archived':3};return (o[a.status]||5)-(o[b.status]||5);});
+  document.getElementById('taskCount').textContent='('+activeTasks.length+' active / '+tasks.length+' total)';
+  const table=document.getElementById('tasksTable');
+  table.querySelector('thead tr').innerHTML=['#','Task','Status','Assignee','Tags','Due','Progress','Last Edit'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('tbody').innerHTML=activeTasks.map((t,i)=>'<tr><td>'+(i+1)+'</td><td>'+t.name+'</td><td>'+statusBadge(t.status)+'</td><td>'+(t.assignees.join(', ')||'-')+'</td><td>'+((t.tags||[]).map(g=>'<span class="tag-chip">'+g+'</span>').join('')||'-')+'</td><td>'+(t.due||'-')+'</td><td>'+progBar(t.progress)+'</td><td>'+t.edited+'</td></tr>').join('')||'<tr><td colspan="8" style="text-align:center;color:var(--text2);padding:30px">No tasks match filters</td></tr>';
+  makeSortable(table);
+}
+
+function renderTasksTable(d){
+  const asel=document.getElementById('filterAssignee');
+  if(asel.options.length<=1) d.personel.sort().forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;asel.appendChild(o);});
+  const tsel=document.getElementById('filterTag');
+  if(tsel.options.length<=1){[...new Set(d.tasks.flatMap(t=>t.tags||[]))].sort().forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;tsel.appendChild(o);});}
+  applyAllTaskFilters();
+}
+
+// ── Projects ───────────────────────────────────────────────────────────────
+function applyProjFilters(){
+  if(!DATA) return;
+  const query=document.getElementById('searchProj').value.toLowerCase();
+  const status=document.getElementById('filterProjStatus').value;
+  const assignee=document.getElementById('filterProjAssignee').value;
+  const due=document.getElementById('filterProjDue').value;
+  const priority=document.getElementById('filterProjPriority').value;
+  const today=new Date().toISOString().slice(0,10);
+  let projects=[...DATA.projects];
+  if(status!=='all') projects=projects.filter(p=>p.status===status);
+  if(assignee!=='all') projects=projects.filter(p=>p.assignees.includes(assignee));
+  if(priority!=='all') projects=projects.filter(p=>p.priority===priority);
+  if(due==='overdue') projects=projects.filter(p=>p.due&&p.due<today);
+  else if(due==='nodue') projects=projects.filter(p=>!p.due);
+  else if(['7','14','21','30','60','90'].includes(due)){const dt=new Date();dt.setDate(dt.getDate()+parseInt(due));const mx=dt.toISOString().slice(0,10);projects=projects.filter(p=>p.due&&p.due<=mx);}
+  if(query) projects=projects.filter(p=>(p.title+p.assignees.join(',')).toLowerCase().includes(query));
+  projects.sort((a,b)=>{const o={'In Progress':0,'Planning':1,'Done':2};return (o[a.status]||5)-(o[b.status]||5);});
+  window._filteredProjects=projects;
+  document.getElementById('projCount').textContent='('+projects.length+')';
+  const table=document.getElementById('projTable');
+  table.querySelector('thead tr').innerHTML=['#','Project','Status','Assignee','Due','Sisa','Completion','Docs','Priority','SPK Baru','Last Edit',''].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('tbody').innerHTML=projects.map((p,i)=>{
+    const pri=p.priority!=='-'?'<span class="badge '+(p.priority==='High'?'b-high':'b-med')+'">'+p.priority+'</span>':'-';
+    return '<tr><td>'+(i+1)+'</td><td>'+p.title+'</td><td>'+statusBadge(p.status)+'</td><td>'+(p.assignees.join(', ')||'-')+'</td><td>'+(p.due||'-')+'</td><td>'+sisaBadge(p.remaining_days)+'</td><td>'+progBar(p.completion)+'</td><td>'+p.docs+'</td><td>'+pri+'</td><td>'+(p.spk_baru.join('<br>')||'-')+'</td><td>'+p.edited+'</td><td><button class="action-btn" onclick="showProjDetail('+i+')">🔍</button></td></tr>';
+  }).join('')||'<tr><td colspan="12" style="text-align:center;color:var(--text2);padding:30px">No projects match filters</td></tr>';
+  makeSortable(table);
+}
+
+function renderProjectsTable(d){
+  const asel=document.getElementById('filterProjAssignee');
+  if(asel.options.length<=1) d.personel.sort().forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;asel.appendChild(o);});
+  applyProjFilters();
+}
+
+// ── SPK ────────────────────────────────────────────────────────────────────
+function renderSpk(d){
+  const ssel=document.getElementById('filterSpkStatus'),vsel=document.getElementById('filterSpkVendor'),psel=document.getElementById('filterSpkPic');
+  if(ssel.options.length<=1){
+    [...new Set(d.spk.map(s=>s.status).filter(Boolean))].sort().forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;ssel.appendChild(o);});
+    [...new Set(d.spk.map(s=>s.vendor).filter(v=>v&&v!=='-'))].sort().forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;vsel.appendChild(o);});
+    [...new Set(d.spk.flatMap(s=>s.pic))].filter(Boolean).sort().forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;psel.appendChild(o);});
+  }
+  const total=d.spk.length,active=d.spk.filter(s=>s.status==='Active').length;
+  const expired=d.spk.filter(s=>s.sisa_hari!==null&&s.sisa_hari<0).length;
+  const soon=d.spk.filter(s=>s.sisa_hari!==null&&s.sisa_hari>=0&&s.sisa_hari<=30).length;
+  const totalNilai=d.spk.reduce((s,x)=>s+(x.nilai||0),0);
+  document.getElementById('kpi-spk').innerHTML=[
+    ['blue',total,'Total SPK'],['green',active,'Active'],['red',expired,'Expired'],['yellow',soon,'≤ 30 Hari'],
+    ['blue','Rp '+Math.round(totalNilai/1e9)+'M','Total Nilai']
+  ].map(([c,n,l])=>'<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
+  renderSpkCharts(d.spk);
+  applySpkFilters();
+}
+
+function applySpkFilters(){
+  if(!DATA) return;
+  const query=document.getElementById('searchSpk').value.toLowerCase();
+  const status=document.getElementById('filterSpkStatus').value;
+  const vendor=document.getElementById('filterSpkVendor').value;
+  const due=document.getElementById('filterSpkDue').value;
+  const pic=document.getElementById('filterSpkPic').value;
+  const today=new Date().toISOString().slice(0,10);
+  let spk=[...DATA.spk];
+  if(status!=='all') spk=spk.filter(s=>s.status===status);
+  if(vendor!=='all') spk=spk.filter(s=>s.vendor===vendor);
+  if(pic==='empty') spk=spk.filter(s=>!s.pic||s.pic.length===0);
+  else if(pic!=='all') spk=spk.filter(s=>s.pic.includes(pic));
+  if(due==='overdue') spk=spk.filter(s=>s.jatuh_tempo&&s.jatuh_tempo<today);
+  else if(due!=='all'){const dt=new Date();dt.setDate(dt.getDate()+parseInt(due));const mx=dt.toISOString().slice(0,10);spk=spk.filter(s=>s.jatuh_tempo&&s.jatuh_tempo<=mx&&s.jatuh_tempo>=today);}
+  if(query) spk=spk.filter(s=>(s.no_spk+s.project+s.vendor+s.notes).toLowerCase().includes(query));
+  spk.sort((a,b)=>(a.sisa_hari??999)-(b.sisa_hari??999));
+  window._filteredSpk=spk;
+  document.getElementById('spkCount').textContent='('+spk.length+')';
+  const table=document.getElementById('spkTable');
+  table.querySelector('thead tr').innerHTML=['#','ID','No SPK','Project','Vendor','Status','Jatuh Tempo','Sisa Hari','Nilai Kontrak','Perpanjangan','SPK Baru','PIC','Notes'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('tbody').innerHTML=spk.map((s,i)=>{
+    let perp='-';
+    if(s.perpanjangan&&s.perpanjangan.length>0) perp=s.perpanjangan.map(p=>'<div>'+p.title+' '+statusBadge(p.status)+'</div>').join('');
+    else if(s.sisa_hari!==null&&s.sisa_hari<=90) perp='<span class="badge b-high">Belum Ada</span>';
+    return '<tr><td>'+(i+1)+'</td><td>'+s.spk_id+'</td><td>'+s.no_spk+'</td><td>'+s.project+'</td><td>'+s.vendor+'</td><td>'+statusBadge(s.status)+'</td><td>'+(s.jatuh_tempo||'-')+'</td><td>'+sisaBadge(s.sisa_hari)+'</td><td>'+fmtRp(s.nilai)+'</td><td>'+perp+'</td><td>'+(s.spk_baru.join('<br>')||'-')+'</td><td>'+(s.pic.join(', ')||'-')+'</td><td>'+s.notes+'</td></tr>';
+  }).join('')||'<tr><td colspan="13" style="text-align:center;color:var(--text2);padding:30px">No SPK match filters</td></tr>';
+  makeSortable(table);
+}
+
+// ── People Charts ──────────────────────────────────────────────────────────
+function renderPeopleCharts(d){
+  if(!d) return;
+  ['personRate','personDone','personProj'].forEach(destroyChart);
+  const def=chartDefaults();
+  const minDate=calcMinDate(document.getElementById('peopleRange').value);
+  const tasks=d.tasks.filter(t=>!minDate||t.created>=minDate||t.edited>=minDate||(t.done_date&&t.done_date>=minDate));
+  const projects=d.projects.filter(p=>!minDate||p.created>=minDate||p.edited>=minDate);
+
+  const pDone={},pTotal={};
+  tasks.forEach(t=>{t.assignees.forEach(a=>{pTotal[a]=(pTotal[a]||0)+1;if(t.status==='Done')pDone[a]=(pDone[a]||0)+1;});});
+  const persons=Object.keys(pTotal).sort((a,b)=>(pTotal[b]||0)-(pTotal[a]||0));
+  const doneArr=persons.map(p=>pDone[p]||0),totalArr=persons.map(p=>pTotal[p]||0);
+  const rateArr=doneArr.map((v,i)=>totalArr[i]?Math.round(v/totalArr[i]*100):0);
+
+  charts.personRate=new Chart(document.getElementById('personRateChart'),{type:'bar',data:{labels:persons,datasets:[{label:'%',data:rateArr,backgroundColor:rateArr.map(r=>r>=60?'#2eb872':r>=30?'#e7b416':'#e94560'),borderRadius:5}]},options:{...def,indexAxis:'y',plugins:{...def.plugins,legend:{display:false}},scales:{x:{...def.scales.x,max:100,ticks:{...def.scales.x.ticks,callback:v=>v+'%'}},y:def.scales.y}}});
+
+  charts.personDone=new Chart(document.getElementById('personDoneChart'),{type:'bar',data:{labels:persons,datasets:[{label:'Done',data:doneArr,backgroundColor:'#2eb872',borderRadius:5},{label:'Open',data:totalArr.map((t,i)=>t-doneArr[i]),backgroundColor:'#0f3460',borderRadius:5}]},options:{...def,indexAxis:'y',scales:{x:{...def.scales.x,stacked:true},y:{...def.scales.y,stacked:true}}}});
+
+  const pp={};
+  projects.forEach(p=>{p.assignees.forEach(a=>{if(!pp[a])pp[a]={};pp[a][p.status]=(pp[a][p.status]||0)+1;});});
+  const ppP=Object.keys(pp).sort((a,b)=>Object.values(pp[b]).reduce((x,y)=>x+y,0)-Object.values(pp[a]).reduce((x,y)=>x+y,0));
+  charts.personProj=new Chart(document.getElementById('personProjChart'),{type:'bar',data:{labels:ppP,datasets:[
+    {label:'In Progress',data:ppP.map(p=>(pp[p]||{})['In Progress']||0),backgroundColor:'#4cc9f0',borderRadius:4},
+    {label:'Planning',data:ppP.map(p=>(pp[p]||{})['Planning']||0),backgroundColor:'#e7b416',borderRadius:4},
+    {label:'Done',data:ppP.map(p=>(pp[p]||{})['Done']||0),backgroundColor:'#2eb872',borderRadius:4}
+  ]},options:{...def,scales:{x:{...def.scales.x,stacked:true},y:{...def.scales.y,stacked:true}}}});
+}
+
+// ── Achievements ───────────────────────────────────────────────────────────
+let currentPeriod='daily';
+function switchPeriod(p,btn){currentPeriod=p;document.querySelectorAll('.ptab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');if(DATA)renderAchievements(DATA);}
+function getWeek(ds){const d=new Date(ds),j=new Date(d.getFullYear(),0,1),w=Math.ceil(((d-j)/86400000+j.getDay()+1)/7);return d.getFullYear()+'-W'+String(w).padStart(2,'0');}
+function periodKey(ds,p){if(!ds)return null;if(p==='daily')return ds;if(p==='weekly')return getWeek(ds);return ds.slice(0,7);}
+function currentPeriodKey(p){const t=new Date().toISOString().slice(0,10);if(p==='daily')return t;if(p==='weekly')return getWeek(t);return t.slice(0,7);}
+function periodLabel(p){return{daily:'Today',weekly:'This Week',monthly:'This Month'}[p];}
+
+function renderAchievements(d){
+  const period=currentPeriod,curKey=currentPeriodKey(period);
+  const personAchieve={},allItems=[];
+  d.tasks.forEach(t=>{
+    if(t.status!=='Done'||!t.done_date)return;
+    const pk=periodKey(t.done_date,period);
+    t.assignees.forEach(a=>{if(!personAchieve[a])personAchieve[a]={};if(!personAchieve[a][pk])personAchieve[a][pk]={tasks:0,projects:0};personAchieve[a][pk].tasks++;});
+    allItems.push({type:'Task',name:t.name,person:t.assignees.join(', ')||'-',date:t.done_date,period_key:pk,status:'Done'});
+  });
+  d.projects.forEach(p=>{
+    if(p.status!=='Done')return;
+    const pk=periodKey(p.edited,period);
+    p.assignees.forEach(a=>{if(!personAchieve[a])personAchieve[a]={};if(!personAchieve[a][pk])personAchieve[a][pk]={tasks:0,projects:0};personAchieve[a][pk].projects++;});
+    allItems.push({type:'Project',name:p.title,person:p.assignees.join(', ')||'-',date:p.edited,period_key:pk,status:'Done'});
+  });
+  d.tasks.forEach(t=>{if(t.status==='Done')return;const pk=periodKey(t.edited,period);if(pk===curKey)allItems.push({type:'Task (Updated)',name:t.name,person:t.assignees.join(', ')||'-',date:t.edited,period_key:pk,status:t.status});});
+  d.projects.forEach(p=>{if(p.status==='Done')return;const pk=periodKey(p.edited,period);if(pk===curKey)allItems.push({type:'Project (Updated)',name:p.title,person:p.assignees.join(', ')||'-',date:p.edited,period_key:pk,status:p.status});});
+
+  const curItems=allItems.filter(i=>i.period_key===curKey);
+  document.getElementById('kpi-achieve').innerHTML=[
+    ['green',curItems.filter(i=>i.type==='Task').length,'Tasks Done '+periodLabel(period)],
+    ['blue',curItems.filter(i=>i.type==='Project').length,'Projects Done '+periodLabel(period)],
+    ['yellow',curItems.filter(i=>i.type==='Task (Updated)').length,'Tasks Updated '+periodLabel(period)],
+    ['yellow',curItems.filter(i=>i.type==='Project (Updated)').length,'Projects Updated '+periodLabel(period)]
+  ].map(([c,n,l])=>'<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
+
+  destroyChart('achieve');
+  const persons=d.personel.sort(),def=chartDefaults();
+  charts.achieve=new Chart(document.getElementById('achieveChart'),{type:'bar',data:{labels:persons,datasets:[
+    {label:'Tasks Done',data:persons.map(p=>(personAchieve[p]||{})[curKey]?.tasks||0),backgroundColor:'#2eb872',borderRadius:5},
+    {label:'Projects Done',data:persons.map(p=>(personAchieve[p]||{})[curKey]?.projects||0),backgroundColor:'#4cc9f0',borderRadius:5}
+  ]},options:{...def}});
+  document.getElementById('achieveChartTitle').textContent='🏆 Achievements per Person — '+curKey;
+
+  const table=document.getElementById('achieveTable');
+  table.querySelector('thead tr').innerHTML=['#','Type','Name','Person','Date','Status'].map(h=>'<th>'+h+'</th>').join('');
+  const sorted=[...curItems].sort((a,b)=>b.date.localeCompare(a.date));
+  table.querySelector('tbody').innerHTML=sorted.map((item,i)=>'<tr><td>'+(i+1)+'</td><td>'+item.type+'</td><td>'+item.name+'</td><td>'+item.person+'</td><td>'+item.date+'</td><td>'+statusBadge(item.status)+'</td></tr>').join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:30px">No achievements in this period</td></tr>';
+  document.getElementById('achieveTableTitle').textContent='📋 Achievement Details — '+curKey;
+  makeSortable(table);
+}
+
+// ── Export CSV ─────────────────────────────────────────────────────────────
+function exportCSV(type){
+  let rows=[],filename='';
+  if(type==='tasks'){
+    const {tasks}=getFilteredTasks();filename='tasks.csv';
+    rows=[['Task','Status','Assignee','Tags','Due','Progress','Created','Last Edit']];
+    tasks.forEach(t=>rows.push([t.name,t.status,t.assignees.join(';'),(t.tags||[]).join(';'),t.due||'',t.progress!=null?t.progress+'%':'',t.created,t.edited]));
+  } else if(type==='projects'){
+    filename='projects.csv';
+    rows=[['Project','Status','Assignee','Due','Remaining Days','Completion','Docs','Priority','SPK Baru','Last Edit']];
+    (window._filteredProjects||DATA.projects).forEach(p=>rows.push([p.title,p.status,p.assignees.join(';'),p.due||'',p.remaining_days!=null?p.remaining_days:'',p.completion!=null?p.completion+'%':'',p.docs,p.priority,p.spk_baru.join(';'),p.edited]));
+  } else if(type==='spk'){
+    filename='spk.csv';
+    rows=[['ID','No SPK','Project','Vendor','Status','Jatuh Tempo','Sisa Hari','Nilai Kontrak','PIC','Notes']];
+    (window._filteredSpk||DATA.spk).forEach(s=>rows.push([s.spk_id,s.no_spk,s.project,s.vendor,s.status,s.jatuh_tempo||'',s.sisa_hari!=null?s.sisa_hari:'',s.nilai!=null?s.nilai:'',s.pic.join(';'),s.notes]));
+  } else if(type==='achievements'){
+    filename='achievements.csv';
+    rows=[['Type','Name','Person','Date','Status']];
+    document.querySelectorAll('#achieveTable tbody tr').forEach(tr=>{
+      const c=Array.from(tr.querySelectorAll('td'));
+      if(c.length>=6) rows.push([c[1].textContent,c[2].textContent,c[3].textContent,c[4].textContent,c[5].textContent]);
+    });
+  }
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download=filename;a.click();
+}
+
+// ── Project Modal ──────────────────────────────────────────────────────────
+function showProjDetail(idx){
+  const p=window._filteredProjects[idx];if(!p)return;
+  document.getElementById('projModalTitle').textContent=p.title;
+  const pri=p.priority!=='-'?'<span class="badge '+(p.priority==='High'?'b-high':'b-med')+'">'+p.priority+'</span>':'-';
+  const docs=p.doc_detail?Object.entries(p.doc_detail).map(([k,v])=>v+' '+k).join('<br>'):p.docs;
+  document.getElementById('projModalBody').innerHTML=[
+    ['Status',statusBadge(p.status)],['Assignee',p.assignees.join(', ')||'-'],
+    ['Due',p.due||'-'],['Sisa',sisaBadge(p.remaining_days)],
+    ['Completion',progBar(p.completion)],['Docs ('+p.docs+')',docs],
+    ['Priority',pri],['SPK Baru',p.spk_baru.join(', ')||'-'],['Last Edit',p.edited||'-']
+  ].map(([l,v])=>'<div class="modal-row"><div class="lbl">'+l+'</div><div class="val">'+v+'</div></div>').join('');
   document.getElementById('projModal').classList.add('active');
 }
-function closeProjModal() { document.getElementById('projModal').classList.remove('active'); }
-document.addEventListener('keydown', e => { if(e.key==='Escape') closeProjModal(); });
+function closeProjModal(){document.getElementById('projModal').classList.remove('active');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeProjModal();});
 
+// ── Load Data ──────────────────────────────────────────────────────────────
+function loadData(){
+  document.getElementById('lastUpdate').textContent='Loading...';
+  fetch('/api/data').then(r=>r.json()).then(d=>{
+    DATA=d;
+    renderKPI(d);renderCharts(d);renderPeopleCharts(d);renderTasksTable(d);renderProjectsTable(d);renderAchievements(d);renderSpk(d);
+    document.getElementById('lastUpdate').textContent='Last update: '+new Date().toLocaleTimeString('id-ID');
+  }).catch(e=>{document.getElementById('lastUpdate').textContent='Error: '+e.message;});
+}
 loadData();
-setInterval(loadData, 300000); // auto-refresh every 5 min
+setInterval(loadData,300000);
 </script>
 </body></html>
