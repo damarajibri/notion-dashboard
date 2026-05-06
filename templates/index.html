@@ -511,11 +511,11 @@ function chartDefaults(){
 function renderKPI(d){
   const total=d.tasks.length,done=d.task_status['Done']||0,open=total-done;
   const tp=d.projects.length,pd=d.proj_status['Done']||0;
-  const totalNilai=d.spk.reduce((s,x)=>s+(x.nilai||0),0);
+  const totalNilai=d.spk.reduce((s,x)=>s+(x.total_anggaran||0),0);
   document.getElementById('kpi-overview').innerHTML=[
     ['blue',total,'Total Tasks'],['green',done,'Tasks Done'],['yellow',open,'Tasks Open'],
     ['red',d.overdue,'Overdue'],['blue',tp,'Total Projects'],['green',pd,'Projects Done'],
-    ['yellow',d.spk.length,'Total SPK'],['green','Rp '+Math.round(totalNilai/1e9)+'M','Nilai SPK']
+    ['yellow',d.spk.length,'Total SPK'],['green','Rp '+Math.round(totalNilai/1e9)+'M','Total Anggaran']
   ].map(([c,n,l])=>'<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
 }
 
@@ -685,14 +685,14 @@ function renderSpk(d){
   if(ssel.options.length<=1){
     [...new Set(d.spk.map(s=>s.status).filter(Boolean))].sort().forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;ssel.appendChild(o);});
     [...new Set(d.spk.map(s=>s.vendor).filter(v=>v&&v!=='-'))].sort().forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;vsel.appendChild(o);});
-    [...new Set(d.spk.flatMap(s=>s.pic))].filter(Boolean).sort().forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;psel.appendChild(o);});
+    d.personel.sort().forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;psel.appendChild(o);});
   }
   const total=d.spk.length,active=d.spk.filter(s=>s.status==='Active').length;
   const expired=d.spk.filter(s=>s.sisa_hari!==null&&s.sisa_hari<0).length;
   const soon=d.spk.filter(s=>s.sisa_hari!==null&&s.sisa_hari>=0&&s.sisa_hari<=30).length;
-  const totalNilai=d.spk.reduce((s,x)=>s+(x.nilai||0),0);
+  const totalAnggaran=d.spk.reduce((s,x)=>s+(x.total_anggaran||0),0);
   document.getElementById('kpi-spk').innerHTML=[
-    ['blue',total,'Total SPK'],['green',active,'Active'],['red',expired,'Expired'],['yellow',soon,'≤ 30 Hari'],['blue','Rp '+Math.round(totalNilai/1e9)+'M','Total Nilai']
+    ['blue',total,'Total SPK'],['green',active,'Active'],['red',expired,'Expired'],['yellow',soon,'≤ 30 Hari'],['blue','Rp '+Math.round(totalAnggaran/1e9)+'M','Total Anggaran']
   ].map(([c,n,l])=>'<div class="kpi"><div class="num '+c+'">'+n+'</div><div class="label">'+l+'</div></div>').join('');
   renderSpkCharts(d.spk);
   applySpkFilters();
