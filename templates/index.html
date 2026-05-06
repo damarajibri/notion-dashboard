@@ -268,7 +268,7 @@ canvas{max-height:300px}
 <div id="tab-spk" class="tab-content">
   <div class="filter-bar">
     <input type="text" id="searchSpk" placeholder="🔍 Search SPK..." oninput="applySpkFilters()" style="width:150px">
-    <select id="filterSpkStatus" onchange="applySpkFilters()"><option value="all">All Status</option></select>
+    <select id="filterSpkStatus" onchange="applySpkFilters()" multiple style="min-width:120px;height:auto;max-height:80px"><option value="all" selected>All Status</option></select>
     <select id="filterSpkVendor" onchange="applySpkFilters()"><option value="all">All Vendor</option></select>
     <select id="filterSpkDue" onchange="applySpkFilters()">
       <option value="all">All Jatuh Tempo</option>
@@ -701,7 +701,9 @@ function renderSpk(d){
 function applySpkFilters(){
   if(!DATA)return;
   const query=document.getElementById('searchSpk').value.toLowerCase();
-  const status=document.getElementById('filterSpkStatus').value;
+  const statusSel=document.getElementById('filterSpkStatus');
+  const selectedStatuses=[...statusSel.selectedOptions].map(o=>o.value);
+  const statusAll=selectedStatuses.includes('all')||selectedStatuses.length===0;
   const vendor=document.getElementById('filterSpkVendor').value;
   const due=document.getElementById('filterSpkDue').value;
   const pic=document.getElementById('filterSpkPic').value;
@@ -709,7 +711,7 @@ function applySpkFilters(){
   const nilaiMax=parseFloat(document.getElementById('filterSpkNilaiMax').value)*1e6||Infinity;
   const today=new Date().toISOString().slice(0,10);
   let spk=[...DATA.spk];
-  if(status!=='all')spk=spk.filter(s=>s.status===status);
+  if(!statusAll)spk=spk.filter(s=>selectedStatuses.includes(s.status));
   if(vendor!=='all')spk=spk.filter(s=>s.vendor===vendor);
   if(pic==='empty')spk=spk.filter(s=>!s.pic||s.pic.length===0);
   else if(pic!=='all')spk=spk.filter(s=>s.pic.includes(pic));
