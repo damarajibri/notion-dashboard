@@ -9,6 +9,7 @@ TASKS_DB = '2c3a31d192f481d68c65d0f289ebd111'
 PROJECTS_DB = '2c3a31d192f48104ba5fecc8ee9c66d1'
 PERSONEL_DB = '2c4a31d192f480aab819f688af756ed1'
 SPK_DB = '2c5a31d192f4803a86e4fb50b19df8dc'
+MONTHLY_PERF_DB = '358a31d192f4809ca281cd6849efa28a'
 HEADERS = {
     'Authorization': f'Bearer {TOKEN}',
     'Notion-Version': '2022-06-28',
@@ -117,12 +118,68 @@ def extract_spk(r, personel):
     for item in status_perp_arr:
         if item.get('type') == 'status' and item.get('status'):
             status_perp.append(item['status'].get('name',''))
+    # New fields
+    asset_class = (props.get('Asset Class',{}).get('select') or {}).get('name','')
+    baru_sisa = (props.get('Baru-Sisa Bayar-Perpanjangan',{}).get('select') or {}).get('name','')
+    id_rka_raw = props.get('ID RKA',{}).get('rich_text',[])
+    id_rka = id_rka_raw[0]['plain_text'] if id_rka_raw else ''
+    jenis_anggaran = (props.get('Jenis Anggaran',{}).get('select') or {}).get('name','')
+    kategori_inisiatif = (props.get('Kategori Inisiatif Pengadaan',{}).get('select') or {}).get('name','')
+    klasifikasi = (props.get('Klasifikasi Pengadaan',{}).get('select') or {}).get('name','')
+    nama_gl = (props.get('Nama GL',{}).get('select') or {}).get('name','')
+    pengadaan_baru = (props.get('Pengadaan Baru/Pembayaran',{}).get('select') or {}).get('name','')
+    spk_mulai = props.get('SPK Mulai',{}).get('date',{})
+    spk_mulai = spk_mulai.get('start','')[:10] if spk_mulai and spk_mulai.get('start') else ''
+    spk_selesai = props.get('SPK Selesai',{}).get('date',{})
+    spk_selesai = spk_selesai.get('start','')[:10] if spk_selesai and spk_selesai.get('start') else ''
+    tgl_spk = props.get('Tanggal SPK',{}).get('date',{})
+    tgl_spk = tgl_spk.get('start','')[:10] if tgl_spk and tgl_spk.get('start') else ''
+    total_anggaran = props.get('Total Anggaran',{}).get('number')
+    total_terbayar_raw = props.get('Total Terbayar',{}).get('rollup',{})
+    total_terbayar = total_terbayar_raw.get('number') if total_terbayar_raw else None
+    sisa_anggaran_raw = props.get('Sisa Anggaran',{}).get('formula',{})
+    sisa_anggaran = sisa_anggaran_raw.get('number') if sisa_anggaran_raw else None
     return {
         'spk_id': spk_id, 'no_spk': no_spk, 'project': proj_name, 'vendor': vendor_name,
         'status': status_name, 'jatuh_tempo': jatuh_tempo, 'sisa_hari': sisa_hari,
         'nilai': nilai, 'notes': notes_text, 'pic': pic,
         'perp_ids': perp_ids, 'status_perpanjangan': status_perp,
-        '_id': r['id']
+        '_id': r['id'],
+        'asset_class': asset_class, 'baru_sisa': baru_sisa, 'id_rka': id_rka,
+        'jenis_anggaran': jenis_anggaran, 'kategori_inisiatif': kategori_inisiatif,
+        'klasifikasi': klasifikasi, 'nama_gl': nama_gl, 'pengadaan_baru': pengadaan_baru,
+        'spk_mulai': spk_mulai, 'spk_selesai': spk_selesai, 'tgl_spk': tgl_spk,
+        'total_anggaran': total_anggaran, 'total_terbayar': total_terbayar,
+        'sisa_anggaran': sisa_anggaran
+    }
+
+def extract_monthly_perf(r, spk_map_by_id):
+    props = r['properties']
+    name = props.get('Name',{}).get('title',[])
+    name = name[0]['plain_text'] if name else ''
+    uid = props.get('ID',{}).get('unique_id',{})
+    perf_id = f"{uid.get('prefix','')}-{uid.get('number','')}" if uid else ''
+    nilai = props.get('Nilai Tagihan',{}).get('number')
+    periode = props.get('Periode',{}).get('date',{})
+    periode_start = periode.get('start','')[:10] if periode and periode.get('start') else ''
+    periode_end = periode.get('end','')[:10] if periode and periode.get('end') else ''
+    ba = (props.get('Status BA Performansi',{}).get('select') or {}).get('name','')
+    invoice = (props.get('Status Invoice',{}).get('select') or {}).get('name','')
+    bayar = (props.get('Status Pembayaran',{}).get('select') or {}).get('name','')
+    rekon = (props.get('Status Rekon',{}).get('select') or {}).get('name','')
+    tgl_rekon = props.get('Tanggal Rekon',{}).get('date',{})
+    tgl_rekon = tgl_rekon.get('start','')[:10] if tgl_rekon and tgl_rekon.get('start') else ''
+    tgl_ba = props.get('Tanggal Serah BA Performansi',{}).get('date',{})
+    tgl_ba = tgl_ba.get('start','')[:10] if tgl_ba and tgl_ba.get('start') else ''
+    spk_rels = props.get('\U0001f4cb SPK',{}).get('relation',[])
+    spk_names = [spk_map_by_id.get(rel['id'], rel['id'][:8]) for rel in spk_rels]
+    return {
+        'perf_id': perf_id, 'name': name, 'nilai': nilai,
+        'periode_start': periode_start, 'periode_end': periode_end,
+        'status_ba': ba, 'status_invoice': invoice,
+        'status_bayar': bayar, 'status_rekon': rekon,
+        'tgl_rekon': tgl_rekon, 'tgl_ba': tgl_ba,
+        'spk_names': spk_names
     }
 
 def extract_project(r, personel):
@@ -177,6 +234,7 @@ def api_data():
     raw_tasks = query_all(TASKS_DB)
     raw_projects = query_all(PROJECTS_DB)
     raw_spk = query_all(SPK_DB)
+    raw_monthly_perf = query_all(MONTHLY_PERF_DB)
     tasks = [extract_task(r, personel) for r in raw_tasks]
     projects = [extract_project(r, personel) for r in raw_projects]
     spk = [extract_spk(r, personel) for r in raw_spk]
@@ -223,6 +281,13 @@ def api_data():
             if dates:
                 p['due'] = dates[0]
         del p['spk_baru_ids'], p['spk_seb_ids']
+
+    # Build SPK page_id -> No SPK map for monthly perf
+    spk_id_to_nospk = {}
+    for r in raw_spk:
+        no = r['properties'].get('No SPK',{}).get('title',[])
+        if no: spk_id_to_nospk[r['id']] = no[0]['plain_text']
+    monthly_perf = [extract_monthly_perf(r, spk_id_to_nospk) for r in raw_monthly_perf]
 
     from datetime import datetime
     today_dt = datetime.now().date()
@@ -290,7 +355,8 @@ def api_data():
         'proj_status': dict(proj_status),
         'proj_person': {k: dict(v) for k,v in proj_person.items()},
         'daily': daily,
-        'spk': spk
+        'spk': spk,
+        'monthly_perf': monthly_perf
     })
 
 if __name__ == '__main__':
