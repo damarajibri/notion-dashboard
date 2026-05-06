@@ -288,7 +288,7 @@ canvas{max-height:300px}
   </div>
   <div class="kpi-row" id="kpi-spk"></div>
   <div class="grid-3 section-gap">
-    <div class="card"><h2>🏢 Nilai Kontrak per Vendor</h2><canvas id="spkVendorChart"></canvas></div>
+    <div class="card"><h2>🏢 Total Anggaran per Vendor</h2><canvas id="spkVendorChart"></canvas></div>
     <div class="card"><h2>📊 Status SPK</h2><canvas id="spkStatusChart"></canvas></div>
     <div class="card"><h2>⏳ Jatuh Tempo Timeline</h2><canvas id="spkTimelineChart"></canvas></div>
   </div>
@@ -566,11 +566,11 @@ function renderSpkCharts(spk){
   ['spkVendor','spkStatus','spkTimeline'].forEach(destroyChart);
   const def=chartDefaults();
   const vendorNilai={};
-  spk.forEach(s=>{if(s.nilai&&s.vendor&&s.vendor!=='-')vendorNilai[s.vendor]=(vendorNilai[s.vendor]||0)+s.nilai;});
+  spk.forEach(s=>{if(s.total_anggaran&&s.vendor&&s.vendor!=='-')vendorNilai[s.vendor]=(vendorNilai[s.vendor]||0)+s.total_anggaran;});
   const sortedV=Object.entries(vendorNilai).sort((a,b)=>b[1]-a[1]).slice(0,8);
   charts.spkVendor=new Chart(document.getElementById('spkVendorChart'),{type:'bar',data:{
     labels:sortedV.map(v=>v[0].length>15?v[0].slice(0,15)+'…':v[0]),
-    datasets:[{label:'Nilai (Rp)',data:sortedV.map(v=>v[1]),backgroundColor:CHART_COLORS,borderRadius:5}]
+    datasets:[{label:'Total Anggaran (Rp)',data:sortedV.map(v=>v[1]),backgroundColor:CHART_COLORS,borderRadius:5}]
   },options:{...def,indexAxis:'y',plugins:{...def.plugins,tooltip:{callbacks:{label:ctx=>'Rp '+ctx.raw.toLocaleString('id-ID')}}}}});
 
   const statusCount={};
