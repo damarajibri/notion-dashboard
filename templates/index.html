@@ -401,6 +401,15 @@ canvas{max-height:300px}
   </div>
 </div>
 
+<!-- SPK Detail Modal -->
+<div class="modal-overlay" id="spkModal" onclick="if(event.target===this)closeSpkModal()">
+  <div class="modal" style="position:relative;max-width:700px">
+    <button class="modal-close" onclick="closeSpkModal()">✕</button>
+    <h2 id="spkModalTitle">SPK Detail</h2>
+    <div id="spkModalBody"></div>
+  </div>
+</div>
+
 </main>
 
 <script>
@@ -724,13 +733,13 @@ function applySpkFilters(){
   window._filteredSpk=spk;
   document.getElementById('spkCount').textContent='('+spk.length+')';
   const table=document.getElementById('spkTable');
-  table.querySelector('thead tr').innerHTML=['#','ID','No SPK','Project','Vendor','Status','Tgl SPK','SPK Mulai','SPK Selesai','Sisa','Nilai','Total Anggaran','Terbayar','Sisa Anggaran','Klasifikasi','Jenis Anggaran','Perpanjangan','SPK Baru','PIC','Notes'].map(h=>'<th>'+h+'</th>').join('');
+  table.querySelector('thead tr').innerHTML=['#','ID','No SPK','Project','Vendor','Status','Tgl SPK','SPK Mulai','SPK Selesai','Sisa','Nilai','Total Anggaran','Terbayar','Sisa Anggaran','Klasifikasi','Jenis Anggaran','Perpanjangan','SPK Baru','PIC','Notes',''].map(h=>'<th>'+h+'</th>').join('');
   table.querySelector('tbody').innerHTML=spk.map((s,i)=>{
     let perp='-';
     if(s.perpanjangan&&s.perpanjangan.length>0)perp=s.perpanjangan.map(p=>'<div>'+p.title+' '+statusBadge(p.status)+'</div>').join('');
     else if(s.sisa_hari!==null&&s.sisa_hari<=90)perp='<span class="badge b-high">Belum Ada</span>';
-    return '<tr><td>'+(i+1)+'</td><td>'+s.spk_id+'</td><td>'+s.no_spk+'</td><td>'+s.project+'</td><td>'+s.vendor+'</td><td>'+statusBadge(s.status)+'</td><td>'+(s.tgl_spk||'-')+'</td><td>'+(s.spk_mulai||'-')+'</td><td>'+(s.spk_selesai||'-')+'</td><td>'+sisaBadge(s.sisa_hari)+'</td><td>'+fmtRp(s.nilai)+'</td><td>'+fmtRp(s.total_anggaran)+'</td><td>'+fmtRp(s.total_terbayar)+'</td><td>'+fmtRp(s.sisa_anggaran)+'</td><td>'+(s.klasifikasi||'-')+'</td><td>'+(s.jenis_anggaran||'-')+'</td><td>'+perp+'</td><td>'+(s.spk_baru.join('<br>')||'-')+'</td><td>'+(s.pic.join(', ')||'-')+'</td><td>'+s.notes+'</td></tr>';
-  }).join('')||'<tr><td colspan="20" style="text-align:center;color:var(--text2);padding:30px">No SPK match</td></tr>';
+    return '<tr><td>'+(i+1)+'</td><td>'+s.spk_id+'</td><td>'+s.no_spk+'</td><td>'+s.project+'</td><td>'+s.vendor+'</td><td>'+statusBadge(s.status)+'</td><td>'+(s.tgl_spk||'-')+'</td><td>'+(s.spk_mulai||'-')+'</td><td>'+(s.spk_selesai||'-')+'</td><td>'+sisaBadge(s.sisa_hari)+'</td><td>'+fmtRp(s.nilai)+'</td><td>'+fmtRp(s.total_anggaran)+'</td><td>'+fmtRp(s.total_terbayar)+'</td><td>'+fmtRp(s.sisa_anggaran)+'</td><td>'+(s.klasifikasi||'-')+'</td><td>'+(s.jenis_anggaran||'-')+'</td><td>'+perp+'</td><td>'+(s.spk_baru.join('<br>')||'-')+'</td><td>'+(s.pic.join(', ')||'-')+'</td><td>'+s.notes+'</td><td><button class="btn btn-sm btn-outline" onclick="showSpkDetail('+i+')">🔍</button></td></tr>';
+  }).join('')||'<tr><td colspan="21" style="text-align:center;color:var(--text2);padding:30px">No SPK match</td></tr>';
   makeSortable(table);
 }
 </script>
@@ -963,6 +972,39 @@ function exportCSV(type){
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download=filename;a.click();
 }
 
+// ── SPK Modal ──
+function showSpkDetail(idx){
+  const s=window._filteredSpk[idx];if(!s)return;
+  document.getElementById('spkModalTitle').textContent=s.no_spk||'SPK Detail';
+  // SPK detail rows
+  let html=[
+    ['ID',s.spk_id],['No SPK',s.no_spk],['Project',s.project],['Vendor',s.vendor],
+    ['Status',statusBadge(s.status)],['Tanggal SPK',s.tgl_spk||'-'],['SPK Mulai',s.spk_mulai||'-'],['SPK Selesai',s.spk_selesai||'-'],
+    ['Sisa Hari',sisaBadge(s.sisa_hari)],['Nilai Kontrak',fmtRp(s.nilai)],['Total Anggaran',fmtRp(s.total_anggaran)],
+    ['Total Terbayar',fmtRp(s.total_terbayar)],['Sisa Anggaran',fmtRp(s.sisa_anggaran)],
+    ['Asset Class',s.asset_class||'-'],['Klasifikasi',s.klasifikasi||'-'],['Jenis Anggaran',s.jenis_anggaran||'-'],
+    ['Nama GL',s.nama_gl||'-'],['ID RKA',s.id_rka||'-'],['Kategori Inisiatif',s.kategori_inisiatif||'-'],
+    ['Pengadaan',s.pengadaan_baru||'-'],['Baru/Sisa/Perpanjangan',s.baru_sisa||'-'],
+    ['PIC',s.pic.join(', ')||'-'],['Notes',s.notes||'-']
+  ].map(([l,v])=>'<div class="modal-row"><div class="lbl">'+l+'</div><div class="val">'+v+'</div></div>').join('');
+
+  // Monthly Performance related
+  const perfs=(DATA.monthly_perf||[]).filter(m=>m.spk_names.includes(s.no_spk));
+  if(perfs.length>0){
+    html+='<h2 style="margin-top:18px;font-size:14px;color:var(--accent)">📈 Monthly Performance</h2>';
+    html+='<table style="margin-top:8px"><thead><tr><th>Periode</th><th>Nilai Tagihan</th><th>BA</th><th>Invoice</th><th>Pembayaran</th><th>Rekon</th></tr></thead><tbody>';
+    perfs.forEach(m=>{
+      html+='<tr><td>'+(m.name||m.periode_start||'-')+'</td><td>'+fmtRp(m.nilai)+'</td><td>'+statusBadge(m.status_ba)+'</td><td>'+statusBadge(m.status_invoice)+'</td><td>'+statusBadge(m.status_bayar)+'</td><td>'+statusBadge(m.status_rekon)+'</td></tr>';
+    });
+    html+='</tbody></table>';
+  }else{
+    html+='<div style="margin-top:18px;color:var(--text2);font-size:12px">📈 Belum ada data Monthly Performance untuk SPK ini.</div>';
+  }
+  document.getElementById('spkModalBody').innerHTML=html;
+  document.getElementById('spkModal').classList.add('active');
+}
+function closeSpkModal(){document.getElementById('spkModal').classList.remove('active');}
+
 // ── Project Modal ──
 function showProjDetail(idx){
   const p=window._filteredProjects[idx];if(!p)return;
@@ -975,7 +1017,7 @@ function showProjDetail(idx){
   document.getElementById('projModal').classList.add('active');
 }
 function closeProjModal(){document.getElementById('projModal').classList.remove('active');}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeProjModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeProjModal();closeSpkModal();}});
 
 // ── Load Data ──
 function loadData(){
