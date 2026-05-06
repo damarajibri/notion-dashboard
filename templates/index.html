@@ -571,7 +571,7 @@ function renderSpkCharts(spk){
   },options:{plugins:{legend:{position:'bottom',labels:{color:'#eee',padding:8}}}}});
 
   const jtMonthly={};
-  spk.forEach(s=>{if(s.jatuh_tempo){const m=s.jatuh_tempo.slice(0,7);jtMonthly[m]=(jtMonthly[m]||0)+1;}});
+  spk.forEach(s=>{if(s.spk_selesai){const m=s.spk_selesai.slice(0,7);jtMonthly[m]=(jtMonthly[m]||0)+1;}});
   const jtMonths=Object.keys(jtMonthly).sort();
   const today=new Date().toISOString().slice(0,7);
   charts.spkTimeline=new Chart(document.getElementById('spkTimelineChart'),{type:'bar',data:{
@@ -713,8 +713,8 @@ function applySpkFilters(){
   if(vendor!=='all')spk=spk.filter(s=>s.vendor===vendor);
   if(pic==='empty')spk=spk.filter(s=>!s.pic||s.pic.length===0);
   else if(pic!=='all')spk=spk.filter(s=>s.pic.includes(pic));
-  if(due==='overdue')spk=spk.filter(s=>s.jatuh_tempo&&s.jatuh_tempo<today);
-  else if(due!=='all'){const dt=new Date();dt.setDate(dt.getDate()+parseInt(due));const mx=dt.toISOString().slice(0,10);spk=spk.filter(s=>s.jatuh_tempo&&s.jatuh_tempo<=mx&&s.jatuh_tempo>=today);}
+  if(due==='overdue')spk=spk.filter(s=>s.spk_selesai&&s.spk_selesai<today);
+  else if(due!=='all'){const dt=new Date();dt.setDate(dt.getDate()+parseInt(due));const mx=dt.toISOString().slice(0,10);spk=spk.filter(s=>s.spk_selesai&&s.spk_selesai<=mx&&s.spk_selesai>=today);}
   if(nilaiMin>0)spk=spk.filter(s=>s.nilai&&s.nilai>=nilaiMin);
   if(nilaiMax<Infinity)spk=spk.filter(s=>s.nilai&&s.nilai<=nilaiMax);
   if(query)spk=spk.filter(s=>(s.no_spk+s.project+s.vendor+s.notes).toLowerCase().includes(query));
