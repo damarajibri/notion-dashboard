@@ -1187,6 +1187,12 @@ tbody tr:last-child td { border-bottom: none; }
           <option value="all">All PIC</option>
           <option value="empty">⚠️ Belum Ada PIC</option>
         </select>
+        <select id="filterSpkTipe" class="form-select" onchange="applySpkFilters()">
+          <option value="all">All Tipe</option>
+          <option value="Baru">Baru</option>
+          <option value="Perpanjangan">Perpanjangan</option>
+          <option value="Sisa Bayar">Sisa Bayar</option>
+        </select>
       </div>
     </div>
     <div id="kpi-spk" class="kpi-row"></div>
@@ -1651,7 +1657,7 @@ function applyAllTaskFilters() {
   document.getElementById('taskCount').textContent = activeTasks.length + ' tasks';
 
   const table = document.getElementById('tasksTable');
-  table.querySelector('thead tr').innerHTML = ['#', 'Task', 'Status', 'Assignee', 'Tags', 'Due', 'Progress', 'Last Edit'].map(h => `<th>${h}</th>`).join('');
+  table.querySelector('thead tr').innerHTML = ['#', 'Task', 'Status', 'Priority', 'Assignee', 'Tags', 'Due', 'Progress', 'Last Edit'].map(h => `<th>${h}</th>`).join('');
   table.querySelector('tbody').innerHTML = activeTasks.map((t, i) => {
     const tags = (t.tags || []).map(g => `<span class="tag">${g}</span>`).join('') || '-';
     const due = t.due ? (t.due < new Date().toISOString().slice(0, 10) ? `<span style="color:var(--red);font-weight:600">⚠️ ${t.due}</span>` : `<span style="color:var(--text2)">${t.due}</span>`) : '<span style="color:var(--text2)">-</span>';
@@ -1659,13 +1665,14 @@ function applyAllTaskFilters() {
       <td class="col-num">${i + 1}</td>
       <td class="col-name"><div class="col-name-text">${t.name}</div></td>
       <td>${statusBadge(t.status)}</td>
+      <td>${priorityBadge(t.priority)}</td>
       <td>${renderAssignees(t.assignees)}</td>
       <td>${tags}</td>
       <td>${due}</td>
       <td>${progBar(t.progress)}</td>
       <td style="color:var(--text2);font-size:12px">${t.edited}</td>
     </tr>`;
-  }).join('') || emptyState(8);
+  }).join('') || emptyState(9);
   makeSortable(table);
 }
 
@@ -1874,73 +1881,101 @@ function renderSpk(d) {
     pics.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; psel.appendChild(o); });
   }
 
-  const total = d.spk.length;
-  const active = d.spk.filter(s => s.status === 'Active').length;
-  const expired = d.spk.filter(s => s.sisa_hari !== null && s.sisa_hari < 0).length;
-  const soon = d.spk.filter(s => s.sisa_hari !== null && s.sisa_hari >= 0 && s.sisa_hari <= 30).length;
+  // Populate filter Tipe
+  const tsel = document.getElementById('filterSpkTipe');
+  if (tsel && tsel.options.length <= 1) {
+    const tipes = [...new Set(d.spk.map(s => s.tipe).filter(t => t && t !== '-'))].sort();
+    tipes.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; tsel.appendChild(o); });
+  }
+
+  const total    = d.spk.length;
+  const active   = d.spk.filter(s => s.status === 'Active').length;
+  const expired  = d.spk.filter(s => s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari < 0).length;
+  const soon     = d.spk.filter(s => s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari >= 0 && s.sisa_hari <= 30).length;
+  const totalAng = d.total_anggaran_all || 0;
 
   document.getElementById('kpi-spk').innerHTML = [
-    { color: 'kpi-blue',   icon: '📄', num: total,   label: 'Total SPK'   },
-    { color: 'kpi-green',  icon: '✅', num: active,  label: 'Active SPK'  },
-    { color: 'kpi-red',    icon: '❌', num: expired, label: 'Expired SPK' },
-    { color: 'kpi-yellow', icon: '⏰', num: soon,    label: '≤ 30 Hari'   },
-  ].map(k => `<div class="kpi-card ${k.color}"><span class="kpi-icon">${k.icon}</span><div class="kpi-num">${k.num}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+    { color: 'kpi-blue',   icon: '📄', num: total,         label: 'Total SPK'         },
+    { color: 'kpi-green',  icon: '✅', num: active,        label: 'Active SPK'        },
+    { color: 'kpi-red',    icon: '❌', num: expired,       label: 'Expired / Lewat'   },
+    { color: 'kpi-yellow', icon: '⏰', num: soon,          label: '≤ 30 Hari Selesai' },
+    { color: 'kpi-purple', icon: '💰', num: fmtRp(totalAng), label: 'Total Anggaran'  },
+  ].map(k => `<div class="kpi-card ${k.color}"><span class="kpi-icon">${k.icon}</span><div class="kpi-num" style="font-size:${typeof k.num === 'string' && k.num.length > 10 ? '16px' : '32px'}">${k.num}</div><div class="kpi-label">${k.label}</div></div>`).join('');
 
   applySpkFilters();
 }
 
 function applySpkFilters() {
   if (!DATA) return;
-  const query = document.getElementById('searchSpk').value.toLowerCase();
-  const status = document.getElementById('filterSpkStatus').value;
-  const vendor = document.getElementById('filterSpkVendor').value;
-  const due = document.getElementById('filterSpkDue').value;
-  const pic = document.getElementById('filterSpkPic').value;
-  const today = new Date().toISOString().slice(0, 10);
+  const query    = document.getElementById('searchSpk').value.toLowerCase();
+  const status   = document.getElementById('filterSpkStatus').value;
+  const vendor   = document.getElementById('filterSpkVendor').value;
+  const due      = document.getElementById('filterSpkDue').value;
+  const pic      = document.getElementById('filterSpkPic').value;
+  const tipe     = document.getElementById('filterSpkTipe') ? document.getElementById('filterSpkTipe').value : 'all';
+  const today    = new Date().toISOString().slice(0, 10);
 
   let spk = [...DATA.spk];
   if (status !== 'all') spk = spk.filter(s => s.status === status);
   if (vendor !== 'all') spk = spk.filter(s => s.vendor === vendor);
-  if (pic === 'empty') spk = spk.filter(s => !s.pic || s.pic.length === 0);
+  if (tipe   !== 'all') spk = spk.filter(s => s.tipe   === tipe);
+  if (pic === 'empty')  spk = spk.filter(s => !s.pic || s.pic.length === 0);
   else if (pic !== 'all') spk = spk.filter(s => s.pic.includes(pic));
-  if (due === 'overdue') spk = spk.filter(s => s.jatuh_tempo && s.jatuh_tempo < today);
+  // filter berdasarkan spk_selesai (field baru ganti jatuh_tempo)
+  if (due === 'overdue') spk = spk.filter(s => s.spk_selesai && s.spk_selesai < today);
   else if (due !== 'all') {
     const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
     const max = dt.toISOString().slice(0, 10);
-    spk = spk.filter(s => s.jatuh_tempo && s.jatuh_tempo <= max && s.jatuh_tempo >= today);
+    spk = spk.filter(s => s.spk_selesai && s.spk_selesai <= max && s.spk_selesai >= today);
   }
   if (query) spk = spk.filter(s => (s.no_spk + s.project + s.vendor + s.notes).toLowerCase().includes(query));
-  spk.sort((a, b) => (a.sisa_hari ?? 999) - (b.sisa_hari ?? 999));
+  spk.sort((a, b) => (a.sisa_hari ?? 9999) - (b.sisa_hari ?? 9999));
 
   document.getElementById('spkCount').textContent = spk.length + ' SPK';
 
   const table = document.getElementById('spkTable');
-  table.querySelector('thead tr').innerHTML = ['#', 'ID', 'No SPK', 'Project', 'Vendor', 'Status', 'Jatuh Tempo', 'Sisa Hari', 'Nilai Kontrak', 'Perpanjangan', 'SPK Baru', 'PIC', 'Notes'].map(h => `<th>${h}</th>`).join('');
+  table.querySelector('thead tr').innerHTML = [
+    '#', 'ID', 'No SPK', 'Project', 'Vendor', 'Status', 'Tipe',
+    'Mulai', 'Selesai', 'Sisa Hari',
+    'Total Anggaran', 'Terbayar', 'Sisa Anggaran',
+    'Perpanjangan', 'PIC', 'Notes'
+  ].map(h => `<th>${h}</th>`).join('');
+
   table.querySelector('tbody').innerHTML = spk.map((s, i) => {
     let perp = '-';
     if (s.perpanjangan && s.perpanjangan.length > 0) {
       perp = s.perpanjangan.map(p => `<div style="margin:2px 0">${p.title} ${statusBadge(p.status)}</div>`).join('');
-    } else if (s.sisa_hari !== null && s.sisa_hari <= 90) {
+    } else if (s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari <= 90) {
       perp = `<span class="badge badge-high">Belum Ada</span>`;
     }
-    const baru = s.spk_baru && s.spk_baru.length > 0 ? s.spk_baru.map(b => `<span class="tag">${b}</span>`).join('') : '-';
-    const nilai = s.nilai ? `<span style="font-weight:600;color:var(--green)">${fmtRp(s.nilai)}</span>` : '-';
+
+    const anggaran  = s.total_anggaran  ? `<span style="font-weight:600;color:var(--green)">${fmtRp(s.total_anggaran)}</span>`  : '-';
+    const terbayar  = s.total_terbayar  ? `<span style="color:var(--blue)">${fmtRp(s.total_terbayar)}</span>`                   : '<span style="color:var(--text2)">-</span>';
+    const sisaAng   = s.sisa_anggaran   ? `<span style="color:var(--yellow)">${fmtRp(s.sisa_anggaran)}</span>`                  : '-';
+    const tipeBadge = s.tipe && s.tipe !== '-' ? `<span class="badge ${s.tipe === 'Baru' ? 'badge-done' : s.tipe === 'Perpanjangan' ? 'badge-ip' : 'badge-pend'}">${s.tipe}</span>` : '-';
+
+    const mulai   = s.spk_mulai   ? `<span style="color:var(--text2);font-size:12px">${s.spk_mulai}</span>`   : '-';
+    const selesai = s.spk_selesai ? `<span style="color:var(--text2);font-size:12px">${s.spk_selesai}</span>` : '-';
+
     return `<tr>
       <td class="col-num">${i + 1}</td>
       <td><span class="tag">${s.spk_id}</span></td>
-      <td style="font-weight:600">${s.no_spk}</td>
+      <td style="font-weight:600;white-space:nowrap;font-size:12px">${s.no_spk}</td>
       <td class="col-name"><div class="col-name-text">${s.project}</div></td>
-      <td style="color:var(--text2)">${s.vendor}</td>
+      <td style="color:var(--text2);font-size:12px">${s.vendor}</td>
       <td>${statusBadge(s.status)}</td>
-      <td style="color:var(--text2);font-size:12px">${s.jatuh_tempo || '-'}</td>
+      <td>${tipeBadge}</td>
+      <td>${mulai}</td>
+      <td>${selesai}</td>
       <td>${sisaBadge(s.sisa_hari)}</td>
-      <td>${nilai}</td>
+      <td>${anggaran}</td>
+      <td>${terbayar}</td>
+      <td>${sisaAng}</td>
       <td>${perp}</td>
-      <td>${baru}</td>
-      <td>${s.pic.length ? s.pic.map(p => renderAvatar(p)).join('') : '<span style="color:var(--text2)">-</span>'}</td>
+      <td>${s.pic && s.pic.length ? s.pic.map(p => renderAvatar(p)).join('') : '<span style="color:var(--text2)">-</span>'}</td>
       <td style="color:var(--text2);font-size:12px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.notes}">${s.notes || '-'}</td>
     </tr>`;
-  }).join('') || emptyState(13);
+  }).join('') || emptyState(16);
   makeSortable(table);
 }
 
@@ -1967,12 +2002,8 @@ function showProjDetail(idx) {
       <div class="modal-row"><div class="label">Completion</div><div class="value">${progBar(p.completion)}</div></div>
     </div>
     <div class="modal-section">
-      <div class="modal-section-title">Dokumen (${p.docs})</div>
+      <div class="modal-section-title">Dokumen (${p.docs} selesai)</div>
       ${docs}
-    </div>
-    <div class="modal-section">
-      <div class="modal-section-title">SPK</div>
-      <div class="modal-row"><div class="label">SPK Baru</div><div class="value">${spkb}</div></div>
     </div>`;
 
   document.getElementById('projModal').classList.add('active');
