@@ -1365,20 +1365,34 @@ function renderKPI(d) {
   const total = d.tasks.length, done = d.task_status['Done'] || 0, open = total - done;
   const tp = d.projects.length, pd = d.proj_status['Done'] || 0;
 
+  // Proyek In Progress
+  const projInProgress = d.proj_status['In Progress'] || 0;
+
+  // SPK aktif tapi sudah jatuh tempo (sisa_hari < 0 dan status Active)
+  const today = new Date().toISOString().slice(0, 10);
+  const spkAktifLewat = (d.spk || []).filter(s =>
+    s.status === 'Active' && s.spk_selesai && s.spk_selesai < today
+  ).length;
+
+  // Total nilai SPK (semua, bukan hanya active)
+  const totalNilaiSpk = d.total_anggaran_all || 0;
+
   const kpis = [
-    { color: 'kpi-blue',   icon: '📋', num: total,       label: 'Total Tasks'     },
-    { color: 'kpi-green',  icon: '✅', num: done,         label: 'Tasks Done'      },
-    { color: 'kpi-yellow', icon: '⏳', num: open,         label: 'Tasks Open'      },
-    { color: 'kpi-red',    icon: '🔥', num: d.overdue,    label: 'Overdue'         },
-    { color: 'kpi-purple', icon: '📂', num: d.no_due,     label: 'No Due Date'     },
-    { color: 'kpi-blue',   icon: '🏗️', num: tp,          label: 'Total Projects'  },
-    { color: 'kpi-green',  icon: '🎯', num: pd,           label: 'Projects Done'   },
+    { color: 'kpi-blue',   icon: '📋', num: total,            label: 'Total Tasks',              small: false },
+    { color: 'kpi-green',  icon: '✅', num: done,              label: 'Tasks Done',               small: false },
+    { color: 'kpi-yellow', icon: '⏳', num: open,              label: 'Tasks Open',               small: false },
+    { color: 'kpi-red',    icon: '🔥', num: d.overdue,         label: 'Tasks Overdue',            small: false },
+    { color: 'kpi-blue',   icon: '🏗️', num: tp,               label: 'Total Projects',           small: false },
+    { color: 'kpi-yellow', icon: '🔄', num: projInProgress,    label: 'Projects In Progress',     small: false },
+    { color: 'kpi-green',  icon: '🎯', num: pd,                label: 'Projects Done',            small: false },
+    { color: 'kpi-red',    icon: '⚠️', num: spkAktifLewat,    label: 'SPK Aktif Jatuh Tempo',    small: false },
+    { color: 'kpi-purple', icon: '💰', num: fmtRp(totalNilaiSpk), label: 'Total Nilai SPK',      small: true  },
   ];
 
   document.getElementById('kpi-overview').innerHTML = kpis.map(k =>
     `<div class="kpi-card ${k.color}">
       <span class="kpi-icon">${k.icon}</span>
-      <div class="kpi-num">${k.num}</div>
+      <div class="kpi-num" style="${k.small ? 'font-size:16px;line-height:1.3' : ''}">${k.num}</div>
       <div class="kpi-label">${k.label}</div>
     </div>`
   ).join('');
