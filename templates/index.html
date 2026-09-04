@@ -1902,20 +1902,7 @@ function renderSpk(d) {
     tipes.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; tsel.appendChild(o); });
   }
 
-  const total    = d.spk.length;
-  const active   = d.spk.filter(s => s.status === 'Active').length;
-  const expired  = d.spk.filter(s => s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari < 0).length;
-  const soon     = d.spk.filter(s => s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari >= 0 && s.sisa_hari <= 30).length;
-  const totalAng = d.total_anggaran_all || 0;
-
-  document.getElementById('kpi-spk').innerHTML = [
-    { color: 'kpi-blue',   icon: '📄', num: total,         label: 'Total SPK'         },
-    { color: 'kpi-green',  icon: '✅', num: active,        label: 'Active SPK'        },
-    { color: 'kpi-red',    icon: '❌', num: expired,       label: 'Expired / Lewat'   },
-    { color: 'kpi-yellow', icon: '⏰', num: soon,          label: '≤ 30 Hari Selesai' },
-    { color: 'kpi-purple', icon: '💰', num: fmtRp(totalAng), label: 'Total Anggaran'  },
-  ].map(k => `<div class="kpi-card ${k.color}"><span class="kpi-icon">${k.icon}</span><div class="kpi-num" style="font-size:${typeof k.num === 'string' && k.num.length > 10 ? '16px' : '32px'}">${k.num}</div><div class="kpi-label">${k.label}</div></div>`).join('');
-
+  // KPI dan tabel dirender sepenuhnya oleh applySpkFilters
   applySpkFilters();
 }
 
@@ -1935,7 +1922,6 @@ function applySpkFilters() {
   if (tipe   !== 'all') spk = spk.filter(s => s.tipe   === tipe);
   if (pic === 'empty')  spk = spk.filter(s => !s.pic || s.pic.length === 0);
   else if (pic !== 'all') spk = spk.filter(s => s.pic.includes(pic));
-  // filter berdasarkan spk_selesai (field baru ganti jatuh_tempo)
   if (due === 'overdue') spk = spk.filter(s => s.spk_selesai && s.spk_selesai < today);
   else if (due !== 'all') {
     const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
@@ -1945,7 +1931,29 @@ function applySpkFilters() {
   if (query) spk = spk.filter(s => (s.no_spk + s.project + s.vendor + s.notes).toLowerCase().includes(query));
   spk.sort((a, b) => (a.sisa_hari ?? 9999) - (b.sisa_hari ?? 9999));
 
-  document.getElementById('spkCount').textContent = spk.length + ' SPK';
+  // ── Update count & KPI Total Anggaran sesuai filter aktif ──
+  const filteredCount   = spk.length;
+  const filteredActive  = spk.filter(s => s.status === 'Active').length;
+  const filteredExpired = spk.filter(s => s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari < 0).length;
+  const filteredSoon    = spk.filter(s => s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari >= 0 && s.sisa_hari <= 30).length;
+  const filteredAnggaran = spk.reduce((sum, s) => sum + (s.total_anggaran || 0), 0);
+
+  document.getElementById('spkCount').textContent = filteredCount + ' SPK';
+
+  // Cek apakah ada filter aktif (selain all)
+  const isFiltered = status !== 'all' || vendor !== 'all' || due !== 'all' || pic !== 'all' || tipe !== 'all' || query;
+
+  document.getElementById('kpi-spk').innerHTML = [
+    { color: 'kpi-blue',   icon: '📄', num: filteredCount,              label: isFiltered ? 'SPK (terfilter)'        : 'Total SPK'         },
+    { color: 'kpi-green',  icon: '✅', num: filteredActive,             label: isFiltered ? 'Active (terfilter)'     : 'Active SPK'        },
+    { color: 'kpi-red',    icon: '❌', num: filteredExpired,            label: isFiltered ? 'Lewat (terfilter)'      : 'Expired / Lewat'   },
+    { color: 'kpi-yellow', icon: '⏰', num: filteredSoon,               label: isFiltered ? '≤ 30 Hari (terfilter)' : '≤ 30 Hari Selesai' },
+    { color: 'kpi-purple', icon: '💰', num: fmtRp(filteredAnggaran),    label: isFiltered ? 'Total Anggaran (terfilter)' : 'Total Anggaran'},
+  ].map(k => `<div class="kpi-card ${k.color}">
+    <span class="kpi-icon">${k.icon}</span>
+    <div class="kpi-num" style="font-size:${typeof k.num === 'string' && k.num.length > 10 ? '15px' : '32px'};line-height:1.2">${k.num}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
 
   const table = document.getElementById('spkTable');
   table.querySelector('thead tr').innerHTML = [
