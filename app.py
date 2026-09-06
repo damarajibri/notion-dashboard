@@ -1,6 +1,6 @@
 import json, os, io, csv, urllib.request, urllib.error
 from collections import defaultdict
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
 
 app = Flask(__name__)
 
@@ -360,6 +360,17 @@ def extract_spk(r, personel):
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/download/template-csv')
+def download_template_csv():
+    """Kirim file contoh/template CSV untuk import Monthly Performance."""
+    return send_from_directory(
+        os.path.dirname(os.path.abspath(__file__)),
+        'data.csv',
+        as_attachment=True,
+        download_name='template_monthly_performance.csv',
+        mimetype='text/csv',
+    )
 
 @app.route('/api/data')
 def api_data():
