@@ -1,0 +1,2247 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EXO Dashboard — Realtime</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ===== RESET & BASE ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0d0d1a;
+  --bg2: #111122;
+  --surface: #161628;
+  --surface2: #1c1c35;
+  --border: #2a2a4a;
+  --border-hover: #3d3d6b;
+  --text: #e8e8f0;
+  --text2: #8888aa;
+  --text3: #5555770;
+  --accent: #7c6af7;
+  --accent2: #5b4fd4;
+  --accent-glow: rgba(124, 106, 247, 0.3);
+  --green: #22d4a0;
+  --green-bg: rgba(34, 212, 160, 0.12);
+  --red: #f05673;
+  --red-bg: rgba(240, 86, 115, 0.12);
+  --yellow: #f0b429;
+  --yellow-bg: rgba(240, 180, 41, 0.12);
+  --blue: #38bdf8;
+  --blue-bg: rgba(56, 189, 248, 0.12);
+  --purple: #a78bfa;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --transition: all 0.2s ease;
+}
+
+[data-theme="light"] {
+  --bg: #f0f2f8;
+  --bg2: #e8eaf2;
+  --surface: #ffffff;
+  --surface2: #f5f6fc;
+  --border: #dde0ee;
+  --border-hover: #b8bcd8;
+  --text: #1a1a35;
+  --text2: #6666888;
+  --text3: #9999bb;
+  --accent: #6355e0;
+  --accent2: #4f43cc;
+  --accent-glow: rgba(99, 85, 224, 0.2);
+  --green: #0f9e72;
+  --green-bg: rgba(15, 158, 114, 0.1);
+  --red: #d63b5a;
+  --red-bg: rgba(214, 59, 90, 0.1);
+  --yellow: #c9870e;
+  --yellow-bg: rgba(201, 135, 14, 0.1);
+  --blue: #0284c7;
+  --blue-bg: rgba(2, 132, 199, 0.1);
+  --purple: #7c3aed;
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.12);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,0.15);
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  transition: background 0.3s, color 0.3s;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* ===== HEADER ===== */
+.header {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: var(--shadow-md);
+}
+
+.header-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.header-logo {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 4px 14px var(--accent-glow);
+  flex-shrink: 0;
+}
+
+.header-title { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.header-title span { color: var(--accent); }
+.header-subtitle { font-size: 12px; color: var(--text2); margin-top: 1px; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px var(--accent-glow); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-ghost {
+  background: var(--surface2);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { border-color: var(--border-hover); color: var(--text); background: var(--border); }
+
+.status-dot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text2);
+  padding: 6px 12px;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text2);
+}
+.dot.loading { background: var(--yellow); animation: pulse 1.2s ease-in-out infinite; }
+.dot.success { background: var(--green); }
+.dot.error { background: var(--red); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ===== MAIN LAYOUT ===== */
+.main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 28px;
+}
+
+/* ===== TABS ===== */
+.tabs-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 5px;
+  margin-bottom: 28px;
+  overflow-x: auto;
+  width: fit-content;
+  max-width: 100%;
+  box-shadow: var(--shadow-sm);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 500;
+  transition: var(--transition);
+  white-space: nowrap;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+.tab:hover { color: var(--text); background: var(--surface2); }
+
+.tab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.tab-icon { font-size: 16px; }
+
+.tab-content { display: none; animation: fadeIn 0.25s ease; }
+.tab-content.active { display: block; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+}
+
+.card:hover { border-color: var(--border-hover); }
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title .icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.icon-blue { background: var(--blue-bg); }
+.icon-green { background: var(--green-bg); }
+.icon-yellow { background: var(--yellow-bg); }
+.icon-red { background: var(--red-bg); }
+.icon-purple { background: rgba(167, 139, 250, 0.12); }
+
+/* ===== GRID ===== */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+.full { grid-column: 1 / -1; }
+
+/* ===== KPI CARDS ===== */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition);
+  cursor: default;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-hover);
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.kpi-card.kpi-blue::before { background: linear-gradient(90deg, var(--blue), var(--accent)); }
+.kpi-card.kpi-green::before { background: linear-gradient(90deg, var(--green), #10b981); }
+.kpi-card.kpi-red::before { background: linear-gradient(90deg, var(--red), #f97316); }
+.kpi-card.kpi-yellow::before { background: linear-gradient(90deg, var(--yellow), #f59e0b); }
+.kpi-card.kpi-purple::before { background: linear-gradient(90deg, var(--purple), var(--accent)); }
+
+.kpi-icon {
+  font-size: 24px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.kpi-num {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 6px;
+  letter-spacing: -1px;
+}
+
+.kpi-card.kpi-blue .kpi-num { color: var(--blue); }
+.kpi-card.kpi-green .kpi-num { color: var(--green); }
+.kpi-card.kpi-red .kpi-num { color: var(--red); }
+.kpi-card.kpi-yellow .kpi-num { color: var(--yellow); }
+.kpi-card.kpi-purple .kpi-num { color: var(--purple); }
+
+.kpi-label {
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 500;
+}
+
+/* ===== FILTER BAR ===== */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.filter-label {
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 600;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-input, .form-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: var(--transition);
+  height: 38px;
+}
+
+.form-input { min-width: 200px; }
+.form-input::placeholder { color: var(--text2); }
+.form-input:focus, .form-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.form-select { min-width: 160px; cursor: pointer; }
+.form-select option { background: var(--surface2); }
+
+/* ===== TABLES ===== */
+.table-wrapper {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.scroll-table { max-height: 520px; overflow-y: auto; overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+thead { position: sticky; top: 0; z-index: 2; }
+
+th {
+  background: var(--surface2);
+  color: var(--text2);
+  padding: 11px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  transition: var(--transition);
+}
+
+th:hover { background: var(--border); color: var(--text); }
+
+td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+tbody tr { transition: background 0.15s; }
+tbody tr:nth-child(even) { background: rgba(255,255,255,0.015); }
+tbody tr:hover td { background: var(--surface2); }
+tbody tr:last-child td { border-bottom: none; }
+
+.col-num { color: var(--text2); font-size: 12px; width: 40px; }
+.col-name { font-weight: 500; max-width: 280px; }
+.col-name-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ===== BADGES ===== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 100px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: 0.7; }
+
+.badge-ip    { background: rgba(56, 189, 248, 0.15); color: var(--blue); border: 1px solid rgba(56,189,248,0.3); }
+.badge-ns    { background: rgba(167, 139, 250, 0.15); color: var(--purple); border: 1px solid rgba(167,139,250,0.3); }
+.badge-done  { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,212,160,0.3); }
+.badge-pend  { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(240,180,41,0.3); }
+.badge-high  { background: var(--red-bg); color: var(--red); border: 1px solid rgba(240,86,115,0.3); }
+.badge-med   { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(240,180,41,0.3); }
+.badge-low   { background: var(--green-bg); color: var(--green); border: 1px solid rgba(34,212,160,0.3); }
+.badge-gray  { background: rgba(136,136,170,0.15); color: var(--text2); border: 1px solid rgba(136,136,170,0.3); }
+
+/* ===== TAGS ===== */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(124, 106, 247, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(124,106,247,0.25);
+  margin: 1px;
+}
+
+/* ===== PROGRESS BAR ===== */
+.prog-bar {
+  background: var(--surface2);
+  border-radius: 100px;
+  height: 20px;
+  overflow: hidden;
+  min-width: 80px;
+  border: 1px solid var(--border);
+}
+
+.prog-fill {
+  height: 100%;
+  border-radius: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  transition: width 0.5s ease;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* ===== ACTION BUTTONS ===== */
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  cursor: pointer;
+  font-size: 14px;
+  transition: var(--transition);
+  color: var(--text2);
+}
+
+.action-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  transform: scale(1.05);
+}
+
+/* ===== SISA HARI ===== */
+.sisa-ok { color: var(--green); font-weight: 600; }
+.sisa-warn { color: var(--yellow); font-weight: 600; }
+.sisa-danger { color: var(--red); font-weight: 600; }
+
+/* ===== PERIOD TOGGLE ===== */
+.period-toggle {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.ptab {
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  background: var(--surface);
+  color: var(--text2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+.ptab:hover { border-color: var(--border-hover); color: var(--text); }
+.ptab.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 200;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  animation: overlayIn 0.2s ease;
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-overlay.active { display: flex; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 0;
+  max-width: 640px;
+  width: 100%;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  animation: modalIn 0.25s ease;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header {
+  padding: 24px 28px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  z-index: 1;
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.modal-subtitle { font-size: 12px; color: var(--text2); margin-top: 4px; }
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text2);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.modal-close:hover { background: var(--red); border-color: var(--red); color: #fff; }
+
+.modal-body { padding: 24px 28px; }
+
+.modal-section {
+  margin-bottom: 24px;
+}
+
+.modal-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text2);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 0;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 13px;
+}
+
+.modal-row:last-child { border-bottom: none; }
+.modal-row .label { color: var(--text2); width: 140px; flex-shrink: 0; font-weight: 500; padding-top: 2px; }
+.modal-row .value { color: var(--text); flex: 1; }
+
+/* ===== LOADING SKELETON ===== */
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-kpi { height: 110px; border-radius: var(--radius-lg); }
+.skeleton-card { height: 320px; border-radius: var(--radius-lg); }
+.skeleton-row { height: 44px; margin-bottom: 6px; }
+
+/* ===== EMPTY STATE ===== */
+.empty-state {
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--text2);
+}
+
+.empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+.empty-state-text { font-size: 15px; font-weight: 500; color: var(--text2); }
+.empty-state-sub { font-size: 13px; color: var(--text2); opacity: 0.7; margin-top: 6px; }
+
+/* ===== CHART WRAPPERS ===== */
+.chart-wrapper { position: relative; }
+
+/* ===== LOADING OVERLAY ===== */
+#loadingOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(13,13,26,0.75);
+  backdrop-filter: blur(8px);
+  z-index: 300;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#loadingOverlay.active { display: flex; }
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-text { color: var(--text2); font-size: 14px; }
+
+/* ===== FOOTER ===== */
+.footer {
+  text-align: center;
+  padding: 24px;
+  color: var(--text2);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 900px) {
+  .grid, .grid-3 { grid-template-columns: 1fr; }
+  .full { grid-column: 1; }
+  .main { padding: 16px; }
+  .header-inner { padding: 14px 16px; }
+  .header-subtitle { display: none; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .tabs-wrapper { width: 100%; }
+}
+
+@media (max-width: 600px) {
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .filter-bar { padding: 12px; }
+  .form-input, .form-select { font-size: 12px; }
+}
+
+/* ===== ASSIGNEE AVATAR ===== */
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
+.avatar-stack { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+
+/* ===== NOTIFICATION TOAST ===== */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  box-shadow: var(--shadow-lg);
+  font-size: 13px;
+  color: var(--text);
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: toastIn 0.3s ease;
+  max-width: 320px;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== THEME TOGGLE COMPACT ===== */
+.theme-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  cursor: pointer;
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition);
+  flex-shrink: 0;
+}
+
+.theme-btn:hover { border-color: var(--accent); background: var(--accent-glow); }
+
+/* ===== CHART LEGEND COLORS ===== */
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+  flex-shrink: 0;
+}
+
+/* ===== CONTENT SECTION HEADER ===== */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-count {
+  font-size: 12px;
+  color: var(--text2);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 100px;
+}
+
+/* ===== DIVIDER ===== */
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+</style>
+</head>
+
+<body>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Memuat data dari Notion...</div>
+</div>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <div class="header-inner">
+    <div class="header-brand">
+      <div class="header-logo">🌕</div>
+      <div>
+        <div class="header-title">EXO <span>Dashboard</span></div>
+        <div class="header-subtitle">Projects & Tasks EXO · Data from Notion API</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="status-dot" id="statusIndicator">
+        <div class="dot loading" id="statusDot"></div>
+        <span id="lastUpdate">Loading...</span>
+      </div>
+      <button class="btn btn-primary" onclick="loadData()">
+        <span id="refreshIcon">🔄</span> Refresh
+      </button>
+      <button class="btn btn-ghost" onclick="openImportModal()" title="Import data CSV ke Monthly Performance">
+        <span>📥</span> Import CSV
+      </button>
+      <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle theme">🌙</button>
+    </div>
+  </div>
+</header>
+
+<!-- ===== MAIN ===== -->
+<div class="main">
+
+  <!-- Tabs Navigation -->
+  <div class="tabs-wrapper">
+    <button class="tab active" onclick="switchTab('overview', this)">
+      <span class="tab-icon">📊</span> Overview
+    </button>
+    <button class="tab" onclick="switchTab('tasks', this)">
+      <span class="tab-icon">📋</span> Tasks
+    </button>
+    <button class="tab" onclick="switchTab('projects', this)">
+      <span class="tab-icon">🏗️</span> Projects
+    </button>
+    <button class="tab" onclick="switchTab('people', this)">
+      <span class="tab-icon">👥</span> People
+    </button>
+    <button class="tab" onclick="switchTab('achievements', this)">
+      <span class="tab-icon">🏆</span> Achievements
+    </button>
+    <button class="tab" onclick="switchTab('spk', this)">
+      <span class="tab-icon">📄</span> SPK
+    </button>
+  </div>
+
+  <!-- ===== OVERVIEW TAB ===== -->
+  <div id="tab-overview" class="tab-content active">
+    <div id="kpi-overview" class="kpi-row">
+      <!-- Skeleton loading -->
+      <div class="skeleton skeleton-kpi"></div>
+      <div class="skeleton skeleton-kpi"></div>
+      <div class="skeleton skeleton-kpi"></div>
+      <div class="skeleton skeleton-kpi"></div>
+      <div class="skeleton skeleton-kpi"></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="card-title">
+          <div class="icon icon-blue">📈</div>
+          Monthly: Created vs Completed vs Backlog
+        </div>
+        <div class="chart-wrapper"><canvas id="monthlyChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">
+          <div class="icon icon-red">⏰</div>
+          Due Date Health
+        </div>
+        <div class="chart-wrapper"><canvas id="overdueChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">
+          <div class="icon icon-purple">📊</div>
+          Task Status Distribution
+        </div>
+        <div class="chart-wrapper"><canvas id="taskStatusChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">
+          <div class="icon icon-green">🏗️</div>
+          Project Status Distribution
+        </div>
+        <div class="chart-wrapper"><canvas id="projStatusChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TASKS TAB ===== -->
+  <div id="tab-tasks" class="tab-content">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <input type="text" id="search" class="form-input" placeholder="🔍 Search tasks..." oninput="applyAllTaskFilters()">
+        <select id="filterStatus" class="form-select" onchange="applyAllTaskFilters()">
+          <option value="all">All Status</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Not Started">Not Started</option>
+          <option value="Pending">Pending</option>
+          <option value="Archived">Archived</option>
+        </select>
+        <select id="filterAssignee" class="form-select" onchange="applyAllTaskFilters()">
+          <option value="all">All Assignee</option>
+        </select>
+        <select id="filterTag" class="form-select" onchange="applyAllTaskFilters()">
+          <option value="all">All Tags</option>
+        </select>
+        <select id="filterDue" class="form-select" onchange="applyAllTaskFilters()">
+          <option value="all">All Due Date</option>
+          <option value="7">Due ≤ 1 Minggu</option>
+          <option value="14">Due ≤ 2 Minggu</option>
+          <option value="21">Due ≤ 3 Minggu</option>
+          <option value="30">Due ≤ 1 Bulan</option>
+          <option value="60">Due ≤ 2 Bulan</option>
+          <option value="90">Due ≤ 3 Bulan</option>
+          <option value="overdue">Overdue</option>
+          <option value="nodue">No Due Date</option>
+        </select>
+        <select id="dailyRange" class="form-select" onchange="applyAllTaskFilters()">
+          <option value="7">Last 7 Days</option>
+          <option value="this_week">This Week</option>
+          <option value="14">Last 2 Weeks</option>
+          <option value="this_month" selected>This Month</option>
+          <option value="last_month">Last Month</option>
+          <option value="90">Last 3 Months</option>
+          <option value="this_year">This Year</option>
+          <option value="all">All Time</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card full" style="margin-bottom: 20px;">
+      <div class="card-title">
+        <div class="icon icon-blue">📈</div>
+        Daily Task Resolve Progress
+      </div>
+      <div class="chart-wrapper"><canvas id="dailyResolveChart"></canvas></div>
+    </div>
+
+    <div class="card full">
+      <div class="section-header">
+        <div class="section-title">
+          <span>📋</span> Active Tasks
+        </div>
+        <span class="section-count" id="taskCount">0 tasks</span>
+      </div>
+      <div class="table-wrapper">
+        <div class="scroll-table">
+          <table id="tasksTable">
+            <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PROJECTS TAB ===== -->
+  <div id="tab-projects" class="tab-content">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <input type="text" id="searchProj" class="form-input" placeholder="🔍 Search projects..." oninput="applyProjFilters()">
+        <select id="filterProjStatus" class="form-select" onchange="applyProjFilters()">
+          <option value="all">All Status</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Planning">Planning</option>
+          <option value="Done">Done</option>
+        </select>
+        <select id="filterProjAssignee" class="form-select" onchange="applyProjFilters()">
+          <option value="all">All Assignee</option>
+        </select>
+        <select id="filterProjPriority" class="form-select" onchange="applyProjFilters()">
+          <option value="all">All Priority</option>
+          <option value="High">⚡ High</option>
+          <option value="Medium">Medium</option>
+          <option value="Low">Low</option>
+        </select>
+        <select id="filterProjDue" class="form-select" onchange="applyProjFilters()">
+          <option value="all">All Due Date</option>
+          <option value="7">Due ≤ 1 Minggu</option>
+          <option value="14">Due ≤ 2 Minggu</option>
+          <option value="21">Due ≤ 3 Minggu</option>
+          <option value="30">Due ≤ 1 Bulan</option>
+          <option value="60">Due ≤ 2 Bulan</option>
+          <option value="90">Due ≤ 3 Bulan</option>
+          <option value="overdue">Overdue</option>
+          <option value="nodue">No Due Date</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card full">
+      <div class="section-header">
+        <div class="section-title">
+          <span>🏗️</span> All Projects Submission
+        </div>
+        <span class="section-count" id="projCount">0 projects</span>
+      </div>
+      <div class="table-wrapper">
+        <div class="scroll-table">
+          <table id="projTable">
+            <thead><tr></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== PEOPLE TAB ===== -->
+  <div id="tab-people" class="tab-content">
+    <div style="display:flex; justify-content:center; margin-bottom:24px;">
+      <select id="peopleRange" class="form-select" onchange="renderPeopleCharts(DATA)" style="min-width:200px;">
+        <option value="all">📅 All Time</option>
+        <option value="1">Today</option>
+        <option value="7">Last 7 Days</option>
+        <option value="this_month">This Month</option>
+        <option value="last_month">Last Month</option>
+        <option value="last_2_month">Last 2 Months</option>
+        <option value="last_3_month">Last 3 Months</option>
+        <option value="90">Last 90 Days</option>
+      </select>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <div class="card-title"><div class="icon icon-green">🏆</div> Task Completion Rate</div>
+        <div class="chart-wrapper"><canvas id="personRateChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><div class="icon icon-blue">📦</div> Tasks Done vs Open</div>
+        <div class="chart-wrapper"><canvas id="personDoneChart"></canvas></div>
+      </div>
+      <div class="card full">
+        <div class="card-title"><div class="icon icon-purple">🏗️</div> Projects per Person</div>
+        <div class="chart-wrapper"><canvas id="personProjChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== ACHIEVEMENTS TAB ===== -->
+  <div id="tab-achievements" class="tab-content">
+    <div class="period-toggle">
+      <button class="ptab active" onclick="switchPeriod('daily', this)">📅 Daily</button>
+      <button class="ptab" onclick="switchPeriod('weekly', this)">📆 Weekly</button>
+      <button class="ptab" onclick="switchPeriod('monthly', this)">🗓️ Monthly</button>
+    </div>
+    <div id="kpi-achieve" class="kpi-row"></div>
+    <div class="grid">
+      <div class="card full">
+        <div class="card-title" id="achieveChartTitle">
+          <div class="icon icon-yellow">🏆</div> Achievements per Person
+        </div>
+        <div class="chart-wrapper"><canvas id="achieveChart"></canvas></div>
+      </div>
+      <div class="card full">
+        <div class="section-header">
+          <div class="section-title" id="achieveTableTitle"><span>📋</span> Achievement Details</div>
+        </div>
+        <div class="table-wrapper">
+          <div class="scroll-table">
+            <table id="achieveTable"><thead><tr></tr></thead><tbody></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== SPK TAB ===== -->
+  <div id="tab-spk" class="tab-content">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <input type="text" id="searchSpk" class="form-input" placeholder="🔍 Search SPK..." oninput="applySpkFilters()">
+        <select id="filterSpkStatus" class="form-select" onchange="applySpkFilters()">
+          <option value="all">All Status</option>
+        </select>
+        <select id="filterSpkVendor" class="form-select" onchange="applySpkFilters()">
+          <option value="all">All Vendor</option>
+        </select>
+        <select id="filterSpkDue" class="form-select" onchange="applySpkFilters()">
+          <option value="all">All Jatuh Tempo</option>
+          <option value="7">≤ 1 Minggu</option>
+          <option value="14">≤ 2 Minggu</option>
+          <option value="30">≤ 1 Bulan</option>
+          <option value="90">≤ 3 Bulan</option>
+          <option value="180">≤ 6 Bulan</option>
+          <option value="overdue">Sudah Lewat</option>
+        </select>
+        <select id="filterSpkPic" class="form-select" onchange="applySpkFilters()">
+          <option value="all">All PIC</option>
+          <option value="empty">⚠️ Belum Ada PIC</option>
+        </select>
+        <select id="filterSpkTipe" class="form-select" onchange="applySpkFilters()">
+          <option value="all">All Tipe</option>
+          <option value="Baru">Baru</option>
+          <option value="Perpanjangan">Perpanjangan</option>
+          <option value="Sisa Bayar">Sisa Bayar</option>
+        </select>
+      </div>
+    </div>
+    <div id="kpi-spk" class="kpi-row"></div>
+    <div class="card full">
+      <div class="section-header">
+        <div class="section-title"><span>📄</span> All SPK</div>
+        <span class="section-count" id="spkCount">0 SPK</span>
+      </div>
+      <div class="table-wrapper">
+        <div class="scroll-table">
+          <table id="spkTable"><thead><tr></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- Modal: Project Detail -->
+<div class="modal-overlay" id="projModal" onclick="if(event.target===this)closeProjModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="projModalTitle">Project Detail</div>
+        <div class="modal-subtitle" id="projModalSubtitle">Detail informasi project</div>
+      </div>
+      <button class="modal-close" onclick="closeProjModal()">✕</button>
+    </div>
+    <div class="modal-body" id="projModalBody"></div>
+  </div>
+</div>
+
+<!-- Modal: Import CSV -->
+<div class="modal-overlay" id="importModal" onclick="if(event.target===this)closeImportModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">📥 Import CSV ke Monthly Performance</div>
+        <div class="modal-subtitle">Isi Database ID untuk verifikasi, lalu unggah file CSV</div>
+      </div>
+      <button class="modal-close" onclick="closeImportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="modal-section">
+        <div class="modal-section-title">1. Database Tujuan</div>
+        <label class="filter-label" for="importDbId" style="display:block;margin-bottom:6px">Database ID (wajib)</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="text" id="importDbId" class="form-input" style="flex:1;min-width:260px"
+                 placeholder="contoh: 358a31d192f4809ca281cd6849efa28a"
+                 oninput="resetVerify()">
+          <button class="btn btn-ghost" id="verifyBtn" onclick="verifyDb()">🔎 Verifikasi</button>
+        </div>
+        <div id="verifyResult" style="margin-top:12px;font-size:13px"></div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">2. File CSV</div>
+        <input type="file" id="importFile" accept=".csv" class="form-input" style="width:100%;padding:8px">
+        <div class="empty-state-sub" style="margin-top:8px;text-align:left">
+          Header wajib: <code>Name</code>, <code>No SPK</code>. Kolom opsional: Periode, Nilai Tagihan,
+          Status Invoice/Pembayaran/BA Performansi/Rekon, Tanggal Serah BA Performansi, Tanggal Rekon.
+          <br><b>No SPK wajib diisi</b> &amp; harus cocok dengan judul di database SPK (case-insensitive).
+          Bila ada satu baris tidak valid, <b>seluruh import dibatalkan</b>.
+        </div>
+      </div>
+
+      <div class="modal-section" id="importResult" style="display:none"></div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeImportModal()">Batal</button>
+        <button class="btn btn-primary" id="importBtn" onclick="doImport()" disabled>
+          <span id="importBtnIcon">📤</span> Import
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+  EXO Dashboard · Notion API · Auto-refresh every 5 minutes
+</footer>
+
+<!-- ===== JAVASCRIPT ===== -->
+<script>
+'use strict';
+
+let DATA = null;
+const charts = {};
+
+// ===== CHART DEFAULTS =====
+const CHART_COLORS = {
+  blue:   '#38bdf8',
+  green:  '#22d4a0',
+  red:    '#f05673',
+  yellow: '#f0b429',
+  purple: '#a78bfa',
+  accent: '#7c6af7',
+  gray:   '#555577',
+};
+
+const CHART_BG = 'rgba(0,0,0,0)';
+
+function chartDefaults(isDark) {
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tickColor = isDark ? '#8888aa' : '#6666888';
+  const legendColor = isDark ? '#e8e8f0' : '#1a1a35';
+  return { gridColor, tickColor, legendColor };
+}
+
+function getThemeIsDark() {
+  return document.documentElement.getAttribute('data-theme') !== 'light';
+}
+
+// ===== THEME =====
+function toggleTheme() {
+  const html = document.documentElement;
+  const isLight = html.getAttribute('data-theme') === 'light';
+  html.setAttribute('data-theme', isLight ? '' : 'light');
+  document.getElementById('themeBtn').textContent = isLight ? '🌙' : '☀️';
+  localStorage.setItem('theme', isLight ? 'dark' : 'light');
+  if (DATA) {
+    renderCharts(DATA);
+    renderPeopleCharts(DATA);
+    renderAchievements(DATA);
+    applyAllTaskFilters();
+  }
+}
+
+(function () {
+  const t = localStorage.getItem('theme');
+  if (t === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.getElementById('themeBtn').textContent = '☀️';
+  }
+})();
+
+// ===== TABS =====
+function switchTab(name, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (el) el.classList.add('active');
+  else event.target.closest('.tab').classList.add('active');
+}
+
+// ===== AVATAR COLOR =====
+const avatarColors = ['#7c6af7','#38bdf8','#22d4a0','#f0b429','#f05673','#a78bfa','#fb923c','#34d399'];
+function avatarColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return avatarColors[Math.abs(hash) % avatarColors.length];
+}
+
+function renderAvatar(name) {
+  const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  const bg = avatarColor(name);
+  return `<span class="avatar" style="background:${bg}" title="${name}">${initials}</span>`;
+}
+
+function renderAssignees(assignees) {
+  if (!assignees || !assignees.length) return '<span style="color:var(--text2)">-</span>';
+  return `<div class="avatar-stack">${assignees.map(a => renderAvatar(a)).join('')}<span style="font-size:12px;color:var(--text2);margin-left:4px">${assignees.join(', ')}</span></div>`;
+}
+
+// ===== BADGES =====
+const STATUS_MAP = {
+  'In Progress': 'badge-ip',
+  'Not Started': 'badge-ns',
+  'Done': 'badge-done',
+  'Pending': 'badge-pend',
+  'Planning': 'badge-ns',
+  'Archived': 'badge-gray',
+  'Active': 'badge-ip',
+  'Terminated': 'badge-gray',
+  'Expired': 'badge-high',
+};
+
+function statusBadge(s) {
+  if (!s) return '<span class="badge badge-gray">-</span>';
+  return `<span class="badge ${STATUS_MAP[s] || 'badge-gray'}">${s}</span>`;
+}
+
+function priorityBadge(p) {
+  if (!p || p === '-') return '<span style="color:var(--text2)">-</span>';
+  const cls = p === 'High' ? 'badge-high' : p === 'Medium' ? 'badge-med' : 'badge-low';
+  return `<span class="badge ${cls}">${p}</span>`;
+}
+
+// ===== PROGRESS BAR =====
+function progBar(val) {
+  if (val === null || val === undefined) {
+    return '<div class="prog-bar"><div class="prog-fill" style="width:100%;background:var(--border)">-</div></div>';
+  }
+  const pct = Math.min(Math.max(val, 0), 100);
+  const color = pct >= 100 ? CHART_COLORS.green : pct >= 50 ? CHART_COLORS.yellow : CHART_COLORS.red;
+  return `<div class="prog-bar"><div class="prog-fill" style="width:${Math.max(pct,5)}%;background:${color}">${val}%</div></div>`;
+}
+
+// ===== SISA HARI BADGE =====
+function sisaBadge(n) {
+  if (n === null || n === undefined) return '-';
+  const cls = n < 0 ? 'sisa-danger' : n <= 30 ? 'sisa-warn' : 'sisa-ok';
+  const icon = n < 0 ? '🔴' : n <= 30 ? '🟡' : '🟢';
+  return `<span class="${cls}">${icon} ${n} hari</span>`;
+}
+
+// ===== FORMAT RUPIAH =====
+function fmtRp(n) {
+  if (n === null || n === undefined) return '-';
+  return 'Rp ' + n.toLocaleString('id-ID');
+}
+
+// ===== KPI RENDER =====
+function renderKPI(d) {
+  const total = d.tasks.length, done = d.task_status['Done'] || 0, open = total - done;
+  const tp = d.projects.length, pd = d.proj_status['Done'] || 0;
+
+  // Proyek In Progress
+  const projInProgress = d.proj_status['In Progress'] || 0;
+
+  // SPK aktif tapi sudah jatuh tempo (sisa_hari < 0 dan status Active)
+  const today = new Date().toISOString().slice(0, 10);
+  const spkAktifLewat = (d.spk || []).filter(s =>
+    s.status === 'Active' && s.spk_selesai && s.spk_selesai < today
+  ).length;
+
+  // Total nilai SPK (semua, bukan hanya active)
+  const totalNilaiSpk = d.total_anggaran_all || 0;
+
+  const kpis = [
+    { color: 'kpi-blue',   icon: '📋', num: total,            label: 'Total Tasks',              small: false },
+    { color: 'kpi-green',  icon: '✅', num: done,              label: 'Tasks Done',               small: false },
+    { color: 'kpi-yellow', icon: '⏳', num: open,              label: 'Tasks Open',               small: false },
+    { color: 'kpi-red',    icon: '🔥', num: d.overdue,         label: 'Tasks Overdue',            small: false },
+    { color: 'kpi-blue',   icon: '🏗️', num: tp,               label: 'Total Projects',           small: false },
+    { color: 'kpi-yellow', icon: '🔄', num: projInProgress,    label: 'Projects In Progress',     small: false },
+    { color: 'kpi-green',  icon: '🎯', num: pd,                label: 'Projects Done',            small: false },
+    { color: 'kpi-red',    icon: '⚠️', num: spkAktifLewat,    label: 'SPK Aktif Jatuh Tempo',    small: false },
+    { color: 'kpi-purple', icon: '💰', num: fmtRp(totalNilaiSpk), label: 'Total Nilai SPK',      small: true  },
+  ];
+
+  document.getElementById('kpi-overview').innerHTML = kpis.map(k =>
+    `<div class="kpi-card ${k.color}">
+      <span class="kpi-icon">${k.icon}</span>
+      <div class="kpi-num" style="${k.small ? 'font-size:16px;line-height:1.3' : ''}">${k.num}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`
+  ).join('');
+}
+
+// ===== MAKE TABLE SORTABLE =====
+function makeSortable(table) {
+  table.querySelectorAll('th').forEach((th, idx) => {
+    th.addEventListener('click', () => {
+      const tbody = table.querySelector('tbody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const asc = th.dataset.sort !== 'asc';
+      th.dataset.sort = asc ? 'asc' : 'desc';
+      table.querySelectorAll('th').forEach(h => { if (h !== th) { delete h.dataset.sort; h.textContent = h.textContent.replace(/ [▲▼]$/, ''); } });
+      rows.sort((a, b) => {
+        let av = (a.children[idx] || {}).textContent || '';
+        let bv = (b.children[idx] || {}).textContent || '';
+        const an = parseFloat(av.replace(/[^0-9.\-]/g, '')), bn = parseFloat(bv.replace(/[^0-9.\-]/g, ''));
+        if (!isNaN(an) && !isNaN(bn)) return asc ? an - bn : bn - an;
+        return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
+      rows.forEach(r => tbody.appendChild(r));
+      th.textContent = th.textContent.replace(/ [▲▼]$/, '') + (asc ? ' ▲' : ' ▼');
+    });
+  });
+}
+
+// ===== EMPTY STATE =====
+function emptyState(colspan, msg = 'Tidak ada data yang cocok', sub = 'Coba ubah filter pencarian') {
+  return `<tr><td colspan="${colspan}">
+    <div class="empty-state">
+      <div class="empty-state-icon">🔍</div>
+      <div class="empty-state-text">${msg}</div>
+      <div class="empty-state-sub">${sub}</div>
+    </div>
+  </td></tr>`;
+}
+
+// ===== CHART COLORS HELPER =====
+function isDark() { return getThemeIsDark(); }
+function cd() { return chartDefaults(isDark()); }
+
+// ===== RENDER CHARTS =====
+function renderCharts(d) {
+  Object.values(charts).forEach(c => { try { c.destroy(); } catch(e){} });
+  const { gridColor, tickColor, legendColor } = cd();
+
+  // Monthly chart
+  const ml = d.monthly.map(m => m.month);
+  charts.monthly = new Chart(document.getElementById('monthlyChart'), {
+    type: 'bar',
+    data: {
+      labels: ml,
+      datasets: [
+        { label: 'Created', data: d.monthly.map(m => m.created), backgroundColor: CHART_COLORS.blue + 'cc', borderRadius: 6, borderSkipped: false },
+        { label: 'Completed', data: d.monthly.map(m => m.done), backgroundColor: CHART_COLORS.green + 'cc', borderRadius: 6, borderSkipped: false },
+        { label: 'Backlog', data: d.monthly.map(m => m.backlog), type: 'line', borderColor: CHART_COLORS.yellow, backgroundColor: CHART_COLORS.yellow + '22', tension: 0.4, fill: true, pointRadius: 4, pointBackgroundColor: CHART_COLORS.yellow, borderWidth: 2 }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
+        x: { ticks: { color: tickColor }, grid: { color: gridColor } }
+      },
+      plugins: { legend: { labels: { color: legendColor, padding: 16, usePointStyle: true } } }
+    }
+  });
+
+  // Overdue doughnut
+  charts.overdue = new Chart(document.getElementById('overdueChart'), {
+    type: 'doughnut',
+    data: {
+      labels: [`Overdue (${d.overdue})`, `On Track (${d.on_track})`, `No Due (${d.no_due})`],
+      datasets: [{ data: [d.overdue, d.on_track, d.no_due], backgroundColor: [CHART_COLORS.red, CHART_COLORS.green, CHART_COLORS.gray], borderColor: isDark() ? '#161628' : '#ffffff', borderWidth: 3, hoverOffset: 6 }]
+    },
+    options: { cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: legendColor, padding: 14, usePointStyle: true } } } }
+  });
+
+  // Task status
+  const ts = d.task_status;
+  const tsColors = [CHART_COLORS.green, CHART_COLORS.purple, CHART_COLORS.blue, CHART_COLORS.red, CHART_COLORS.gray];
+  charts.taskStatus = new Chart(document.getElementById('taskStatusChart'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(ts),
+      datasets: [{ data: Object.values(ts), backgroundColor: tsColors, borderColor: isDark() ? '#161628' : '#ffffff', borderWidth: 3, hoverOffset: 6 }]
+    },
+    options: { cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: legendColor, padding: 14, usePointStyle: true } } } }
+  });
+
+  // Project status
+  const ps = d.proj_status;
+  const psColors = [CHART_COLORS.yellow, CHART_COLORS.blue, CHART_COLORS.green];
+  charts.projStatus = new Chart(document.getElementById('projStatusChart'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(ps),
+      datasets: [{ data: Object.values(ps), backgroundColor: psColors, borderColor: isDark() ? '#161628' : '#ffffff', borderWidth: 3, hoverOffset: 6 }]
+    },
+    options: { cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: legendColor, padding: 14, usePointStyle: true } } } }
+  });
+}
+
+// ===== PEOPLE CHARTS =====
+function getPeopleMinDate() {
+  return calcMinDate(document.getElementById('peopleRange').value);
+}
+
+function renderPeopleCharts(d) {
+  if (!d) return;
+  ['personRate', 'personDone', 'personProj'].forEach(k => { if (charts[k]) { try { charts[k].destroy(); } catch(e){} } });
+  const { gridColor, tickColor, legendColor } = cd();
+
+  const minDate = document.getElementById('peopleRange').value === 'all' ? null : calcMinDate(document.getElementById('peopleRange').value);
+  const tasks = minDate ? d.tasks.filter(t => t.created >= minDate || t.edited >= minDate || (t.done_date && t.done_date >= minDate)) : d.tasks;
+  const projects = minDate ? d.projects.filter(p => p.created >= minDate || p.edited >= minDate) : d.projects;
+
+  const personDone = {}, personTotal = {};
+  tasks.forEach(t => {
+    t.assignees.forEach(a => {
+      personTotal[a] = (personTotal[a] || 0) + 1;
+      if (t.status === 'Done') personDone[a] = (personDone[a] || 0) + 1;
+    });
+  });
+
+  const persons = Object.keys(personTotal).sort((a, b) => (personTotal[b] || 0) - (personTotal[a] || 0));
+  const pDone = persons.map(p => personDone[p] || 0);
+  const pTotal = persons.map(p => personTotal[p] || 0);
+  const pRate = pDone.map((v, i) => pTotal[i] ? Math.round(v / pTotal[i] * 100) : 0);
+
+  charts.personRate = new Chart(document.getElementById('personRateChart'), {
+    type: 'bar',
+    data: {
+      labels: persons,
+      datasets: [{ label: 'Completion %', data: pRate, backgroundColor: pRate.map(r => r >= 60 ? CHART_COLORS.green : r >= 30 ? CHART_COLORS.yellow : CHART_COLORS.red), borderRadius: 8, borderSkipped: false }]
+    },
+    options: {
+      indexAxis: 'y',
+      scales: {
+        x: { beginAtZero: true, max: 100, ticks: { color: tickColor, callback: v => v + '%' }, grid: { color: gridColor } },
+        y: { ticks: { color: tickColor }, grid: { display: false } }
+      },
+      plugins: { legend: { display: false } }
+    }
+  });
+
+  charts.personDone = new Chart(document.getElementById('personDoneChart'), {
+    type: 'bar',
+    data: {
+      labels: persons,
+      datasets: [
+        { label: 'Done', data: pDone, backgroundColor: CHART_COLORS.green + 'cc', borderRadius: 4 },
+        { label: 'Open', data: pTotal.map((t, i) => t - pDone[i]), backgroundColor: CHART_COLORS.blue + '55', borderRadius: 4 }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      scales: {
+        x: { stacked: true, beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } },
+        y: { stacked: true, ticks: { color: tickColor }, grid: { display: false } }
+      },
+      plugins: { legend: { labels: { color: legendColor, usePointStyle: true } } }
+    }
+  });
+
+  const pp = {};
+  projects.forEach(p => { p.assignees.forEach(a => { if (!pp[a]) pp[a] = {}; pp[a][p.status] = (pp[a][p.status] || 0) + 1; }); });
+  const ppPersons = Object.keys(pp).sort((a, b) => { const sa = Object.values(pp[a]).reduce((x, y) => x + y, 0), sb = Object.values(pp[b]).reduce((x, y) => x + y, 0); return sb - sa; });
+
+  charts.personProj = new Chart(document.getElementById('personProjChart'), {
+    type: 'bar',
+    data: {
+      labels: ppPersons,
+      datasets: [
+        { label: 'In Progress', data: ppPersons.map(p => (pp[p] || {})['In Progress'] || 0), backgroundColor: CHART_COLORS.blue + 'cc', borderRadius: 4 },
+        { label: 'Planning', data: ppPersons.map(p => (pp[p] || {})['Planning'] || 0), backgroundColor: CHART_COLORS.yellow + 'cc', borderRadius: 4 },
+        { label: 'Done', data: ppPersons.map(p => (pp[p] || {})['Done'] || 0), backgroundColor: CHART_COLORS.green + 'cc', borderRadius: 4 }
+      ]
+    },
+    options: {
+      scales: {
+        x: { stacked: true, ticks: { color: tickColor }, grid: { color: gridColor } },
+        y: { stacked: true, beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor } }
+      },
+      plugins: { legend: { labels: { color: legendColor, usePointStyle: true } } }
+    }
+  });
+}
+
+// ===== CALC MIN DATE =====
+function calcMinDate(range) {
+  if (!range || range === 'all') return null;
+  const now = new Date();
+  if (range === 'this_week') { const d = new Date(now); d.setDate(d.getDate() - d.getDay()); return d.toISOString().slice(0, 10); }
+  if (range === 'this_month') return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  if (range === 'last_month') return new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+  if (range === 'last_2_month') return new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().slice(0, 10);
+  if (range === 'last_3_month') return new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().slice(0, 10);
+  if (range === 'this_year') return now.getFullYear() + '-01-01';
+  const d = new Date(); d.setDate(d.getDate() - parseInt(range));
+  return d.toISOString().slice(0, 10);
+}
+
+// ===== TASKS FILTER =====
+function getFilteredTasks() {
+  if (!DATA) return { tasks: [], minDate: '0000-00-00' };
+  const query = document.getElementById('search').value.toLowerCase();
+  const status = document.getElementById('filterStatus').value;
+  const assignee = document.getElementById('filterAssignee').value;
+  const due = document.getElementById('filterDue').value;
+  const tag = document.getElementById('filterTag').value;
+  const range = document.getElementById('dailyRange').value;
+  const today = new Date().toISOString().slice(0, 10);
+
+  let tasks = [...DATA.tasks];
+  if (status !== 'all') tasks = tasks.filter(t => t.status === status);
+  if (assignee !== 'all') tasks = tasks.filter(t => t.assignees.includes(assignee));
+  if (tag !== 'all') tasks = tasks.filter(t => t.tags && t.tags.includes(tag));
+  if (due === 'overdue') tasks = tasks.filter(t => t.due && t.due < today);
+  else if (due === 'nodue') tasks = tasks.filter(t => !t.due);
+  else if (['7', '14', '21', '30', '60', '90'].includes(due)) {
+    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
+    const maxDue = dt.toISOString().slice(0, 10);
+    tasks = tasks.filter(t => t.due && t.due <= maxDue);
+  }
+  if (query) tasks = tasks.filter(t => (t.name + t.assignees.join(',')).toLowerCase().includes(query));
+  return { tasks, minDate: range !== 'all' ? calcMinDate(range) : '0000-00-00' };
+}
+
+function applyAllTaskFilters() {
+  if (!DATA) return;
+  const { tasks, minDate } = getFilteredTasks();
+  const { gridColor, tickColor, legendColor } = cd();
+
+  // Daily chart
+  if (charts.dailyResolve) { try { charts.dailyResolve.destroy(); } catch(e){} }
+  const dailyDone = {}, dailyCreated = {};
+  tasks.forEach(t => {
+    if (t.done_date) dailyDone[t.done_date] = (dailyDone[t.done_date] || 0) + 1;
+    if (t.created) dailyCreated[t.created] = (dailyCreated[t.created] || 0) + 1;
+  });
+  const allDays = [...new Set([...Object.keys(dailyDone), ...Object.keys(dailyCreated)])].sort().filter(day => !minDate || day >= minDate);
+  let cumDone = 0;
+  const days = [], active = [], cumDoneArr = [];
+  allDays.forEach(day => {
+    const act = tasks.filter(t => t.created <= day && (t.status !== 'Done' || (t.done_date && t.done_date > day))).length;
+    cumDone += (dailyDone[day] || 0);
+    days.push(day); active.push(act); cumDoneArr.push(cumDone);
+  });
+
+  charts.dailyResolve = new Chart(document.getElementById('dailyResolveChart'), {
+    type: 'bar',
+    data: {
+      labels: days,
+      datasets: [
+        { label: 'Active Tasks', data: active, backgroundColor: CHART_COLORS.blue + '55', borderRadius: 4, order: 2 },
+        { label: 'Done (cumulative)', data: cumDoneArr, type: 'line', borderColor: CHART_COLORS.green, backgroundColor: CHART_COLORS.green + '22', tension: 0.4, fill: true, pointRadius: 3, pointBackgroundColor: CHART_COLORS.green, borderWidth: 2, order: 1 }
+      ]
+    },
+    options: {
+      scales: {
+        x: { ticks: { color: tickColor, maxRotation: 45, autoSkip: true, maxTicksLimit: 30 }, grid: { color: gridColor } },
+        y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: gridColor }, title: { display: true, text: 'Tasks', color: tickColor } }
+      },
+      plugins: { legend: { labels: { color: legendColor, usePointStyle: true } }, tooltip: { mode: 'index', intersect: false } }
+    }
+  });
+
+  // Tasks table
+  const activeTasks = tasks.filter(t => t.status !== 'Done').sort((a, b) => {
+    const o = { 'In Progress': 0, 'Not Started': 1, 'Pending': 2, 'Archived': 3 };
+    return (o[a.status] || 5) - (o[b.status] || 5);
+  });
+
+  document.getElementById('taskCount').textContent = activeTasks.length + ' tasks';
+
+  const table = document.getElementById('tasksTable');
+  table.querySelector('thead tr').innerHTML = ['#', 'Task', 'Status', 'Priority', 'Assignee', 'Tags', 'Due', 'Progress', 'Last Edit'].map(h => `<th>${h}</th>`).join('');
+  table.querySelector('tbody').innerHTML = activeTasks.map((t, i) => {
+    const tags = (t.tags || []).map(g => `<span class="tag">${g}</span>`).join('') || '-';
+    const due = t.due ? (t.due < new Date().toISOString().slice(0, 10) ? `<span style="color:var(--red);font-weight:600">⚠️ ${t.due}</span>` : `<span style="color:var(--text2)">${t.due}</span>`) : '<span style="color:var(--text2)">-</span>';
+    return `<tr>
+      <td class="col-num">${i + 1}</td>
+      <td class="col-name"><div class="col-name-text">${t.name}</div></td>
+      <td>${statusBadge(t.status)}</td>
+      <td>${priorityBadge(t.priority)}</td>
+      <td>${renderAssignees(t.assignees)}</td>
+      <td>${tags}</td>
+      <td>${due}</td>
+      <td>${progBar(t.progress)}</td>
+      <td style="color:var(--text2);font-size:12px">${t.edited}</td>
+    </tr>`;
+  }).join('') || emptyState(9);
+  makeSortable(table);
+}
+
+// ===== RENDER TASKS TABLE =====
+function renderTasksTable(d) {
+  const asel = document.getElementById('filterAssignee');
+  if (asel.options.length <= 1) {
+    d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; asel.appendChild(o); });
+  }
+  const tsel = document.getElementById('filterTag');
+  if (tsel.options.length <= 1) {
+    const allTags = [...new Set(d.tasks.flatMap(t => t.tags || []))].sort();
+    allTags.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; tsel.appendChild(o); });
+  }
+  applyAllTaskFilters();
+}
+
+// ===== PROJECTS FILTER =====
+function renderProjectsTable(d) {
+  const asel = document.getElementById('filterProjAssignee');
+  if (asel.options.length <= 1) {
+    d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; asel.appendChild(o); });
+  }
+  applyProjFilters();
+}
+
+function applyProjFilters() {
+  if (!DATA) return;
+  const query = document.getElementById('searchProj').value.toLowerCase();
+  const status = document.getElementById('filterProjStatus').value;
+  const assignee = document.getElementById('filterProjAssignee').value;
+  const due = document.getElementById('filterProjDue').value;
+  const priority = document.getElementById('filterProjPriority').value;
+  const today = new Date().toISOString().slice(0, 10);
+
+  let projects = [...DATA.projects];
+  if (status !== 'all') projects = projects.filter(p => p.status === status);
+  if (assignee !== 'all') projects = projects.filter(p => p.assignees.includes(assignee));
+  if (priority !== 'all') projects = projects.filter(p => p.priority === priority);
+  if (due === 'overdue') projects = projects.filter(p => p.due && p.due < today);
+  else if (due === 'nodue') projects = projects.filter(p => !p.due);
+  else if (['7', '14', '21', '30', '60', '90'].includes(due)) {
+    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
+    const maxDue = dt.toISOString().slice(0, 10);
+    projects = projects.filter(p => p.due && p.due <= maxDue);
+  }
+  if (query) projects = projects.filter(p => (p.title + p.assignees.join(',')).toLowerCase().includes(query));
+  projects.sort((a, b) => { const o = { 'In Progress': 0, 'Planning': 1, 'Done': 2 }; return (o[a.status] || 5) - (o[b.status] || 5); });
+
+  document.getElementById('projCount').textContent = projects.length + ' projects';
+
+  const table = document.getElementById('projTable');
+  table.querySelector('thead tr').innerHTML = ['#', 'Project', 'Status', 'Assignee', 'Due', 'Sisa', 'Completion', 'Docs', 'Priority', 'SPK Baru', 'Last Edit', ''].map(h => `<th>${h}</th>`).join('');
+  table.querySelector('tbody').innerHTML = projects.map((p, i) => {
+    const spkb = p.spk_baru && p.spk_baru.length > 0 ? p.spk_baru.map(s => `<span class="tag">${s}</span>`).join('') : '-';
+    const rd = p.remaining_days !== null && p.remaining_days !== undefined ? sisaBadge(p.remaining_days) : '-';
+    const due = p.due ? `<span style="color:var(--text2);font-size:12px">${p.due}</span>` : '-';
+    return `<tr>
+      <td class="col-num">${i + 1}</td>
+      <td class="col-name"><div class="col-name-text" style="font-weight:600">${p.title}</div></td>
+      <td>${statusBadge(p.status)}</td>
+      <td>${renderAssignees(p.assignees)}</td>
+      <td>${due}</td>
+      <td>${rd}</td>
+      <td>${progBar(p.completion)}</td>
+      <td><span style="font-size:13px;font-weight:600;color:var(--text)">${p.docs}</span></td>
+      <td>${priorityBadge(p.priority)}</td>
+      <td>${spkb}</td>
+      <td style="color:var(--text2);font-size:12px">${p.edited}</td>
+      <td><button class="action-btn" onclick="showProjDetail(${i})" title="Lihat detail">🔍</button></td>
+    </tr>`;
+  }).join('') || emptyState(12);
+  window._filteredProjects = projects;
+  makeSortable(table);
+}
+
+// ===== ACHIEVEMENTS =====
+let currentPeriod = 'daily';
+
+function switchPeriod(period, btn) {
+  currentPeriod = period;
+  document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (DATA) renderAchievements(DATA);
+}
+
+function getWeek(dateStr) {
+  const d = new Date(dateStr);
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+  return d.getFullYear() + '-W' + String(week).padStart(2, '0');
+}
+
+function periodKey(dateStr, period) {
+  if (!dateStr) return null;
+  if (period === 'daily') return dateStr;
+  if (period === 'weekly') return getWeek(dateStr);
+  return dateStr.slice(0, 7);
+}
+
+function periodLabel(period) {
+  return { daily: 'Today', weekly: 'This Week', monthly: 'This Month' }[period];
+}
+
+function currentPeriodKey(period) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (period === 'daily') return today;
+  if (period === 'weekly') return getWeek(today);
+  return today.slice(0, 7);
+}
+
+function renderAchievements(d) {
+  const { gridColor, tickColor, legendColor } = cd();
+  const period = currentPeriod;
+  const curKey = currentPeriodKey(period);
+  const personAchieve = {}, allItems = [];
+
+  d.tasks.forEach(t => {
+    if (t.status !== 'Done' || !t.done_date) return;
+    const pk = periodKey(t.done_date, period);
+    t.assignees.forEach(a => {
+      if (!personAchieve[a]) personAchieve[a] = {};
+      if (!personAchieve[a][pk]) personAchieve[a][pk] = { tasks: 0, projects: 0 };
+      personAchieve[a][pk].tasks++;
+    });
+    allItems.push({ type: 'Task', name: t.name, person: t.assignees.join(', ') || '-', date: t.done_date, period_key: pk, status: 'Done' });
+  });
+
+  d.projects.forEach(p => {
+    if (p.status !== 'Done') return;
+    const pk = periodKey(p.edited, period);
+    p.assignees.forEach(a => {
+      if (!personAchieve[a]) personAchieve[a] = {};
+      if (!personAchieve[a][pk]) personAchieve[a][pk] = { tasks: 0, projects: 0 };
+      personAchieve[a][pk].projects++;
+    });
+    allItems.push({ type: 'Project', name: p.title, person: p.assignees.join(', ') || '-', date: p.edited, period_key: pk, status: 'Done' });
+  });
+
+  d.tasks.forEach(t => {
+    if (t.status === 'Done') return;
+    const pk = periodKey(t.edited, period);
+    if (pk === curKey) allItems.push({ type: 'Task (Updated)', name: t.name, person: t.assignees.join(', ') || '-', date: t.edited, period_key: pk, status: t.status });
+  });
+
+  d.projects.forEach(p => {
+    if (p.status === 'Done') return;
+    const pk = periodKey(p.edited, period);
+    if (pk === curKey) allItems.push({ type: 'Project (Updated)', name: p.title, person: p.assignees.join(', ') || '-', date: p.edited, period_key: pk, status: p.status });
+  });
+
+  const curItems = allItems.filter(i => i.period_key === curKey);
+  const tasksDone = curItems.filter(i => i.type === 'Task').length;
+  const projDone = curItems.filter(i => i.type === 'Project').length;
+  const tasksUpdated = curItems.filter(i => i.type === 'Task (Updated)').length;
+  const projUpdated = curItems.filter(i => i.type === 'Project (Updated)').length;
+
+  document.getElementById('kpi-achieve').innerHTML = [
+    { color: 'kpi-green',  icon: '✅', num: tasksDone,    label: 'Tasks Completed ' + periodLabel(period) },
+    { color: 'kpi-blue',   icon: '🎯', num: projDone,     label: 'Projects Completed ' + periodLabel(period) },
+    { color: 'kpi-yellow', icon: '✏️', num: tasksUpdated, label: 'Tasks Updated ' + periodLabel(period) },
+    { color: 'kpi-yellow', icon: '🔄', num: projUpdated,  label: 'Projects Updated ' + periodLabel(period) },
+  ].map(k => `<div class="kpi-card ${k.color}"><span class="kpi-icon">${k.icon}</span><div class="kpi-num">${k.num}</div><div class="kpi-label">${k.label}</div></div>`).join('');
+
+  if (charts.achieve) { try { charts.achieve.destroy(); } catch(e){} }
+  const persons = d.personel.sort();
+  charts.achieve = new Chart(document.getElementById('achieveChart'), {
+    type: 'bar',
+    data: {
+      labels: persons,
+      datasets: [
+        { label: 'Tasks Done', data: persons.map(p => (personAchieve[p] || {})[curKey]?.tasks || 0), backgroundColor: CHART_COLORS.green + 'cc', borderRadius: 6 },
+        { label: 'Projects Done', data: persons.map(p => (personAchieve[p] || {})[curKey]?.projects || 0), backgroundColor: CHART_COLORS.blue + 'cc', borderRadius: 6 }
+      ]
+    },
+    options: {
+      scales: { x: { ticks: { color: tickColor }, grid: { color: gridColor } }, y: { beginAtZero: true, ticks: { color: tickColor, stepSize: 1 }, grid: { color: gridColor } } },
+      plugins: { legend: { labels: { color: legendColor, usePointStyle: true } } }
+    }
+  });
+
+  const titleEl = document.getElementById('achieveChartTitle');
+  titleEl.innerHTML = `<div class="icon icon-yellow">🏆</div> Achievements per Person — ${curKey}`;
+
+  const table = document.getElementById('achieveTable');
+  table.querySelector('thead tr').innerHTML = ['#', 'Type', 'Name', 'Person', 'Date', 'Status'].map(h => `<th>${h}</th>`).join('');
+  const sorted = [...curItems].sort((a, b) => b.date.localeCompare(a.date));
+  table.querySelector('tbody').innerHTML = sorted.map((item, i) =>
+    `<tr><td class="col-num">${i + 1}</td><td><span class="tag">${item.type}</span></td><td class="col-name"><div class="col-name-text">${item.name}</div></td><td>${item.person}</td><td style="color:var(--text2);font-size:12px">${item.date}</td><td>${statusBadge(item.status)}</td></tr>`
+  ).join('') || emptyState(6, 'Belum ada aktivitas di periode ini', `Pilih periode yang berbeda untuk melihat data`);
+  document.getElementById('achieveTableTitle').innerHTML = `<span>📋</span> Achievement Details — ${curKey}`;
+  makeSortable(table);
+}
+
+// ===== SPK =====
+function renderSpk(d) {
+  const ssel = document.getElementById('filterSpkStatus');
+  const vsel = document.getElementById('filterSpkVendor');
+  const psel = document.getElementById('filterSpkPic');
+  if (ssel.options.length <= 1) {
+    const statuses = [...new Set(d.spk.map(s => s.status).filter(Boolean))].sort();
+    statuses.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; ssel.appendChild(o); });
+    const vendors = [...new Set(d.spk.map(s => s.vendor).filter(Boolean))].sort();
+    vendors.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; vsel.appendChild(o); });
+    const pics = [...new Set(d.spk.flatMap(s => s.pic))].filter(Boolean).sort();
+    pics.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; psel.appendChild(o); });
+  }
+
+  // Populate filter Tipe
+  const tsel = document.getElementById('filterSpkTipe');
+  if (tsel && tsel.options.length <= 1) {
+    const tipes = [...new Set(d.spk.map(s => s.tipe).filter(t => t && t !== '-'))].sort();
+    tipes.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; tsel.appendChild(o); });
+  }
+
+  // KPI dan tabel dirender sepenuhnya oleh applySpkFilters
+  applySpkFilters();
+}
+
+function applySpkFilters() {
+  if (!DATA) return;
+  const query    = document.getElementById('searchSpk').value.toLowerCase();
+  const status   = document.getElementById('filterSpkStatus').value;
+  const vendor   = document.getElementById('filterSpkVendor').value;
+  const due      = document.getElementById('filterSpkDue').value;
+  const pic      = document.getElementById('filterSpkPic').value;
+  const tipe     = document.getElementById('filterSpkTipe') ? document.getElementById('filterSpkTipe').value : 'all';
+  const today    = new Date().toISOString().slice(0, 10);
+
+  let spk = [...DATA.spk];
+  if (status !== 'all') spk = spk.filter(s => s.status === status);
+  if (vendor !== 'all') spk = spk.filter(s => s.vendor === vendor);
+  if (tipe   !== 'all') spk = spk.filter(s => s.tipe   === tipe);
+  if (pic === 'empty')  spk = spk.filter(s => !s.pic || s.pic.length === 0);
+  else if (pic !== 'all') spk = spk.filter(s => s.pic.includes(pic));
+  if (due === 'overdue') spk = spk.filter(s => s.spk_selesai && s.spk_selesai < today);
+  else if (due !== 'all') {
+    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
+    const max = dt.toISOString().slice(0, 10);
+    spk = spk.filter(s => s.spk_selesai && s.spk_selesai <= max && s.spk_selesai >= today);
+  }
+  if (query) spk = spk.filter(s => (s.no_spk + s.project + s.vendor + s.notes).toLowerCase().includes(query));
+  spk.sort((a, b) => (a.sisa_hari ?? 9999) - (b.sisa_hari ?? 9999));
+
+  // ── Update count & KPI Total Anggaran sesuai filter aktif ──
+  const filteredCount   = spk.length;
+  const filteredActive  = spk.filter(s => s.status === 'Active').length;
+  const filteredExpired = spk.filter(s => s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari < 0).length;
+  const filteredSoon    = spk.filter(s => s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari >= 0 && s.sisa_hari <= 30).length;
+  const filteredAnggaran = spk.reduce((sum, s) => sum + (s.total_anggaran || 0), 0);
+
+  document.getElementById('spkCount').textContent = filteredCount + ' SPK';
+
+  // Cek apakah ada filter aktif (selain all)
+  const isFiltered = status !== 'all' || vendor !== 'all' || due !== 'all' || pic !== 'all' || tipe !== 'all' || query;
+
+  document.getElementById('kpi-spk').innerHTML = [
+    { color: 'kpi-blue',   icon: '📄', num: filteredCount,              label: isFiltered ? 'SPK (terfilter)'        : 'Total SPK'         },
+    { color: 'kpi-green',  icon: '✅', num: filteredActive,             label: isFiltered ? 'Active (terfilter)'     : 'Active SPK'        },
+    { color: 'kpi-red',    icon: '❌', num: filteredExpired,            label: isFiltered ? 'Lewat (terfilter)'      : 'Expired / Lewat'   },
+    { color: 'kpi-yellow', icon: '⏰', num: filteredSoon,               label: isFiltered ? '≤ 30 Hari (terfilter)' : '≤ 30 Hari Selesai' },
+    { color: 'kpi-purple', icon: '💰', num: fmtRp(filteredAnggaran),    label: isFiltered ? 'Total Anggaran (terfilter)' : 'Total Anggaran'},
+  ].map(k => `<div class="kpi-card ${k.color}">
+    <span class="kpi-icon">${k.icon}</span>
+    <div class="kpi-num" style="font-size:${typeof k.num === 'string' && k.num.length > 10 ? '15px' : '32px'};line-height:1.2">${k.num}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
+
+  const table = document.getElementById('spkTable');
+  table.querySelector('thead tr').innerHTML = [
+    '#', 'ID', 'No SPK', 'Project', 'Vendor', 'Status', 'Tipe',
+    'Mulai', 'Selesai', 'Sisa Hari',
+    'Total Anggaran', 'Terbayar', 'Sisa Anggaran',
+    'Perpanjangan', 'PIC', 'Notes'
+  ].map(h => `<th>${h}</th>`).join('');
+
+  table.querySelector('tbody').innerHTML = spk.map((s, i) => {
+    let perp = '-';
+    if (s.perpanjangan && s.perpanjangan.length > 0) {
+      perp = s.perpanjangan.map(p => `<div style="margin:2px 0">${p.title} ${statusBadge(p.status)}</div>`).join('');
+    } else if (s.sisa_hari !== null && s.sisa_hari !== undefined && s.sisa_hari <= 90) {
+      perp = `<span class="badge badge-high">Belum Ada</span>`;
+    }
+
+    const anggaran  = s.total_anggaran  ? `<span style="font-weight:600;color:var(--green)">${fmtRp(s.total_anggaran)}</span>`  : '-';
+    const terbayar  = s.total_terbayar  ? `<span style="color:var(--blue)">${fmtRp(s.total_terbayar)}</span>`                   : '<span style="color:var(--text2)">-</span>';
+    const sisaAng   = s.sisa_anggaran   ? `<span style="color:var(--yellow)">${fmtRp(s.sisa_anggaran)}</span>`                  : '-';
+    const tipeBadge = s.tipe && s.tipe !== '-' ? `<span class="badge ${s.tipe === 'Baru' ? 'badge-done' : s.tipe === 'Perpanjangan' ? 'badge-ip' : 'badge-pend'}">${s.tipe}</span>` : '-';
+
+    const mulai   = s.spk_mulai   ? `<span style="color:var(--text2);font-size:12px">${s.spk_mulai}</span>`   : '-';
+    const selesai = s.spk_selesai ? `<span style="color:var(--text2);font-size:12px">${s.spk_selesai}</span>` : '-';
+
+    return `<tr>
+      <td class="col-num">${i + 1}</td>
+      <td><span class="tag">${s.spk_id}</span></td>
+      <td style="font-weight:600;white-space:nowrap;font-size:12px">${s.no_spk}</td>
+      <td class="col-name"><div class="col-name-text">${s.project}</div></td>
+      <td style="color:var(--text2);font-size:12px">${s.vendor}</td>
+      <td>${statusBadge(s.status)}</td>
+      <td>${tipeBadge}</td>
+      <td>${mulai}</td>
+      <td>${selesai}</td>
+      <td>${sisaBadge(s.sisa_hari)}</td>
+      <td>${anggaran}</td>
+      <td>${terbayar}</td>
+      <td>${sisaAng}</td>
+      <td>${perp}</td>
+      <td>${s.pic && s.pic.length ? s.pic.map(p => renderAvatar(p)).join('') : '<span style="color:var(--text2)">-</span>'}</td>
+      <td style="color:var(--text2);font-size:12px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.notes}">${s.notes || '-'}</td>
+    </tr>`;
+  }).join('') || emptyState(16);
+  makeSortable(table);
+}
+
+// ===== PROJECT MODAL =====
+function showProjDetail(idx) {
+  const p = window._filteredProjects[idx];
+  if (!p) return;
+
+  document.getElementById('projModalTitle').textContent = p.title;
+  document.getElementById('projModalSubtitle').textContent = `${p.status} · Last edited: ${p.edited}`;
+
+  const rd = p.remaining_days !== null && p.remaining_days !== undefined ? sisaBadge(p.remaining_days) : '-';
+  const spkb = p.spk_baru && p.spk_baru.length ? p.spk_baru.map(s => `<span class="tag">${s}</span>`).join('') : '-';
+  const docs = p.doc_detail ? Object.entries(p.doc_detail).map(([k, v]) => `<div style="padding:4px 0;font-size:13px">${v} <span style="color:var(--text2)">${k}</span></div>`).join('') : p.docs;
+
+  document.getElementById('projModalBody').innerHTML = `
+    <div class="modal-section">
+      <div class="modal-section-title">Informasi Umum</div>
+      <div class="modal-row"><div class="label">Status</div><div class="value">${statusBadge(p.status)}</div></div>
+      <div class="modal-row"><div class="label">Priority</div><div class="value">${priorityBadge(p.priority)}</div></div>
+      <div class="modal-row"><div class="label">Assignee</div><div class="value">${p.assignees.length ? `<div class="avatar-stack">${p.assignees.map(a => renderAvatar(a) + ' ' + a).join(', ')}</div>` : '-'}</div></div>
+      <div class="modal-row"><div class="label">Due Date</div><div class="value">${p.due || '-'}</div></div>
+      <div class="modal-row"><div class="label">Sisa Hari</div><div class="value">${rd}</div></div>
+      <div class="modal-row"><div class="label">Completion</div><div class="value">${progBar(p.completion)}</div></div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">Dokumen (${p.docs} selesai)</div>
+      ${docs}
+    </div>`;
+
+  document.getElementById('projModal').classList.add('active');
+}
+
+function closeProjModal() { document.getElementById('projModal').classList.remove('active'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeImportModal(); } });
+
+// ===== TOAST =====
+function showToast(msg, icon = '✅') {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(10px)'; toast.style.transition = '0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
+
+// ===== LOAD DATA =====
+function loadData() {
+  const overlay = document.getElementById('loadingOverlay');
+  const dot = document.getElementById('statusDot');
+  const statusText = document.getElementById('lastUpdate');
+  const refreshIcon = document.getElementById('refreshIcon');
+
+  if (!DATA) overlay.classList.add('active');
+  dot.className = 'dot loading';
+  statusText.textContent = 'Memuat data...';
+  refreshIcon.style.animation = 'spin 0.8s linear infinite';
+
+  fetch('/api/data')
+    .then(r => r.json())
+    .then(d => {
+      DATA = d;
+      renderKPI(d);
+      renderCharts(d);
+      renderPeopleCharts(d);
+      renderTasksTable(d);
+      renderProjectsTable(d);
+      renderAchievements(d);
+      renderSpk(d);
+
+      dot.className = 'dot success';
+      const time = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      statusText.textContent = `Update: ${time}`;
+      overlay.classList.remove('active');
+      refreshIcon.style.animation = '';
+      refreshIcon.textContent = '🔄';
+
+      if (DATA) showToast('Data berhasil dimuat', '✅');
+    })
+    .catch(e => {
+      dot.className = 'dot error';
+      statusText.textContent = 'Error: ' + e.message;
+      overlay.classList.remove('active');
+      refreshIcon.style.animation = '';
+      showToast('Gagal memuat data: ' + e.message, '❌');
+    });
+}
+
+// ===== IMPORT CSV MODAL =====
+let _dbVerified = false;
+
+function openImportModal() {
+  document.getElementById('importModal').classList.add('active');
+}
+function closeImportModal() {
+  document.getElementById('importModal').classList.remove('active');
+}
+
+function resetVerify() {
+  _dbVerified = false;
+  document.getElementById('importBtn').disabled = true;
+  document.getElementById('verifyResult').innerHTML = '';
+}
+
+function verifyDb() {
+  const dbId = document.getElementById('importDbId').value.trim();
+  const box = document.getElementById('verifyResult');
+  if (!dbId) { box.innerHTML = '<span style="color:var(--red)">Isi Database ID dulu.</span>'; return; }
+
+  box.innerHTML = '<span style="color:var(--text2)">⏳ Memverifikasi...</span>';
+  fetch('/api/verify-db', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ database_id: dbId })
+  })
+    .then(r => r.json().then(d => ({ ok: r.ok, d })))
+    .then(({ ok, d }) => {
+      if (!ok || !d.ok) {
+        _dbVerified = false;
+        document.getElementById('importBtn').disabled = true;
+        box.innerHTML = `<span style="color:var(--red)">❌ ${d.error || 'Verifikasi gagal.'}</span>`;
+        return;
+      }
+      _dbVerified = true;
+      document.getElementById('importBtn').disabled = false;
+      const rel = d.relation_prop
+        ? `<div>🔗 Relation SPK: <b>${d.relation_prop}</b></div>`
+        : `<div style="color:var(--yellow)">⚠️ Tidak ada relation ke database SPK — kolom "No SPK" tidak bisa diisi.</div>`;
+      const miss = (d.missing && d.missing.length)
+        ? `<div style="color:var(--yellow)">⚠️ Kolom tidak ditemukan di DB (akan dilewati): ${d.missing.join(', ')}</div>`
+        : '';
+      box.innerHTML = `
+        <div style="color:var(--green)">✅ Terverifikasi: <b>${d.title || '(tanpa judul)'}</b></div>
+        ${rel}${miss}`;
+    })
+    .catch(e => {
+      _dbVerified = false;
+      document.getElementById('importBtn').disabled = true;
+      box.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+    });
+}
+
+function doImport() {
+  if (!_dbVerified) { showToast('Verifikasi Database ID dulu', '⚠️'); return; }
+  const dbId = document.getElementById('importDbId').value.trim();
+  const fileInput = document.getElementById('importFile');
+  const resBox = document.getElementById('importResult');
+  const btn = document.getElementById('importBtn');
+  const icon = document.getElementById('importBtnIcon');
+
+  if (!fileInput.files.length) { showToast('Pilih file CSV dulu', '⚠️'); return; }
+
+  const fd = new FormData();
+  fd.append('database_id', dbId);
+  fd.append('file', fileInput.files[0]);
+
+  btn.disabled = true;
+  icon.style.display = 'inline-block';
+  icon.textContent = '⏳';
+  resBox.style.display = 'block';
+  resBox.innerHTML = '<div style="color:var(--text2)">⏳ Mengunggah & memproses...</div>';
+
+  fetch('/api/import-csv', { method: 'POST', body: fd })
+    .then(r => r.json().then(d => ({ status: r.status, d })))
+    .then(({ status, d }) => {
+      icon.textContent = '📤';
+      btn.disabled = false;
+      if (d.ok) {
+        resBox.innerHTML =
+          `<div class="modal-section-title" style="color:var(--green)">✅ Berhasil</div>
+           <div>${d.imported} baris berhasil di-import ke <b>${d.db_title || ''}</b>.</div>`;
+        showToast(`${d.imported} baris ter-import`, '✅');
+        loadData();
+      } else {
+        const list = (d.errors && d.errors.length)
+          ? `<ul style="margin:8px 0 0 18px;color:var(--red)">${d.errors.map(e => `<li>${e}</li>`).join('')}</ul>`
+          : '';
+        resBox.innerHTML =
+          `<div class="modal-section-title" style="color:var(--red)">❌ ${d.error || 'Gagal'}</div>${list}`;
+        showToast(d.error || 'Import gagal', '❌');
+      }
+    })
+    .catch(e => {
+      icon.textContent = '📤';
+      btn.disabled = false;
+      resBox.innerHTML = `<div style="color:var(--red)">❌ ${e.message}</div>`;
+      showToast('Import error: ' + e.message, '❌');
+    });
+}
+
+loadData();
+setInterval(loadData, 300000); // auto-refresh every 5 min
+</script>
+</body>
+</html>
