@@ -548,11 +548,14 @@ def api_data():
 
 # ─── CSV IMPORT → Monthly Performance ──────────────────────────────────────────
 # Kolom yang didukung di CSV (header harus sama persis):
-#   Name (title, wajib), Periode (date), Nilai Tagihan (number),
+#   Name (title, wajib), Periode (date), Nilai Tagihan (number), Prognosa (number),
 #   Status Invoice / Status Pembayaran / Status BA Performansi / Status Rekon (select),
 #   Tanggal Serah BA Performansi / Tanggal Rekon (date),
 #   No SPK (wajib → dicocokkan ke database SPK untuk mengisi relation)
 
+CSV_NUMBER_FIELDS = [
+    'Nilai Tagihan', 'Prognosa'
+]
 CSV_SELECT_FIELDS = [
     'Status Invoice', 'Status Pembayaran', 'Status BA Performansi', 'Status Rekon'
 ]
@@ -610,7 +613,7 @@ def verify_database(db_id):
     has_title = any(p.get('type') == 'title' for p in props.values())
 
     # Kolom yang diharapkan untuk import (informasi saja, tidak semua wajib)
-    expected = ['Name', 'Nilai Tagihan'] + CSV_SELECT_FIELDS + CSV_DATE_FIELDS
+    expected = ['Name'] + CSV_NUMBER_FIELDS + CSV_SELECT_FIELDS + CSV_DATE_FIELDS
     missing = [c for c in expected if c not in props]
 
     return {
@@ -740,10 +743,11 @@ def build_page_properties(row, relation_prop):
     if val('Name'):
         props['Name'] = {'title': [{'text': {'content': val('Name')}}]}
 
-    if val('Nilai Tagihan'):
-        digits = ''.join(ch for ch in val('Nilai Tagihan') if ch.isdigit())
-        if digits:
-            props['Nilai Tagihan'] = {'number': float(digits)}
+    for col in CSV_NUMBER_FIELDS:
+        if val(col):
+            digits = ''.join(ch for ch in val(col) if ch.isdigit())
+            if digits:
+                props[col] = {'number': float(digits)}
 
     for col in CSV_SELECT_FIELDS:
         if val(col):
