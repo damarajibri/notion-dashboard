@@ -901,9 +901,9 @@ def api_import_csv():
         remapped = []
         for row in rows:
             new_row = {}
-            for k, v in row.items():
+            for k, cell in row.items():
                 key = k.strip() if isinstance(k, str) else k
-                new_row[CSV_HEADER_MAP.get(key, key)] = v
+                new_row[CSV_HEADER_MAP.get(key, key)] = cell
             remapped.append(new_row)
         rows = remapped
 
