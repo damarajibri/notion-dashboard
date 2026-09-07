@@ -1255,6 +1255,18 @@ tbody tr:last-child td { border-bottom: none; }
       <div class="modal-section">
         <div class="modal-section-title">2. File CSV</div>
         <input type="file" id="importFile" accept=".csv" class="form-input" style="width:100%;padding:8px">
+
+        <label class="filter-label" for="importDelimiter" style="display:block;margin:12px 0 6px">Pemisah kolom (delimiter)</label>
+        <select id="importDelimiter" class="form-input" style="width:100%;padding:8px">
+          <option value="auto" selected>Auto-deteksi (disarankan)</option>
+          <option value=",">Koma ( , )</option>
+          <option value=";">Titik koma ( ; )</option>
+        </select>
+        <div class="empty-state-sub" style="margin-top:6px;text-align:left">
+          Excel dengan format Indonesia biasanya menyimpan CSV dengan pemisah <code>;</code>.
+          Biarkan <b>Auto-deteksi</b> bila ragu.
+        </div>
+
         <div class="empty-state-sub" style="margin-top:8px;text-align:left">
           Header wajib: <code>Name</code>, <code>No SPK</code>. Kolom opsional: Periode, Nilai Tagihan,
           Status Invoice/Pembayaran/BA Performansi/Rekon, Tanggal Serah BA Performansi, Tanggal Rekon.
@@ -2207,6 +2219,8 @@ function doImport() {
   const fd = new FormData();
   fd.append('database_id', dbId);
   fd.append('file', fileInput.files[0]);
+  const delimEl = document.getElementById('importDelimiter');
+  fd.append('delimiter', delimEl ? delimEl.value : 'auto');
 
   btn.disabled = true;
   icon.style.display = 'inline-block';

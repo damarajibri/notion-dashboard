@@ -802,6 +802,7 @@ def api_import_csv():
     """
     db_id = (request.form.get('database_id') or '').strip()
     file = request.files.get('file')
+    delim_choice = (request.form.get('delimiter') or 'auto').strip().lower()
 
     if not db_id:
         return jsonify({'ok': False, 'error': 'Database ID wajib diisi untuk verifikasi.'}), 400
@@ -822,7 +823,24 @@ def api_import_csv():
         raw = file.read().decode('utf-8-sig')
     except UnicodeDecodeError:
         raw = file.read().decode('latin-1')
-    reader = csv.DictReader(io.StringIO(raw))
+
+    # Tentukan delimiter. Bila user memilih eksplisit (',' atau ';'), pakai itu.
+    # Bila 'auto' (default): Sniffer dulu, fallback hitung manual pada header.
+    header_line = raw.split('\n', 1)[0]
+    if delim_choice in (',', ';', '\t', '|'):
+        delimiter = delim_choice
+    else:
+        delimiter = ','
+        try:
+            dialect = csv.Sniffer().sniff(header_line, delimiters=',;\t|')
+            delimiter = dialect.delimiter
+        except csv.Error:
+            counts = {d: header_line.count(d) for d in (';', ',', '\t', '|')}
+            best = max(counts, key=counts.get)
+            if counts[best] > 0:
+                delimiter = best
+
+    reader = csv.DictReader(io.StringIO(raw), delimiter=delimiter)
     rows = list(reader)
     if not rows:
         return jsonify({'ok': False, 'error': 'CSV kosong / tidak ada baris data.'}), 400
