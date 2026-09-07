@@ -550,8 +550,12 @@ def api_data():
 # Kolom yang didukung di CSV (header harus sama persis):
 #   Name (title, wajib), Periode (date), Nilai Tagihan (number), Prognosa (number),
 #   Status Invoice / Status Pembayaran / Status BA Performansi / Status Rekon (select),
-#   Tanggal Serah BA Performansi / Tanggal Rekon (date),
-#   No SPK (wajib → dicocokkan ke database SPK untuk mengisi relation)
+#   Tanggal Serah BA Performansi / Tanggal masuk BA Performansi / Tanggal Rekon (date),
+#   No. Dokumen BA LP (rich_text),
+#   No SPK (wajib → dicocokkan ke database SPK untuk mengisi relation '📋 SPK')
+#
+# Catatan: field 'ID' (unique_id), 'Files BAST' & 'Files BALP' (files) tidak dapat
+# diisi lewat CSV — ID di-generate otomatis oleh Notion, file harus diunggah manual.
 
 CSV_NUMBER_FIELDS = [
     'Nilai Tagihan', 'Prognosa'
@@ -560,7 +564,11 @@ CSV_SELECT_FIELDS = [
     'Status Invoice', 'Status Pembayaran', 'Status BA Performansi', 'Status Rekon'
 ]
 CSV_DATE_FIELDS = [
-    'Periode', 'Tanggal Serah BA Performansi', 'Tanggal Rekon'
+    'Periode', 'Tanggal Serah BA Performansi', 'Tanggal masuk BA Performansi',
+    'Tanggal Rekon'
+]
+CSV_TEXT_FIELDS = [
+    'No. Dokumen BA LP'
 ]
 
 
@@ -613,7 +621,7 @@ def verify_database(db_id):
     has_title = any(p.get('type') == 'title' for p in props.values())
 
     # Kolom yang diharapkan untuk import (informasi saja, tidak semua wajib)
-    expected = ['Name'] + CSV_NUMBER_FIELDS + CSV_SELECT_FIELDS + CSV_DATE_FIELDS
+    expected = ['Name'] + CSV_NUMBER_FIELDS + CSV_TEXT_FIELDS + CSV_SELECT_FIELDS + CSV_DATE_FIELDS
     missing = [c for c in expected if c not in props]
 
     return {
@@ -748,6 +756,10 @@ def build_page_properties(row, relation_prop):
             digits = ''.join(ch for ch in val(col) if ch.isdigit())
             if digits:
                 props[col] = {'number': float(digits)}
+
+    for col in CSV_TEXT_FIELDS:
+        if val(col):
+            props[col] = {'rich_text': [{'text': {'content': val(col)}}]}
 
     for col in CSV_SELECT_FIELDS:
         if val(col):
