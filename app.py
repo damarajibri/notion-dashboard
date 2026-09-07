@@ -548,14 +548,23 @@ def api_data():
 
 # ─── CSV IMPORT → Monthly Performance ──────────────────────────────────────────
 # Kolom yang didukung di CSV (header harus sama persis):
-#   Name (title, wajib), Periode (date), Nilai Tagihan (number), Prognosa (number),
+#   Name (title, wajib), Periode DD-MM-YYYY (date → properti 'Periode'),
+#   Nilai Tagihan (number), Prognosa (number),
 #   Status Invoice / Status Pembayaran / Status BA Performansi / Status Rekon (select),
 #   Tanggal Serah BA Performansi / Tanggal masuk BA Performansi / Tanggal Rekon (date),
 #   No. Dokumen BA LP (rich_text),
 #   No SPK (wajib → dicocokkan ke database SPK untuk mengisi relation '📋 SPK')
 #
+# Semua kolom tanggal memakai format DD-MM-YYYY (mis. 01-08-2026).
 # Catatan: field 'ID' (unique_id), 'Files BAST' & 'Files BALP' (files) tidak dapat
 # diisi lewat CSV — ID di-generate otomatis oleh Notion, file harus diunggah manual.
+
+# Pemetaan header CSV → nama properti Notion. Header di CSV boleh berbeda dari
+# nama properti (mis. untuk memberi petunjuk format), tetapi harus dipetakan
+# balik ke nama properti Notion yang sebenarnya sebelum di-upload.
+CSV_HEADER_MAP = {
+    'Periode DD-MM-YYYY': 'Periode',
+}
 
 CSV_NUMBER_FIELDS = [
     'Nilai Tagihan', 'Prognosa'
@@ -669,11 +678,14 @@ def find_spk_page_id(no_spk):
     return None
 
 
-def normalize_date(s):
+def normalize_date(s, dayfirst=True):
     """
     Ubah berbagai format tanggal ke ISO 8601 (YYYY-MM-DD).
-    Mendukung: 2026-10-01, 2026/10/1, 10/1/2026 (M/D/Y), 1-10-2026 (D-M-Y),
-    dan variasi pemisah '/', '-', '.'. Return (iso|None, error|None).
+    Format utama yang diharapkan: DD-MM-YYYY (mis. 01-08-2026 = 1 Agustus 2026).
+    Juga mendukung: ISO YYYY-MM-DD, YYYY/MM/DD, dan variasi pemisah '/', '-', '.'.
+    Bila dayfirst=True (default), komponen pertama dianggap HARI (DD-MM-YYYY);
+    kalau ternyata hari > 31 atau tidak valid, dicoba sebagai bulan (MM-DD-YYYY).
+    Return (iso|None, error|None).
     """
     from datetime import datetime
     if not s:
@@ -686,7 +698,7 @@ def normalize_date(s):
     if 'T' in s:
         s = s.split('T', 1)[0]
 
-    # Format ISO langsung
+    # Format ISO langsung (tahun 4 digit di depan)
     for fmt in ('%Y-%m-%d', '%Y/%m/%d'):
         try:
             return datetime.strptime(s, fmt).strftime('%Y-%m-%d'), None
@@ -708,18 +720,29 @@ def normalize_date(s):
                 if len(a) == 4:
                     y, m, d = int(a), int(b), int(c)
                 else:
-                    # Asumsi M/D/Y (umum dari Excel en-US). Jika bulan > 12,
-                    # berarti sebenarnya D/M/Y → tukar.
-                    m, d, y = int(a), int(b), int(c)
-                    if m > 12 and d <= 12:
-                        m, d = d, m
-                    if y < 100:
-                        y += 2000
+                    ia, ib, ic = int(a), int(b), int(c)
+                    if ic < 100:
+                        ic += 2000
+                    if dayfirst:
+                        # DD-MM-YYYY (default)
+                        if ia > 31 or ia == 0:
+                            # komponen pertama mustahil jadi hari → tafsir MM-DD
+                            m, d, y = ia, ib, ic
+                        else:
+                            d, m, y = ia, ib, ic
+                            # bila 'bulan' > 12 padahal 'hari' <= 12 → sebenarnya MM-DD
+                            if m > 12 and d <= 12:
+                                d, m = m, d
+                    else:
+                        # MM-DD-YYYY (gaya en-US)
+                        m, d, y = ia, ib, ic
+                        if m > 12 and d <= 12:
+                            m, d = d, m
                 return datetime(y, m, d).strftime('%Y-%m-%d'), None
             except (ValueError, TypeError):
                 pass
 
-    return None, f"format tanggal '{s}' tidak dikenali (pakai YYYY-MM-DD)"
+    return None, f"format tanggal '{s}' tidak dikenali (pakai DD-MM-YYYY)"
 
 
 def month_range(iso_date):
@@ -844,6 +867,17 @@ def api_import_csv():
     rows = list(reader)
     if not rows:
         return jsonify({'ok': False, 'error': 'CSV kosong / tidak ada baris data.'}), 400
+
+    # Petakan header CSV → nama properti Notion (mis. 'Periode DD-MM-YYYY' → 'Periode')
+    if CSV_HEADER_MAP:
+        remapped = []
+        for row in rows:
+            new_row = {}
+            for k, v in row.items():
+                key = k.strip() if isinstance(k, str) else k
+                new_row[CSV_HEADER_MAP.get(key, key)] = v
+            remapped.append(new_row)
+        rows = remapped
 
     # 3) Fase validasi (all-or-nothing)
     _spk_lookup_cache.clear()
