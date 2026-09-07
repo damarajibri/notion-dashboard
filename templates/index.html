@@ -1258,13 +1258,14 @@ tbody tr:last-child td { border-bottom: none; }
 
         <label class="filter-label" for="importDelimiter" style="display:block;margin:12px 0 6px">Pemisah kolom (delimiter)</label>
         <select id="importDelimiter" class="form-input" style="width:100%;padding:8px">
-          <option value="auto" selected>Auto-deteksi (disarankan)</option>
+          <option value="auto" selected>Auto (koma; jika titik koma → dikonversi)</option>
           <option value=",">Koma ( , )</option>
-          <option value=";">Titik koma ( ; )</option>
+          <option value=";">Titik koma ( ; ) — dikonversi ke koma</option>
         </select>
         <div class="empty-state-sub" style="margin-top:6px;text-align:left">
-          Excel dengan format Indonesia biasanya menyimpan CSV dengan pemisah <code>;</code>.
-          Biarkan <b>Auto-deteksi</b> bila ragu.
+          Format dasar memakai <b>koma ( , )</b>. Bila file memakai <b>titik koma ( ; )</b>
+          — umum dari Excel format Indonesia — sistem otomatis <b>mengonversinya ke koma</b>
+          sebelum diproses. Biarkan <b>Auto</b> bila ragu.
         </div>
 
         <div class="empty-state-sub" style="margin-top:8px;text-align:left">
@@ -2237,9 +2238,12 @@ function doImport() {
       icon.textContent = '📤';
       btn.disabled = false;
       if (d.ok) {
+        const convNote = d.converted
+          ? `<div style="color:var(--text2);margin-top:4px">ℹ️ File terdeteksi memakai titik koma (;) dan otomatis dikonversi ke koma sebelum diproses.</div>`
+          : '';
         resBox.innerHTML =
           `<div class="modal-section-title" style="color:var(--green)">✅ Berhasil</div>
-           <div>${d.imported} baris berhasil di-import ke <b>${d.db_title || ''}</b>.</div>`;
+           <div>${d.imported} baris berhasil di-import ke <b>${d.db_title || ''}</b>.</div>${convNote}`;
         showToast(`${d.imported} baris ter-import`, '✅');
         loadData();
       } else {

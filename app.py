@@ -847,23 +847,32 @@ def api_import_csv():
     except UnicodeDecodeError:
         raw = file.read().decode('latin-1')
 
-    # Tentukan delimiter. Bila user memilih eksplisit (',' atau ';'), pakai itu.
-    # Bila 'auto' (default): Sniffer dulu, fallback hitung manual pada header.
+    # ── Delimiter: BASIS selalu KOMA (,) ──────────────────────────────────────
+    # Aturan sesuai kebutuhan:
+    #   • File koma  → langsung diproses.
+    #   • File titik koma (;) → DIKONVERSI dulu ke koma, baru diproses.
+    # Deteksi: bila user memilih eksplisit pakai itu; bila 'auto', tebak dari
+    # baris header (mana yang lebih banyak muncul, ';' atau ',').
     header_line = raw.split('\n', 1)[0]
-    if delim_choice in (',', ';', '\t', '|'):
-        delimiter = delim_choice
+    if delim_choice in (',', ';'):
+        source_delim = delim_choice
     else:
-        delimiter = ','
-        try:
-            dialect = csv.Sniffer().sniff(header_line, delimiters=',;\t|')
-            delimiter = dialect.delimiter
-        except csv.Error:
-            counts = {d: header_line.count(d) for d in (';', ',', '\t', '|')}
-            best = max(counts, key=counts.get)
-            if counts[best] > 0:
-                delimiter = best
+        source_delim = ';' if header_line.count(';') > header_line.count(',') else ','
 
-    reader = csv.DictReader(io.StringIO(raw), delimiter=delimiter)
+    converted = False
+    if source_delim == ';':
+        # Konversi ';' → ',' secara aman (berbasis parsing, bukan replace kasar,
+        # sehingga koma di dalam nilai tetap ter-escape dengan benar).
+        out = io.StringIO()
+        writer = csv.writer(out, delimiter=',')
+        reader_semi = csv.reader(io.StringIO(raw), delimiter=';')
+        for row in reader_semi:
+            writer.writerow(row)
+        raw = out.getvalue()
+        converted = True
+
+    # Mulai titik ini, data DIPASTIKAN berpemisah koma.
+    reader = csv.DictReader(io.StringIO(raw), delimiter=',')
     rows = list(reader)
     if not rows:
         return jsonify({'ok': False, 'error': 'CSV kosong / tidak ada baris data.'}), 400
@@ -937,6 +946,7 @@ def api_import_csv():
         'failed': len(fails),
         'errors': fails,
         'db_title': v.get('title'),
+        'converted': converted,
     }), (200 if not fails else 207)
 
 
