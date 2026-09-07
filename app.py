@@ -4,6 +4,25 @@ from flask import Flask, jsonify, render_template, request, send_from_directory
 
 app = Flask(__name__)
 
+
+# ── Error handler global: pastikan endpoint /api/* selalu balas JSON ──────────
+# Tanpa ini, exception tak tertangani membuat Flask mengembalikan halaman HTML
+# error (diawali '<'), sehingga frontend gagal JSON.parse → "Unexpected token '<'".
+@app.errorhandler(Exception)
+def _handle_any_error(e):
+    from werkzeug.exceptions import HTTPException
+    path = request.path if request else ''
+    code = e.code if isinstance(e, HTTPException) else 500
+    if path.startswith('/api/'):
+        return jsonify({
+            'ok': False,
+            'error': f'Server error: {type(e).__name__}: {e}',
+        }), code
+    # Untuk non-API, biarkan perilaku default Flask
+    if isinstance(e, HTTPException):
+        return e
+    return ('Internal Server Error', 500)
+
 TOKEN = os.environ.get('NOTION_TOKEN', '')
 TASKS_DB    = '2c3a31d192f481d68c65d0f289ebd111'
 PROJECTS_DB = '2c3a31d192f48104ba5fecc8ee9c66d1'
