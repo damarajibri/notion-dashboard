@@ -461,6 +461,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 .col-num { color: var(--text2); font-size: 12px; width: 40px; }
 .col-name { font-weight: 500; max-width: 280px; }
+.col-project-full { font-weight: 500; min-width: 240px; white-space: normal; word-break: break-word; }
 .col-name-text {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -944,6 +945,9 @@ tbody tr:last-child td { border-bottom: none; }
     <button class="tab" onclick="switchTab('spk', this)">
       <span class="tab-icon">📄</span> SPK
     </button>
+    <button class="tab" onclick="switchTab('monthly', this)">
+      <span class="tab-icon">💵</span> Monthly Performance
+    </button>
   </div>
 
   <!-- ===== OVERVIEW TAB ===== -->
@@ -1208,6 +1212,49 @@ tbody tr:last-child td { border-bottom: none; }
         <div class="scroll-table">
           <table id="spkTable"><thead><tr></tr></thead><tbody></tbody></table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MONTHLY PERFORMANCE TAB (manual load) ===== -->
+  <div id="tab-monthly" class="tab-content">
+    <div class="filter-bar">
+      <div class="filter-group">
+        <button class="btn btn-primary" id="loadMonthlyBtn" onclick="loadMonthly()">
+          <span id="loadMonthlyIcon">⬇️</span> Load Monthly Performance
+        </button>
+        <input type="text" id="searchMonthly" class="form-input" placeholder="🔍 Search..." oninput="applyMonthlyFilters()" disabled>
+        <select id="filterMonthlyPeriode" class="form-select" onchange="applyMonthlyFilters()" disabled>
+          <option value="all">All Periode</option>
+        </select>
+        <select id="filterMonthlyInvoice" class="form-select" onchange="applyMonthlyFilters()" disabled>
+          <option value="all">All Status Invoice</option>
+        </select>
+        <select id="filterMonthlyBayar" class="form-select" onchange="applyMonthlyFilters()" disabled>
+          <option value="all">All Status Pembayaran</option>
+        </select>
+        <select id="filterMonthlyBA" class="form-select" onchange="applyMonthlyFilters()" disabled>
+          <option value="all">All Status BA Performansi</option>
+        </select>
+        <select id="filterMonthlyRekon" class="form-select" onchange="applyMonthlyFilters()" disabled>
+          <option value="all">All Status Rekon</option>
+        </select>
+      </div>
+    </div>
+    <div id="kpi-monthly" class="kpi-row"></div>
+    <div class="card full">
+      <div class="section-header">
+        <div class="section-title"><span>💵</span> Monthly Performance</div>
+        <span class="section-count" id="monthlyCount">Belum dimuat</span>
+      </div>
+      <div class="table-wrapper">
+        <div class="scroll-table">
+          <table id="monthlyTable"><thead><tr></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div id="monthlyHint" style="padding:24px;text-align:center;color:var(--text2)">
+        Klik <b>Load Monthly Performance</b> untuk memuat data. Data sengaja tidak
+        dimuat otomatis agar dashboard tetap ringan.
       </div>
     </div>
   </div>
@@ -2052,7 +2099,7 @@ function applySpkFilters() {
       <td class="col-num">${i + 1}</td>
       <td><span class="tag">${s.spk_id}</span></td>
       <td style="font-weight:600;white-space:nowrap;font-size:12px">${s.no_spk}</td>
-      <td class="col-name"><div class="col-name-text">${s.project}</div></td>
+      <td class="col-project-full"><div>${s.project}</div></td>
       <td style="color:var(--text2);font-size:12px">${s.vendor}</td>
       <td>${statusBadge(s.status)}</td>
       <td>${tipeBadge}</td>
@@ -2067,6 +2114,144 @@ function applySpkFilters() {
       <td style="color:var(--text2);font-size:12px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.notes}">${s.notes || '-'}</td>
     </tr>`;
   }).join('') || emptyState(16);
+  makeSortable(table);
+}
+
+// ===== MONTHLY PERFORMANCE (manual load) =====
+let MONTHLY_DATA = null;
+
+function loadMonthly() {
+  const btn  = document.getElementById('loadMonthlyBtn');
+  const icon = document.getElementById('loadMonthlyIcon');
+  const hint = document.getElementById('monthlyHint');
+  const cnt  = document.getElementById('monthlyCount');
+
+  btn.disabled = true;
+  icon.textContent = '⏳';
+  cnt.textContent = 'Memuat...';
+  hint.style.display = 'block';
+  hint.innerHTML = '⏳ Memuat data Monthly Performance dari Notion...';
+
+  fetch('/api/monthly')
+    .then(r => r.json().then(d => ({ ok: r.ok, d })))
+    .then(({ ok, d }) => {
+      btn.disabled = false;
+      icon.textContent = '🔄';
+      if (!ok || !d.ok) {
+        cnt.textContent = 'Gagal';
+        hint.innerHTML = `<span style="color:var(--red)">❌ ${d.error || 'Gagal memuat.'}</span>`;
+        showToast(d.error || 'Gagal memuat Monthly Performance', '❌');
+        return;
+      }
+      MONTHLY_DATA = d;
+      hint.style.display = 'none';
+      btn.innerHTML = `<span id="loadMonthlyIcon">🔄</span> Reload`;
+
+      // Aktifkan & isi filter
+      ['searchMonthly','filterMonthlyPeriode','filterMonthlyInvoice',
+       'filterMonthlyBayar','filterMonthlyBA','filterMonthlyRekon'
+      ].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+
+      fillMonthlySelect('filterMonthlyPeriode', d.periodes || []);
+      fillMonthlySelect('filterMonthlyInvoice', uniq(d.monthly.map(x => x.status_invoice)));
+      fillMonthlySelect('filterMonthlyBayar',   uniq(d.monthly.map(x => x.status_bayar)));
+      fillMonthlySelect('filterMonthlyBA',      uniq(d.monthly.map(x => x.status_ba)));
+      fillMonthlySelect('filterMonthlyRekon',   uniq(d.monthly.map(x => x.status_rekon)));
+
+      applyMonthlyFilters();
+      showToast(`${d.count} baris Monthly Performance dimuat`, '✅');
+    })
+    .catch(e => {
+      btn.disabled = false;
+      icon.textContent = '🔄';
+      cnt.textContent = 'Gagal';
+      hint.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+      showToast('Error: ' + e.message, '❌');
+    });
+}
+
+function uniq(arr) {
+  return [...new Set(arr.filter(Boolean))].sort();
+}
+
+function fillMonthlySelect(id, values) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  // Simpan opsi pertama ("All ...")
+  const first = sel.querySelector('option');
+  sel.innerHTML = '';
+  sel.appendChild(first);
+  values.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v; sel.appendChild(o);
+  });
+}
+
+function applyMonthlyFilters() {
+  if (!MONTHLY_DATA) return;
+  const q       = document.getElementById('searchMonthly').value.toLowerCase();
+  const periode = document.getElementById('filterMonthlyPeriode').value;
+  const inv     = document.getElementById('filterMonthlyInvoice').value;
+  const bayar   = document.getElementById('filterMonthlyBayar').value;
+  const ba      = document.getElementById('filterMonthlyBA').value;
+  const rekon   = document.getElementById('filterMonthlyRekon').value;
+
+  let rows = [...MONTHLY_DATA.monthly];
+  if (periode !== 'all') rows = rows.filter(x => (x.periode || '').startsWith(periode));
+  if (inv   !== 'all')   rows = rows.filter(x => x.status_invoice === inv);
+  if (bayar !== 'all')   rows = rows.filter(x => x.status_bayar === bayar);
+  if (ba    !== 'all')   rows = rows.filter(x => x.status_ba === ba);
+  if (rekon !== 'all')   rows = rows.filter(x => x.status_rekon === rekon);
+  if (q) rows = rows.filter(x =>
+    ((x.name||'') + (x.no_spk||'') + (x.dok_lp||'')).toLowerCase().includes(q));
+
+  document.getElementById('monthlyCount').textContent = rows.length + ' baris';
+
+  // KPI
+  const totalTagihan  = rows.reduce((s, x) => s + (x.nilai_tagihan || 0), 0);
+  const totalPrognosa = rows.reduce((s, x) => s + (x.prognosa || 0), 0);
+  const rekonDone     = rows.filter(x => x.status_rekon === 'Done').length;
+  const bayarDone     = rows.filter(x => x.status_bayar === 'Done').length;
+  document.getElementById('kpi-monthly').innerHTML = [
+    { color: 'kpi-blue',   icon: '📄', num: rows.length,           label: 'Baris' },
+    { color: 'kpi-purple', icon: '💰', num: fmtRp(totalTagihan),   label: 'Total Nilai Tagihan' },
+    { color: 'kpi-yellow', icon: '📈', num: fmtRp(totalPrognosa),  label: 'Total Prognosa' },
+    { color: 'kpi-green',  icon: '✅', num: rekonDone,             label: 'Rekon Done' },
+    { color: 'kpi-blue',   icon: '💵', num: bayarDone,             label: 'Pembayaran Done' },
+  ].map(k => `<div class="kpi-card ${k.color}">
+    <span class="kpi-icon">${k.icon}</span>
+    <div class="kpi-num" style="font-size:${typeof k.num === 'string' && k.num.length > 10 ? '15px' : '32px'};line-height:1.2">${k.num}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
+
+  const table = document.getElementById('monthlyTable');
+  table.querySelector('thead tr').innerHTML = [
+    '#', 'Name', 'Periode', 'No SPK', 'Nilai Tagihan', 'Prognosa',
+    'Status Invoice', 'Status Pembayaran', 'Status BA Performansi', 'Status Rekon',
+    'No. Dokumen BA LP', 'Serah BA', 'Masuk BA', 'Rekon'
+  ].map(h => `<th>${h}</th>`).join('');
+
+  table.querySelector('tbody').innerHTML = rows.map((x, i) => {
+    const tagihan  = x.nilai_tagihan ? `<span style="font-weight:600;color:var(--green)">${fmtRp(x.nilai_tagihan)}</span>` : '-';
+    const prognosa = x.prognosa      ? `<span style="color:var(--yellow)">${fmtRp(x.prognosa)}</span>` : '-';
+    const dt = v => v ? `<span style="color:var(--text2);font-size:12px">${v}</span>` : '-';
+    return `<tr>
+      <td class="col-num">${i + 1}</td>
+      <td style="font-weight:600">${x.name || '-'}</td>
+      <td>${dt(x.periode ? x.periode.slice(0,7) : '')}</td>
+      <td style="white-space:nowrap;font-size:12px">${x.no_spk || '-'}</td>
+      <td>${tagihan}</td>
+      <td>${prognosa}</td>
+      <td>${x.status_invoice ? statusBadge(x.status_invoice) : '-'}</td>
+      <td>${x.status_bayar ? statusBadge(x.status_bayar) : '-'}</td>
+      <td>${x.status_ba ? statusBadge(x.status_ba) : '-'}</td>
+      <td>${x.status_rekon ? statusBadge(x.status_rekon) : '-'}</td>
+      <td style="font-size:12px">${x.dok_lp || '-'}</td>
+      <td>${dt(x.tgl_serah_ba)}</td>
+      <td>${dt(x.tgl_masuk_ba)}</td>
+      <td>${dt(x.tgl_rekon)}</td>
+    </tr>`;
+  }).join('') || emptyState(14);
   makeSortable(table);
 }
 

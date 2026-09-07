@@ -28,6 +28,7 @@ TASKS_DB    = '2c3a31d192f481d68c65d0f289ebd111'
 PROJECTS_DB = '2c3a31d192f48104ba5fecc8ee9c66d1'
 PERSONEL_DB = '2c4a31d192f480aab819f688af756ed1'
 SPK_DB      = '2c5a31d192f4803a86e4fb50b19df8dc'
+MONTHLY_DB  = '358a31d192f4809ca281cd6849efa28a'
 
 HEADERS = {
     'Authorization': f'Bearer {TOKEN}',
@@ -374,6 +375,53 @@ def extract_spk(r, personel):
         '_id':           r['id'],
     }
 
+# ─── extract_monthly ──────────────────────────────────────────────────────────
+# Ekstrak satu baris database Monthly Performance untuk ditampilkan di dashboard.
+# Field: Name (title), Periode (date range), Nilai Tagihan (number),
+#        Prognosa (number), Status Invoice/Pembayaran/BA Performansi/Rekon (select),
+#        No. Dokumen BA LP (rich_text), Tanggal Serah/masuk BA Performansi &
+#        Tanggal Rekon (date), 📋 SPK (relation → No SPK).
+
+def _sel_name(props, key):
+    obj = props.get(key, {}).get('select') or {}
+    return obj.get('name', '') or ''
+
+def _date_start(props, key):
+    d = props.get(key, {}).get('date') or {}
+    return (d.get('start') or '')[:10]
+
+def extract_monthly(r, spk_no_map):
+    props = r['properties']
+
+    title = props.get('Name', {}).get('title', [])
+    name  = title[0]['plain_text'] if title else ''
+
+    nilai    = props.get('Nilai Tagihan', {}).get('number')
+    prognosa = props.get('Prognosa', {}).get('number')
+
+    doklp_raw = props.get('No. Dokumen BA LP', {}).get('rich_text', [])
+    dok_lp    = doklp_raw[0]['plain_text'] if doklp_raw else ''
+
+    # Relation SPK → tampilkan No SPK-nya
+    spk_rel = props.get('📋 SPK', {}).get('relation', [])
+    spk_no  = ', '.join(spk_no_map.get(rel['id'], '?') for rel in spk_rel) if spk_rel else ''
+
+    return {
+        'name':            name,
+        'periode':         _date_start(props, 'Periode'),
+        'no_spk':          spk_no,
+        'nilai_tagihan':   nilai,
+        'prognosa':        prognosa,
+        'status_invoice':  _sel_name(props, 'Status Invoice'),
+        'status_bayar':    _sel_name(props, 'Status Pembayaran'),
+        'status_ba':       _sel_name(props, 'Status BA Performansi'),
+        'status_rekon':    _sel_name(props, 'Status Rekon'),
+        'dok_lp':          dok_lp,
+        'tgl_serah_ba':    _date_start(props, 'Tanggal Serah BA Performansi'),
+        'tgl_masuk_ba':    _date_start(props, 'Tanggal masuk BA Performansi'),
+        'tgl_rekon':       _date_start(props, 'Tanggal Rekon'),
+    }
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -562,6 +610,41 @@ def api_data():
         'spk_tipe':           dict(spk_tipe),
         'total_anggaran_all': total_anggaran_all,
         'total_terbayar_all': total_terbayar_all,
+    })
+
+
+@app.route('/api/monthly')
+def api_monthly():
+    """
+    Endpoint TERPISAH untuk data Monthly Performance — di-load MANUAL (on-demand)
+    agar tidak membebani load utama dashboard. Dipanggil hanya saat user menekan
+    tombol "Load Monthly Performance" di tab-nya.
+    """
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    # Peta internal SPK page-id → No SPK (untuk menampilkan No SPK dari relation)
+    spk_no_map = {}
+    for r in query_all(SPK_DB):
+        arr = r['properties'].get('No SPK', {}).get('title', [])
+        spk_no_map[r['id']] = arr[0]['plain_text'] if arr else ''
+
+    rows = [extract_monthly(r, spk_no_map) for r in query_all(MONTHLY_DB)]
+
+    # Ringkasan agregat
+    total_tagihan  = sum(x['nilai_tagihan'] or 0 for x in rows)
+    total_prognosa = sum(x['prognosa'] or 0 for x in rows)
+
+    # Opsi filter unik
+    periodes = sorted({x['periode'][:7] for x in rows if x['periode']}, reverse=True)
+
+    return jsonify({
+        'ok': True,
+        'monthly': rows,
+        'count': len(rows),
+        'total_tagihan': total_tagihan,
+        'total_prognosa': total_prognosa,
+        'periodes': periodes,
     })
 
 
