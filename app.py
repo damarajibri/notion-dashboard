@@ -1,8 +1,61 @@
 import json, os, io, csv, urllib.request, urllib.error
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
+import db
+import sync
+
 app = Flask(__name__)
+
+# ── On-demand incremental sync (Option C) ────────────────────────────────────
+# Read endpoints (/api/data, /api/monthly) serve from a local SQLite cache.
+# When the cache is older than SYNC_TTL_SECONDS, an incremental sync (only rows
+# changed since last sync, via Notion's last_edited_time filter) refreshes it
+# first. This keeps data fresh (~5 min) with no external scheduler, entirely on
+# PythonAnywhere, behind the app's own auth. Sync failures degrade gracefully
+# to whatever is already cached.
+SYNC_TTL_SECONDS = int(os.environ.get('SYNC_TTL_SECONDS', '300'))
+
+
+def _sync_is_due():
+    oldest = db.oldest_sync_time()
+    if not oldest:
+        return True
+    try:
+        oldest_dt = datetime.strptime(oldest, '%Y-%m-%dT%H:%M:%S.000Z').replace(tzinfo=timezone.utc)
+    except ValueError:
+        return True
+    return datetime.now(timezone.utc) - oldest_dt > timedelta(seconds=SYNC_TTL_SECONDS)
+
+
+def _ensure_fresh():
+    try:
+        if _sync_is_due():
+            sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001 - never fail the request on sync error
+        app.logger.warning('On-demand sync failed, serving cached data: %s', e)
+
+
+# Logical name for each Notion DB id, used to read cached rows from SQLite.
+_DBKEY_BY_ID = {
+    '2c3a31d192f481d68c65d0f289ebd111': 'tasks',
+    '2c3a31d192f48104ba5fecc8ee9c66d1': 'projects',
+    '2c4a31d192f480aab819f688af756ed1': 'personel',
+    '2c5a31d192f4803a86e4fb50b19df8dc': 'spk',
+    '358a31d192f4809ca281cd6849efa28a': 'monthly_perf',
+}
+
+
+def cached_query(db_id):
+    """Return raw Notion rows for db_id from the local SQLite cache.
+
+    Falls back to a live Notion query if the id is unknown (should not happen).
+    """
+    key = _DBKEY_BY_ID.get(db_id)
+    if key:
+        return db.load_rows(key)
+    return query_all(db_id)
 
 
 # ── Error handler global: pastikan endpoint /api/* selalu balas JSON ──────────
@@ -65,9 +118,9 @@ def query_all(db_id, filt=None):
 # ─── Personel ─────────────────────────────────────────────────────────────────
 
 def get_personel():
-    """Return dict {page_id: name} dari database Personel."""
+    """Return dict {page_id: name} dari database Personel (cached SQLite)."""
     p = {}
-    for r in query_all(PERSONEL_DB):
+    for r in cached_query(PERSONEL_DB):
         for v in r['properties'].values():
             if v.get('type') == 'title' and v['title']:
                 p[r['id']] = v['title'][0]['plain_text']
@@ -443,10 +496,12 @@ def download_template_csv():
 def api_data():
     from datetime import datetime, timedelta
 
+    _ensure_fresh()  # Option C: refresh cache from Notion only if stale
+
     personel     = get_personel()
-    raw_tasks    = query_all(TASKS_DB)
-    raw_projects = query_all(PROJECTS_DB)
-    raw_spk      = query_all(SPK_DB)
+    raw_tasks    = cached_query(TASKS_DB)
+    raw_projects = cached_query(PROJECTS_DB)
+    raw_spk      = cached_query(SPK_DB)
 
     tasks    = [extract_task(r, personel)    for r in raw_tasks]
     projects = [extract_project(r, personel) for r in raw_projects]
@@ -621,15 +676,18 @@ def api_monthly():
     tombol "Load Monthly Performance" di tab-nya.
     """
     if not TOKEN:
-        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+        # No token: cannot sync, but we can still serve whatever is cached.
+        app.logger.warning('NOTION_TOKEN not set; serving cached Monthly Performance.')
+    else:
+        _ensure_fresh()  # Option C: refresh cache from Notion only if stale
 
     # Peta internal SPK page-id → No SPK (untuk menampilkan No SPK dari relation)
     spk_no_map = {}
-    for r in query_all(SPK_DB):
+    for r in cached_query(SPK_DB):
         arr = r['properties'].get('No SPK', {}).get('title', [])
         spk_no_map[r['id']] = arr[0]['plain_text'] if arr else ''
 
-    rows = [extract_monthly(r, spk_no_map) for r in query_all(MONTHLY_DB)]
+    rows = [extract_monthly(r, spk_no_map) for r in cached_query(MONTHLY_DB)]
 
     # Ringkasan agregat
     total_tagihan  = sum(x['nilai_tagihan'] or 0 for x in rows)
@@ -1041,6 +1099,14 @@ def api_import_csv():
         except Exception as e:
             fails.append(f"Baris {i} ('{row.get('Name','')}'): {e}")
 
+    # New rows were written to Notion; refresh the local cache so the dashboard
+    # reflects them without waiting for the TTL. Best-effort; ignore failures.
+    if created:
+        try:
+            sync.incremental_sync()
+        except Exception as e:  # noqa: BLE001
+            app.logger.warning('Post-import sync failed: %s', e)
+
     return jsonify({
         'ok': len(fails) == 0,
         'stage': 'upload',
@@ -1053,4 +1119,5 @@ def api_import_csv():
 
 
 if __name__ == '__main__':
+    db.init_db()
     app.run(host='0.0.0.0', port=8080, debug=True)

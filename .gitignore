@@ -4,3 +4,7 @@ __pycache__/
 chat-dashboard
 server.log
 server.err
+.env
+dashboard.db
+dashboard.db-wal
+dashboard.db-shm
