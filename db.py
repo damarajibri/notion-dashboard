@@ -114,11 +114,20 @@ def delete_missing(db_key, present_page_ids):
 
 
 def load_rows(db_key):
-    """Return all raw Notion row objects for a logical database."""
+    """Return all raw Notion row objects for a logical database.
+
+    Resilient to a not-yet-created table (returns [] instead of raising),
+    so the web app can serve empty data before the first sync/bootstrap.
+    """
     table = TABLES[db_key]
     conn = get_conn()
     try:
-        return [json.loads(row["raw"]) for row in conn.execute(f"SELECT raw FROM {table}")]
+        try:
+            cur = conn.execute(f"SELECT raw FROM {table}")
+        except sqlite3.OperationalError:
+            # Table does not exist yet (DB not bootstrapped).
+            return []
+        return [json.loads(row["raw"]) for row in cur]
     finally:
         conn.close()
 
@@ -165,7 +174,11 @@ def oldest_sync_time():
     """
     conn = get_conn()
     try:
-        rows = conn.execute("SELECT last_sync_time FROM sync_meta").fetchall()
+        try:
+            rows = conn.execute("SELECT last_sync_time FROM sync_meta").fetchall()
+        except sqlite3.OperationalError:
+            # sync_meta table not created yet -> treat as due.
+            return None
         times = [r["last_sync_time"] for r in rows if r["last_sync_time"]]
         if not times or len(times) < len(TABLES):
             # If any database has never synced, treat as due.

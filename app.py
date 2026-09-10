@@ -17,6 +17,13 @@ app = Flask(__name__)
 # to whatever is already cached.
 SYNC_TTL_SECONDS = int(os.environ.get('SYNC_TTL_SECONDS', '300'))
 
+# Ensure the SQLite schema exists at import time. Under WSGI (PythonAnywhere)
+# the __main__ block never runs, so tables must be created here.
+try:
+    db.init_db()
+except Exception as e:  # noqa: BLE001
+    app.logger.warning('db.init_db() at import failed: %s', e)
+
 
 def _sync_is_due():
     oldest = db.oldest_sync_time()
