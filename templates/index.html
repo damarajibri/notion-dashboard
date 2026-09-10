@@ -1220,25 +1220,26 @@ tbody tr:last-child td { border-bottom: none; }
   <div id="tab-monthly" class="tab-content">
     <div class="filter-bar">
       <div class="filter-group">
-        <button class="btn btn-primary" id="loadMonthlyBtn" onclick="loadMonthly()">
+        <button class="btn btn-primary" id="loadMonthlyBtn" onclick="loadMonthly()" disabled title="Isi Search atau pilih minimal satu filter untuk memuat data">
           <span id="loadMonthlyIcon">⬇️</span> Load Monthly Performance
         </button>
-        <input type="text" id="searchMonthly" class="form-input" placeholder="🔍 Search..." oninput="applyMonthlyFilters()" disabled>
-        <select id="filterMonthlyPeriode" class="form-select" onchange="applyMonthlyFilters()" disabled>
+        <input type="text" id="searchMonthly" class="form-input" placeholder="🔍 Search..." oninput="onMonthlyFilterChange()">
+        <select id="filterMonthlyPeriode" class="form-select" onchange="onMonthlyFilterChange()">
           <option value="all">All Periode</option>
         </select>
-        <select id="filterMonthlyInvoice" class="form-select" onchange="applyMonthlyFilters()" disabled>
+        <select id="filterMonthlyInvoice" class="form-select" onchange="onMonthlyFilterChange()">
           <option value="all">All Status Invoice</option>
         </select>
-        <select id="filterMonthlyBayar" class="form-select" onchange="applyMonthlyFilters()" disabled>
+        <select id="filterMonthlyBayar" class="form-select" onchange="onMonthlyFilterChange()">
           <option value="all">All Status Pembayaran</option>
         </select>
-        <select id="filterMonthlyBA" class="form-select" onchange="applyMonthlyFilters()" disabled>
+        <select id="filterMonthlyBA" class="form-select" onchange="onMonthlyFilterChange()">
           <option value="all">All Status BA Performansi</option>
         </select>
-        <select id="filterMonthlyRekon" class="form-select" onchange="applyMonthlyFilters()" disabled>
+        <select id="filterMonthlyRekon" class="form-select" onchange="onMonthlyFilterChange()">
           <option value="all">All Status Rekon</option>
         </select>
+        <button class="btn btn-outline btn-sm" id="resetMonthlyBtn" onclick="resetMonthlyFilters()" title="Bersihkan filter">↺ Reset</button>
       </div>
     </div>
     <div id="kpi-monthly" class="kpi-row"></div>
@@ -1253,8 +1254,9 @@ tbody tr:last-child td { border-bottom: none; }
         </div>
       </div>
       <div id="monthlyHint" style="padding:24px;text-align:center;color:var(--text2)">
-        Klik <b>Load Monthly Performance</b> untuk memuat data. Data sengaja tidak
-        dimuat otomatis agar dashboard tetap ringan.
+        Isi <b>Search</b> atau pilih minimal satu <b>filter</b> di atas, lalu klik
+        <b>Load Monthly Performance</b>. Data difilter di server agar load lebih cepat
+        dan ringan.
       </div>
     </div>
   </div>
@@ -1407,6 +1409,9 @@ function switchTab(name, el) {
   document.getElementById('tab-' + name).classList.add('active');
   if (el) el.classList.add('active');
   else event.target.closest('.tab').classList.add('active');
+
+  // Monthly Performance: siapkan opsi filter saat tab dibuka (sekali).
+  if (name === 'monthly') initMonthlyOptions();
 }
 
 // ===== AVATAR COLOR =====
@@ -2117,10 +2122,80 @@ function applySpkFilters() {
   makeSortable(table);
 }
 
-// ===== MONTHLY PERFORMANCE (manual load) =====
+// ===== MONTHLY PERFORMANCE (manual load, server-side filter) =====
 let MONTHLY_DATA = null;
+let MONTHLY_OPTIONS_LOADED = false;
+
+// Baca nilai filter saat ini.
+function monthlyFilterValues() {
+  return {
+    search:  document.getElementById('searchMonthly').value.trim(),
+    periode: document.getElementById('filterMonthlyPeriode').value,
+    invoice: document.getElementById('filterMonthlyInvoice').value,
+    bayar:   document.getElementById('filterMonthlyBayar').value,
+    ba:      document.getElementById('filterMonthlyBA').value,
+    rekon:   document.getElementById('filterMonthlyRekon').value,
+  };
+}
+
+// Apakah minimal satu filter/search terisi?
+function anyMonthlyFilterSet() {
+  const f = monthlyFilterValues();
+  return !!f.search || f.periode !== 'all' || f.invoice !== 'all' ||
+         f.bayar !== 'all' || f.ba !== 'all' || f.rekon !== 'all';
+}
+
+// Aktif/nonaktifkan tombol Load sesuai keterisian filter.
+function updateLoadBtnState() {
+  const btn = document.getElementById('loadMonthlyBtn');
+  if (!btn) return;
+  btn.disabled = !anyMonthlyFilterSet();
+}
+
+// Dipanggil tiap kali filter/search berubah.
+function onMonthlyFilterChange() {
+  updateLoadBtnState();
+}
+
+// Bersihkan semua filter.
+function resetMonthlyFilters() {
+  document.getElementById('searchMonthly').value = '';
+  ['filterMonthlyPeriode','filterMonthlyInvoice','filterMonthlyBayar',
+   'filterMonthlyBA','filterMonthlyRekon'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = 'all';
+  });
+  updateLoadBtnState();
+}
+
+// Muat daftar opsi filter (tanpa baris) saat tab dibuka — sekali saja.
+function initMonthlyOptions() {
+  if (MONTHLY_OPTIONS_LOADED) { updateLoadBtnState(); return; }
+  fetch('/api/monthly?options=1')
+    .then(r => r.json())
+    .then(d => {
+      if (!d || !d.ok) return;
+      fillMonthlySelect('filterMonthlyPeriode', d.periodes || []);
+      fillMonthlySelect('filterMonthlyInvoice', d.invoices || []);
+      fillMonthlySelect('filterMonthlyBayar',   d.bayars   || []);
+      fillMonthlySelect('filterMonthlyBA',      d.bas      || []);
+      fillMonthlySelect('filterMonthlyRekon',   d.rekons   || []);
+      MONTHLY_OPTIONS_LOADED = true;
+      const cnt = document.getElementById('monthlyCount');
+      if (cnt && cnt.textContent === 'Belum dimuat') {
+        cnt.textContent = `${d.total_available} baris tersedia — pilih filter`;
+      }
+      updateLoadBtnState();
+    })
+    .catch(() => { /* opsi gagal dimuat; user tetap bisa pakai search */ });
+}
 
 function loadMonthly() {
+  // Guard: hanya jalan bila ada filter (tombol semestinya sudah disabled).
+  if (!anyMonthlyFilterSet()) {
+    showToast('Isi Search atau pilih minimal satu filter dulu', '⚠️');
+    return;
+  }
+
   const btn  = document.getElementById('loadMonthlyBtn');
   const icon = document.getElementById('loadMonthlyIcon');
   const hint = document.getElementById('monthlyHint');
@@ -2130,9 +2205,19 @@ function loadMonthly() {
   icon.textContent = '⏳';
   cnt.textContent = 'Memuat...';
   hint.style.display = 'block';
-  hint.innerHTML = '⏳ Memuat data Monthly Performance dari Notion...';
+  hint.innerHTML = '⏳ Memuat data Monthly Performance (terfilter) dari server...';
 
-  fetch('/api/monthly')
+  // Kirim filter sebagai query param → server hanya mengembalikan baris cocok.
+  const f = monthlyFilterValues();
+  const qs = new URLSearchParams();
+  if (f.search)            qs.set('search', f.search);
+  if (f.periode !== 'all') qs.set('periode', f.periode);
+  if (f.invoice !== 'all') qs.set('invoice', f.invoice);
+  if (f.bayar   !== 'all') qs.set('bayar',   f.bayar);
+  if (f.ba      !== 'all') qs.set('ba',      f.ba);
+  if (f.rekon   !== 'all') qs.set('rekon',   f.rekon);
+
+  fetch('/api/monthly?' + qs.toString())
     .then(r => r.json().then(d => ({ ok: r.ok, d })))
     .then(({ ok, d }) => {
       btn.disabled = false;
@@ -2144,22 +2229,17 @@ function loadMonthly() {
         return;
       }
       MONTHLY_DATA = d;
-      hint.style.display = 'none';
       btn.innerHTML = `<span id="loadMonthlyIcon">🔄</span> Reload`;
 
-      // Aktifkan & isi filter
-      ['searchMonthly','filterMonthlyPeriode','filterMonthlyInvoice',
-       'filterMonthlyBayar','filterMonthlyBA','filterMonthlyRekon'
-      ].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+      if (!d.monthly || d.monthly.length === 0) {
+        hint.style.display = 'block';
+        hint.innerHTML = 'Tidak ada baris yang cocok dengan filter. Ubah filter lalu klik Reload.';
+      } else {
+        hint.style.display = 'none';
+      }
 
-      fillMonthlySelect('filterMonthlyPeriode', d.periodes || []);
-      fillMonthlySelect('filterMonthlyInvoice', uniq(d.monthly.map(x => x.status_invoice)));
-      fillMonthlySelect('filterMonthlyBayar',   uniq(d.monthly.map(x => x.status_bayar)));
-      fillMonthlySelect('filterMonthlyBA',      uniq(d.monthly.map(x => x.status_ba)));
-      fillMonthlySelect('filterMonthlyRekon',   uniq(d.monthly.map(x => x.status_rekon)));
-
-      applyMonthlyFilters();
-      showToast(`${d.count} baris Monthly Performance dimuat`, '✅');
+      renderMonthly();  // render tabel & KPI dari data terfilter server
+      showToast(`${d.count} baris cocok (dari ${d.total_available} total)`, '✅');
     })
     .catch(e => {
       btn.disabled = false;
@@ -2187,23 +2267,10 @@ function fillMonthlySelect(id, values) {
   });
 }
 
-function applyMonthlyFilters() {
+function renderMonthly() {
   if (!MONTHLY_DATA) return;
-  const q       = document.getElementById('searchMonthly').value.toLowerCase();
-  const periode = document.getElementById('filterMonthlyPeriode').value;
-  const inv     = document.getElementById('filterMonthlyInvoice').value;
-  const bayar   = document.getElementById('filterMonthlyBayar').value;
-  const ba      = document.getElementById('filterMonthlyBA').value;
-  const rekon   = document.getElementById('filterMonthlyRekon').value;
-
-  let rows = [...MONTHLY_DATA.monthly];
-  if (periode !== 'all') rows = rows.filter(x => (x.periode || '').startsWith(periode));
-  if (inv   !== 'all')   rows = rows.filter(x => x.status_invoice === inv);
-  if (bayar !== 'all')   rows = rows.filter(x => x.status_bayar === bayar);
-  if (ba    !== 'all')   rows = rows.filter(x => x.status_ba === ba);
-  if (rekon !== 'all')   rows = rows.filter(x => x.status_rekon === rekon);
-  if (q) rows = rows.filter(x =>
-    ((x.name||'') + (x.no_spk||'') + (x.dok_lp||'')).toLowerCase().includes(q));
+  // Baris sudah difilter di server; render langsung.
+  const rows = MONTHLY_DATA.monthly || [];
 
   document.getElementById('monthlyCount').textContent = rows.length + ' baris';
 

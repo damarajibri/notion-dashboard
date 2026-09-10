@@ -678,12 +678,20 @@ def api_data():
 @app.route('/api/monthly')
 def api_monthly():
     """
-    Endpoint TERPISAH untuk data Monthly Performance — di-load MANUAL (on-demand)
-    agar tidak membebani load utama dashboard. Dipanggil hanya saat user menekan
-    tombol "Load Monthly Performance" di tab-nya.
+    Endpoint Monthly Performance dengan FILTER SERVER-SIDE.
+
+    Mode:
+      - ?options=1
+            Kembalikan HANYA daftar opsi filter (periodes/invoices/dst.) tanpa
+            baris. Dipakai frontend untuk mengisi dropdown sebelum load, agar
+            user bisa memilih filter dulu.
+      - dengan parameter filter (search/periode/invoice/bayar/ba/rekon)
+            Kembalikan hanya baris yang cocok + agregat. Ini membuat load cepat
+            karena tidak mengirim seluruh 10rb baris ke browser.
+
+    Semantik filter dibuat identik dengan applyMonthlyFilters() di frontend.
     """
     if not TOKEN:
-        # No token: cannot sync, but we can still serve whatever is cached.
         app.logger.warning('NOTION_TOKEN not set; serving cached Monthly Performance.')
     else:
         _ensure_fresh()  # Option C: refresh cache from Notion only if stale
@@ -694,19 +702,62 @@ def api_monthly():
         arr = r['properties'].get('No SPK', {}).get('title', [])
         spk_no_map[r['id']] = arr[0]['plain_text'] if arr else ''
 
-    rows = [extract_monthly(r, spk_no_map) for r in cached_query(MONTHLY_DB)]
+    all_rows = [extract_monthly(r, spk_no_map) for r in cached_query(MONTHLY_DB)]
 
-    # Ringkasan agregat
+    # ── Options-only mode: kirim daftar opsi filter, tanpa baris ──
+    if request.args.get('options') in ('1', 'true', 'yes'):
+        def uniq_sorted(key):
+            return sorted({(x.get(key) or '') for x in all_rows if x.get(key)})
+        periodes = sorted({x['periode'][:7] for x in all_rows if x['periode']}, reverse=True)
+        return jsonify({
+            'ok': True,
+            'options': True,
+            'total_available': len(all_rows),
+            'periodes':  periodes,
+            'invoices':  uniq_sorted('status_invoice'),
+            'bayars':    uniq_sorted('status_bayar'),
+            'bas':       uniq_sorted('status_ba'),
+            'rekons':    uniq_sorted('status_rekon'),
+        })
+
+    # ── Baca parameter filter ──
+    q       = (request.args.get('search') or '').strip().lower()
+    periode = request.args.get('periode') or 'all'
+    inv     = request.args.get('invoice') or 'all'
+    bayar   = request.args.get('bayar')   or 'all'
+    ba      = request.args.get('ba')      or 'all'
+    rekon   = request.args.get('rekon')   or 'all'
+
+    # ── Terapkan filter di server (semantik = frontend applyMonthlyFilters) ──
+    rows = all_rows
+    if periode != 'all':
+        rows = [x for x in rows if (x.get('periode') or '').startswith(periode)]
+    if inv != 'all':
+        rows = [x for x in rows if x.get('status_invoice') == inv]
+    if bayar != 'all':
+        rows = [x for x in rows if x.get('status_bayar') == bayar]
+    if ba != 'all':
+        rows = [x for x in rows if x.get('status_ba') == ba]
+    if rekon != 'all':
+        rows = [x for x in rows if x.get('status_rekon') == rekon]
+    if q:
+        rows = [
+            x for x in rows
+            if q in ((x.get('name') or '') + (x.get('no_spk') or '') + (x.get('dok_lp') or '')).lower()
+        ]
+
+    # Ringkasan agregat (atas hasil terfilter)
     total_tagihan  = sum(x['nilai_tagihan'] or 0 for x in rows)
     total_prognosa = sum(x['prognosa'] or 0 for x in rows)
 
-    # Opsi filter unik
-    periodes = sorted({x['periode'][:7] for x in rows if x['periode']}, reverse=True)
+    # Opsi filter unik (dari SELURUH data, agar dropdown tetap lengkap)
+    periodes = sorted({x['periode'][:7] for x in all_rows if x['periode']}, reverse=True)
 
     return jsonify({
         'ok': True,
         'monthly': rows,
         'count': len(rows),
+        'total_available': len(all_rows),
         'total_tagihan': total_tagihan,
         'total_prognosa': total_prognosa,
         'periodes': periodes,
