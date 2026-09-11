@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Master User — EXO Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d0d1a; --bg2: #111122; --surface: #161628; --surface2: #1c1c35;
+  --border: #2a2a4a; --border-hover: #3d3d6b;
+  --text: #e8e8f0; --text2: #8888aa;
+  --accent: #7c6af7; --accent2: #5b4fd4; --purple: #a78bfa;
+  --green: #22d4a0; --green-bg: rgba(34,212,160,.12);
+  --red: #f05673; --red-bg: rgba(240,86,115,.12);
+  --yellow: #f0b429; --yellow-bg: rgba(240,180,41,.12);
+  --blue: #38bdf8; --blue-bg: rgba(56,189,248,.12);
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+  --shadow-md: 0 4px 20px rgba(0,0,0,.4); --shadow-lg: 0 8px 40px rgba(0,0,0,.5);
+}
+body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
+.header { background: linear-gradient(135deg, var(--surface), var(--surface2)); border-bottom: 1px solid var(--border); box-shadow: var(--shadow-md); position: sticky; top: 0; z-index: 50; }
+.header-inner { max-width: 1100px; margin: 0 auto; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand-logo { width: 42px; height: 42px; border-radius: var(--radius-md); background: linear-gradient(135deg, var(--accent), var(--purple)); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.brand-title { font-size: 16px; font-weight: 700; }
+.brand-title span { color: var(--accent); }
+.brand-sub { font-size: 12px; color: var(--text2); }
+.header-actions { display: flex; gap: 10px; align-items: center; }
+.whoami { font-size: 12px; color: var(--text2); }
+.whoami b { color: var(--text); }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 15px; font-size: 13px; font-weight: 600; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; text-decoration: none; transition: all .2s; font-family: inherit; }
+.btn:hover { border-color: var(--border-hover); }
+.btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; color: #fff; }
+.btn-primary:hover { opacity: .9; }
+.btn-ghost { background: transparent; color: var(--text2); }
+.btn-danger { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.main { max-width: 1100px; margin: 0 auto; padding: 28px; }
+.page-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.page-title { font-size: 22px; font-weight: 800; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+th { background: var(--surface2); color: var(--text2); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+.badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.badge-root { background: var(--red-bg); color: var(--red); }
+.badge-admin { background: var(--blue-bg); color: var(--blue); }
+.badge-user { background: var(--surface2); color: var(--text2); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.dot-on { background: var(--green); } .dot-off { background: var(--text2); }
+.row-actions { display: flex; gap: 6px; }
+/* Modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay.open { display: flex; }
+.modal { width: 100%; max-width: 420px; background: linear-gradient(135deg, var(--surface), var(--surface2)); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); padding: 26px; }
+.modal h2 { font-size: 18px; margin-bottom: 18px; }
+.field { margin-bottom: 14px; }
+label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
+input, select { width: 100%; padding: 10px 12px; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); font-family: inherit; }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+.hint { font-size: 11px; color: var(--text2); margin-top: 4px; }
+.check-row { display: flex; align-items: center; gap: 8px; }
+.check-row input { width: auto; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 18px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600; box-shadow: var(--shadow-lg); z-index: 200; opacity: 0; transform: translateY(10px); transition: all .25s; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast-ok { background: var(--green-bg); border: 1px solid var(--green); color: var(--green); }
+.toast-err { background: var(--red-bg); border: 1px solid var(--red); color: var(--red); }
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-logo">🌕</div>
+      <div>
+        <div class="brand-title">EXO <span>Dashboard</span></div>
+        <div class="brand-sub">Master User</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="whoami">👤 <b>{{ user.username if user else '-' }}</b> · {{ user.role if user else '' }}</span>
+      <a class="btn btn-ghost" href="{{ url_for('index') }}">← Dashboard</a>
+      <a class="btn btn-ghost" href="{{ url_for('logout') }}">Logout</a>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <div class="page-head">
+    <div class="page-title">👥 Master User</div>
+    <button class="btn btn-primary" onclick="openAdd()">➕ Tambah User</button>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Username</th><th>Nama Lengkap</th>
+          <th>Role</th><th>Status</th><th>Dibuat</th><th style="text-align:right">Aksi</th>
+        </tr>
+      </thead>
+      <tbody id="userTbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Add/Edit -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2 id="modalTitle">Tambah User</h2>
+    <input type="hidden" id="userId">
+    <div class="field">
+      <label for="f_username">Username</label>
+      <input type="text" id="f_username" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="f_fullname">Nama Lengkap</label>
+      <input type="text" id="f_fullname" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="f_password">Password</label>
+      <input type="password" id="f_password" autocomplete="new-password">
+      <div class="hint" id="pwHint">Wajib diisi untuk user baru.</div>
+    </div>
+    <div class="field">
+      <label for="f_role">Role</label>
+      <select id="f_role">
+        <option value="user">user</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+    <div class="field check-row">
+      <input type="checkbox" id="f_active" checked>
+      <label for="f_active" style="margin:0">Aktif</label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Batal</button>
+      <button class="btn btn-primary" id="saveBtn" onclick="saveUser()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const ROOT_USERNAME = "exo";
+const CURRENT_ROLE = "{{ user.role if user else '' }}";
+
+function toast(msg, ok=true) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (ok ? 'toast-ok' : 'toast-err');
+  setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+function badge(role) {
+  const cls = role === 'root' ? 'badge-root' : (role === 'admin' ? 'badge-admin' : 'badge-user');
+  return `<span class="badge ${cls}">${role}</span>`;
+}
+
+function esc(s) {
+  return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadUsers() {
+  const res = await fetch('/api/users');
+  const data = await res.json();
+  const tb = document.getElementById('userTbody');
+  tb.innerHTML = '';
+  if (!data.ok) { toast(data.error || 'Gagal memuat user', false); return; }
+  for (const u of data.users) {
+    const isRoot = u.username === ROOT_USERNAME;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${u.id}</td>
+      <td><b>${esc(u.username)}</b></td>
+      <td>${esc(u.full_name) || '<span style="color:var(--text2)">—</span>'}</td>
+      <td>${badge(u.role)}</td>
+      <td><span class="dot ${u.is_active ? 'dot-on' : 'dot-off'}"></span>${u.is_active ? 'Aktif' : 'Nonaktif'}</td>
+      <td style="color:var(--text2)">${(u.created_at||'').slice(0,10)}</td>
+      <td>
+        <div class="row-actions" style="justify-content:flex-end">
+          <button class="btn btn-sm" onclick='openEdit(${JSON.stringify(u)})'>✏️ Edit</button>
+          ${isRoot ? '' : `<button class="btn btn-sm btn-danger" onclick="delUser(${u.id}, '${esc(u.username)}')">🗑️</button>`}
+        </div>
+      </td>`;
+    tb.appendChild(tr);
+  }
+}
+
+function openAdd() {
+  document.getElementById('modalTitle').textContent = 'Tambah User';
+  document.getElementById('userId').value = '';
+  document.getElementById('f_username').value = '';
+  document.getElementById('f_username').disabled = false;
+  document.getElementById('f_fullname').value = '';
+  document.getElementById('f_password').value = '';
+  document.getElementById('pwHint').textContent = 'Wajib diisi untuk user baru.';
+  document.getElementById('f_role').value = 'user';
+  document.getElementById('f_active').checked = true;
+  document.getElementById('modal').classList.add('open');
+}
+
+function openEdit(u) {
+  document.getElementById('modalTitle').textContent = 'Edit User';
+  document.getElementById('userId').value = u.id;
+  document.getElementById('f_username').value = u.username;
+  document.getElementById('f_username').disabled = true; // username tidak diubah
+  document.getElementById('f_fullname').value = u.full_name || '';
+  document.getElementById('f_password').value = '';
+  document.getElementById('pwHint').textContent = 'Kosongkan jika tidak ingin mengubah password.';
+  const roleSel = document.getElementById('f_role');
+  const isRoot = u.username === ROOT_USERNAME;
+  // Root role tidak bisa diubah; tampilkan opsi root & disable select.
+  roleSel.innerHTML = isRoot
+    ? '<option value="root">root</option>'
+    : '<option value="user">user</option><option value="admin">admin</option>';
+  roleSel.value = u.role;
+  roleSel.disabled = isRoot;
+  const active = document.getElementById('f_active');
+  active.checked = !!u.is_active;
+  active.disabled = isRoot; // root tidak bisa dinonaktifkan
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+async function saveUser() {
+  const id = document.getElementById('userId').value;
+  const body = {
+    full_name: document.getElementById('f_fullname').value,
+    role: document.getElementById('f_role').value,
+    is_active: document.getElementById('f_active').checked,
+  };
+  const pw = document.getElementById('f_password').value;
+  if (pw) body.password = pw;
+
+  let url, method;
+  if (id) {
+    url = '/api/users/' + id; method = 'PUT';
+  } else {
+    url = '/api/users'; method = 'POST';
+    body.username = document.getElementById('f_username').value.trim();
+    if (!body.username) { toast('Username wajib diisi', false); return; }
+    if (!pw) { toast('Password wajib diisi untuk user baru', false); return; }
+  }
+
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      toast('Tersimpan ✓');
+      closeModal();
+      loadUsers();
+    } else {
+      toast(data.error || 'Gagal menyimpan', false);
+    }
+  } catch (e) {
+    toast('Kesalahan jaringan', false);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function delUser(id, username) {
+  if (!confirm(`Hapus user "${username}"? Tindakan ini tidak dapat dibatalkan.`)) return;
+  const res = await fetch('/api/users/' + id, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.ok) { toast('User dihapus ✓'); loadUsers(); }
+  else { toast(data.error || 'Gagal menghapus', false); }
+}
+
+// Close modal on overlay click
+document.getElementById('modal').addEventListener('click', (e) => {
+  if (e.target.id === 'modal') closeModal();
+});
+
+loadUsers();
+</script>
+</body>
+</html>

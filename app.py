@@ -1,12 +1,28 @@
-import json, os, io, csv, urllib.request, urllib.error
+import json, os, io, csv, urllib.request, urllib.error, random, secrets
+from functools import wraps
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import (
+    Flask, jsonify, render_template, request, send_from_directory,
+    session, redirect, url_for, abort,
+)
 
 import db
 import sync
 
 app = Flask(__name__)
+
+# ── Session / auth secret ─────────────────────────────────────────────────────
+# SECRET_KEY signs the session cookie. In production set FLASK_SECRET_KEY in the
+# environment (e.g. the PythonAnywhere WSGI file). We fall back to a random
+# per-process key so the app still runs locally, but note that a random key
+# means sessions are invalidated on restart.
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+)
 
 # ── On-demand incremental sync (Option C) ────────────────────────────────────
 # Read endpoints (/api/data, /api/monthly) serve from a local SQLite cache.
@@ -482,13 +498,200 @@ def extract_monthly(r, spk_no_map):
         'tgl_rekon':       _date_start(props, 'Tanggal Rekon'),
     }
 
+# ─── AUTH: captcha, session helpers, decorators ──────────────────────────────
+
+# A simple, dependency-free text CAPTCHA. We generate a short random code, store
+# it (case-insensitively) in the server-side session, and render it on the login
+# page with light visual distortion via CSS. The user must type it back. This
+# defends against trivial automated login attempts without any external service.
+_CAPTCHA_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # omit ambiguous 0/O/1/I
+
+
+def generate_captcha(length=5):
+    """Create a new captcha code, store it in the session, and return it."""
+    code = ''.join(random.choice(_CAPTCHA_CHARS) for _ in range(length))
+    session['captcha'] = code
+    return code
+
+
+def check_captcha(answer):
+    """Compare the user's answer with the stored captcha (case-insensitive).
+
+    The captcha is single-use: it is cleared from the session on any check.
+    """
+    expected = session.pop('captcha', None)
+    if not expected or not answer:
+        return False
+    return answer.strip().upper() == expected.upper()
+
+
+def current_user():
+    """Return the logged-in user dict from session, or None."""
+    uid = session.get('uid')
+    if uid is None:
+        return None
+    return db.get_user(uid)
+
+
+def login_required(view):
+    """Redirect to /login for pages, or return 401 JSON for /api/* endpoints."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if session.get('uid') is None:
+            if request.path.startswith('/api/'):
+                return jsonify({'ok': False, 'error': 'Unauthorized. Silakan login.'}), 401
+            return redirect(url_for('login', next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def roles_required(*roles):
+    """Restrict a view to the given roles (in addition to requiring login)."""
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            if session.get('uid') is None:
+                if request.path.startswith('/api/'):
+                    return jsonify({'ok': False, 'error': 'Unauthorized.'}), 401
+                return redirect(url_for('login', next=request.path))
+            if session.get('role') not in roles:
+                if request.path.startswith('/api/'):
+                    return jsonify({'ok': False, 'error': 'Akses ditolak (role tidak cukup).'}), 403
+                return abort(403)
+            return view(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
+@app.context_processor
+def inject_user():
+    """Make `user` available in all templates."""
+    return {'user': current_user()}
+
+
+# ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    # Already logged in -> go to dashboard.
+    if session.get('uid') is not None and request.method == 'GET':
+        return redirect(url_for('index'))
+
+    error = None
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+        captcha_answer = request.form.get('captcha') or ''
+
+        if not check_captcha(captcha_answer):
+            error = 'Captcha salah. Coba lagi.'
+        else:
+            user = db.authenticate(username, password)
+            if user:
+                session.clear()
+                session.permanent = True
+                session['uid'] = user['id']
+                session['username'] = user['username']
+                session['role'] = user['role']
+                nxt = request.args.get('next') or url_for('index')
+                # Only allow local redirects.
+                if not nxt.startswith('/'):
+                    nxt = url_for('index')
+                return redirect(nxt)
+            error = 'Username atau password salah, atau akun nonaktif.'
+
+    # (Re)generate a fresh captcha for every rendered login form.
+    captcha = generate_captcha()
+    return render_template('login.html', error=error, captcha=captcha)
+
+
+@app.route('/captcha/refresh')
+def captcha_refresh():
+    """Return a fresh captcha code as JSON (for the 'reload captcha' button)."""
+    return jsonify({'captcha': generate_captcha()})
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+# ─── MASTER USER (CRUD) ───────────────────────────────────────────────────────
+# Only root & admin may manage users.
+
+@app.route('/users')
+@roles_required('root', 'admin')
+def users_page():
+    return render_template('users.html', users=db.list_users())
+
+
+@app.route('/api/users', methods=['GET'])
+@roles_required('root', 'admin')
+def api_users_list():
+    return jsonify({'ok': True, 'users': db.list_users()})
+
+
+@app.route('/api/users', methods=['POST'])
+@roles_required('root', 'admin')
+def api_users_create():
+    payload = request.get_json(silent=True) or request.form
+    try:
+        u = db.create_user(
+            username=payload.get('username'),
+            password=payload.get('password'),
+            full_name=payload.get('full_name', ''),
+            role=payload.get('role', 'user'),
+            is_active=str(payload.get('is_active', 'true')).lower() in ('1', 'true', 'yes', 'on'),
+        )
+        return jsonify({'ok': True, 'user': u}), 201
+    except db.UserError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@app.route('/api/users/<int:user_id>', methods=['PUT', 'POST'])
+@roles_required('root', 'admin')
+def api_users_update(user_id):
+    payload = request.get_json(silent=True) or request.form
+    # Build kwargs only for provided fields so unset fields are untouched.
+    kwargs = {}
+    if 'full_name' in payload:
+        kwargs['full_name'] = payload.get('full_name')
+    if 'role' in payload and payload.get('role'):
+        kwargs['role'] = payload.get('role')
+    if payload.get('password'):
+        kwargs['password'] = payload.get('password')
+    if 'is_active' in payload:
+        kwargs['is_active'] = str(payload.get('is_active')).lower() in ('1', 'true', 'yes', 'on')
+    try:
+        u = db.update_user(user_id, **kwargs)
+        return jsonify({'ok': True, 'user': u})
+    except db.UserError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+@app.route('/api/users/<int:user_id>', methods=['DELETE'])
+@roles_required('root', 'admin')
+def api_users_delete(user_id):
+    # Prevent deleting yourself to avoid lockout confusion.
+    if session.get('uid') == user_id:
+        return jsonify({'ok': False, 'error': 'Tidak dapat menghapus akun yang sedang login.'}), 400
+    try:
+        db.delete_user(user_id)
+        return jsonify({'ok': True})
+    except db.UserError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
 
 @app.route('/download/template-csv')
+@login_required
 def download_template_csv():
     """Kirim file contoh/template CSV untuk import Monthly Performance."""
     return send_from_directory(
@@ -500,6 +703,7 @@ def download_template_csv():
     )
 
 @app.route('/api/data')
+@login_required
 def api_data():
     from datetime import datetime, timedelta
 
@@ -676,6 +880,7 @@ def api_data():
 
 
 @app.route('/api/monthly')
+@login_required
 def api_monthly():
     """
     Endpoint Monthly Performance dengan FILTER SERVER-SIDE.
@@ -1026,6 +1231,7 @@ def build_page_properties(row, relation_prop):
 
 
 @app.route('/api/verify-db', methods=['POST'])
+@login_required
 def api_verify_db():
     payload = request.get_json(silent=True) or {}
     db_id = (payload.get('database_id') or '').strip()
@@ -1034,6 +1240,7 @@ def api_verify_db():
 
 
 @app.route('/api/import-csv', methods=['POST'])
+@login_required
 def api_import_csv():
     """
     Import CSV ke database yang ID-nya diberikan user.

@@ -917,6 +917,14 @@ tbody tr:last-child td { border-bottom: none; }
       <button class="btn btn-ghost" onclick="openImportModal()" title="Import data CSV ke Monthly Performance">
         <span>📥</span> Import CSV
       </button>
+      {% if user and user.role in ['root', 'admin'] %}
+      <a class="btn btn-ghost" href="{{ url_for('users_page') }}" title="Kelola user">
+        <span>👥</span> Master User
+      </a>
+      {% endif %}
+      <a class="btn btn-ghost" href="{{ url_for('logout') }}" title="Keluar">
+        <span>🚪</span> Logout
+      </a>
       <button class="theme-btn" onclick="toggleTheme()" id="themeBtn" title="Toggle theme">🌙</button>
     </div>
   </div>
