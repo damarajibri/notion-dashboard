@@ -478,11 +478,40 @@ def extract_monthly(r, spk_no_map):
     doklp_raw = props.get('No. Dokumen BA LP', {}).get('rich_text', [])
     dok_lp    = doklp_raw[0]['plain_text'] if doklp_raw else ''
 
+    # No. Invoice (rich_text)
+    inv_raw    = props.get('No. Invoice', {}).get('rich_text', [])
+    no_invoice = inv_raw[0]['plain_text'] if inv_raw else ''
+
+    # Keterangan (rich_text)
+    ket_raw    = props.get('Keterangan', {}).get('rich_text', [])
+    keterangan = ket_raw[0]['plain_text'] if ket_raw else ''
+
+    # ID (unique_id) → gabungan prefix-number
+    uid    = props.get('ID', {}).get('unique_id') or {}
+    doc_id = f"{uid.get('prefix', '')}-{uid.get('number', '')}" if uid.get('number') is not None else ''
+
+    # Files (BAST & BALP) → daftar {name, url}
+    def _files(key):
+        out = []
+        for f in props.get(key, {}).get('files', []) or []:
+            url = ''
+            if f.get('type') == 'file':
+                url = f.get('file', {}).get('url', '')
+            elif f.get('type') == 'external':
+                url = f.get('external', {}).get('url', '')
+            out.append({'name': f.get('name', 'file'), 'url': url})
+        return out
+
+    files_bast = _files('Files BAST')
+    files_balp = _files('Files BALP')
+
     # Relation SPK → tampilkan No SPK-nya
     spk_rel = props.get('📋 SPK', {}).get('relation', [])
     spk_no  = ', '.join(spk_no_map.get(rel['id'], '?') for rel in spk_rel) if spk_rel else ''
 
     return {
+        'id':              doc_id,
+        'page_id':         r['id'],
         'name':            name,
         'periode':         _date_start(props, 'Periode'),
         'no_spk':          spk_no,
@@ -492,10 +521,14 @@ def extract_monthly(r, spk_no_map):
         'status_bayar':    _sel_name(props, 'Status Pembayaran'),
         'status_ba':       _sel_name(props, 'Status BA Performansi'),
         'status_rekon':    _sel_name(props, 'Status Rekon'),
+        'no_invoice':      no_invoice,
         'dok_lp':          dok_lp,
+        'keterangan':      keterangan,
         'tgl_serah_ba':    _date_start(props, 'Tanggal Serah BA Performansi'),
         'tgl_masuk_ba':    _date_start(props, 'Tanggal masuk BA Performansi'),
         'tgl_rekon':       _date_start(props, 'Tanggal Rekon'),
+        'files_bast':      files_bast,
+        'files_balp':      files_balp,
     }
 
 # ─── AUTH: captcha, session helpers, decorators ──────────────────────────────
@@ -948,7 +981,7 @@ def api_monthly():
     if q:
         rows = [
             x for x in rows
-            if q in ((x.get('name') or '') + (x.get('no_spk') or '') + (x.get('dok_lp') or '')).lower()
+            if q in ((x.get('name') or '') + (x.get('no_spk') or '') + (x.get('dok_lp') or '') + (x.get('no_invoice') or '') + (x.get('keterangan') or '')).lower()
         ]
 
     # Ringkasan agregat (atas hasil terfilter)
@@ -967,6 +1000,113 @@ def api_monthly():
         'total_prognosa': total_prognosa,
         'periodes': periodes,
     })
+
+
+# ─── UPDATE satu baris Monthly Performance ────────────────────────────────────
+# Dipanggil dari dialog edit di frontend saat user mengklik Name pada tabel.
+# Menerima JSON {page_id, ...field}. Hanya field yang dikirim yang diubah.
+# Field yang dapat diedit di sini (Files & relation SPK dikelola langsung di
+# Notion, tidak lewat dialog ini).
+
+# Peta field frontend → (nama properti Notion, tipe).
+_MONTHLY_EDITABLE = {
+    'name':           ('Name', 'title'),
+    'nilai_tagihan':  ('Nilai Tagihan', 'number'),
+    'prognosa':       ('Prognosa', 'number'),
+    'status_invoice': ('Status Invoice', 'select'),
+    'status_bayar':   ('Status Pembayaran', 'select'),
+    'status_ba':      ('Status BA Performansi', 'select'),
+    'status_rekon':   ('Status Rekon', 'select'),
+    'no_invoice':     ('No. Invoice', 'rich_text'),
+    'dok_lp':         ('No. Dokumen BA LP', 'rich_text'),
+    'keterangan':     ('Keterangan', 'rich_text'),
+    'periode':        ('Periode', 'date_month'),
+    'tgl_serah_ba':   ('Tanggal Serah BA Performansi', 'date'),
+    'tgl_masuk_ba':   ('Tanggal masuk BA Performansi', 'date'),
+    'tgl_rekon':      ('Tanggal Rekon', 'date'),
+}
+
+
+@app.route('/api/monthly/update', methods=['POST'])
+@login_required
+def api_monthly_update():
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    page_id = (payload.get('page_id') or '').strip()
+    if not page_id:
+        return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
+
+    props = {}
+    errors = []
+    for fkey, (notion_name, ftype) in _MONTHLY_EDITABLE.items():
+        if fkey not in payload:
+            continue  # hanya ubah field yang dikirim
+        raw = payload.get(fkey)
+        val = ('' if raw is None else str(raw)).strip()
+
+        if ftype == 'title':
+            props[notion_name] = {'title': [{'text': {'content': val}}] if val else []}
+        elif ftype == 'rich_text':
+            props[notion_name] = {'rich_text': [{'text': {'content': val}}] if val else []}
+        elif ftype == 'number':
+            if val == '':
+                props[notion_name] = {'number': None}
+            else:
+                digits = val.replace(',', '').replace(' ', '')
+                try:
+                    props[notion_name] = {'number': float(digits)}
+                except ValueError:
+                    errors.append(f"'{notion_name}' bukan angka valid: {raw!r}")
+        elif ftype == 'select':
+            props[notion_name] = {'select': {'name': val} if val else None}
+        elif ftype == 'date':
+            if val == '':
+                props[notion_name] = {'date': None}
+            else:
+                iso, derr = normalize_date(val)
+                if iso:
+                    props[notion_name] = {'date': {'start': iso}}
+                else:
+                    errors.append(f"'{notion_name}': {derr}")
+        elif ftype == 'date_month':
+            # Periode disimpan sebagai rentang satu bulan penuh (konsisten dgn import).
+            if val == '':
+                props[notion_name] = {'date': None}
+            else:
+                iso, derr = normalize_date(val)
+                if iso:
+                    start, end = month_range(iso)
+                    props[notion_name] = {'date': {'start': start, 'end': end}}
+                else:
+                    errors.append(f"'{notion_name}': {derr}")
+
+    if errors:
+        return jsonify({'ok': False, 'error': 'Validasi gagal.', 'errors': errors}), 400
+    if not props:
+        return jsonify({'ok': False, 'error': 'Tidak ada field yang diubah.'}), 400
+
+    # PATCH ke Notion
+    try:
+        notion_patch(f'https://api.notion.com/v1/pages/{page_id}', {'properties': props})
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': f'Notion HTTP {e.code}: {detail}'}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal update: {e}'}), 502
+
+    # Refresh cache agar dashboard mencerminkan perubahan (best-effort).
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-update sync failed: %s', e)
+
+    return jsonify({'ok': True, 'updated': list(props.keys())})
 
 
 # ─── CSV IMPORT → Monthly Performance ──────────────────────────────────────────

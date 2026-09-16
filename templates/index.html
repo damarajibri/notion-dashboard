@@ -447,6 +447,11 @@ th {
 
 th:hover { background: var(--border); color: var(--text); }
 
+/* Indikator target saat menyeret kolom (reorder) pada tabel Monthly Performance */
+th.col-drop-target { border-left: 3px solid var(--blue, #3b82f6); background: var(--border); }
+th[draggable="true"] { cursor: grab; }
+th[draggable="true"]:active { cursor: grabbing; }
+
 td {
   padding: 11px 14px;
   border-bottom: 1px solid var(--border);
@@ -1351,6 +1356,115 @@ tbody tr:last-child td { border-bottom: none; }
   </div>
 </div>
 
+<!-- Modal: Edit Monthly Performance -->
+<div class="modal-overlay" id="monthlyEditModal" onclick="if(event.target===this)closeMonthlyEdit()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">✏️ Edit Monthly Performance</div>
+        <div class="modal-subtitle" id="monthlyEditSubtitle">Ubah data baris, lalu simpan ke Notion</div>
+      </div>
+      <button class="modal-close" onclick="closeMonthlyEdit()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="me_page_id">
+
+      <div class="modal-section">
+        <div class="modal-section-title">Informasi Umum</div>
+        <label class="filter-label" for="me_name" style="display:block;margin:8px 0 6px">Name</label>
+        <input type="text" id="me_name" class="form-input" style="width:100%;padding:8px">
+
+        <label class="filter-label" for="me_periode" style="display:block;margin:12px 0 6px">Periode (bulan)</label>
+        <input type="month" id="me_periode" class="form-input" style="width:100%;padding:8px">
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+          <div style="flex:1;min-width:180px">
+            <label class="filter-label" for="me_nilai_tagihan" style="display:block;margin-bottom:6px">Nilai Tagihan</label>
+            <input type="number" step="any" id="me_nilai_tagihan" class="form-input" style="width:100%;padding:8px">
+          </div>
+          <div style="flex:1;min-width:180px">
+            <label class="filter-label" for="me_prognosa" style="display:block;margin-bottom:6px">Prognosa</label>
+            <input type="number" step="any" id="me_prognosa" class="form-input" style="width:100%;padding:8px">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">Status</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:180px">
+            <label class="filter-label" for="me_status_invoice" style="display:block;margin-bottom:6px">Status Invoice</label>
+            <select id="me_status_invoice" class="form-input" style="width:100%;padding:8px">
+              <option value="">—</option>
+              <option>Not started</option><option>In progress</option><option>Done</option><option>Revise</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:180px">
+            <label class="filter-label" for="me_status_bayar" style="display:block;margin-bottom:6px">Status Pembayaran</label>
+            <select id="me_status_bayar" class="form-input" style="width:100%;padding:8px">
+              <option value="">—</option>
+              <option>Not Started</option><option>On Progress</option><option>Done</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+          <div style="flex:1;min-width:180px">
+            <label class="filter-label" for="me_status_ba" style="display:block;margin-bottom:6px">Status BA Performansi</label>
+            <select id="me_status_ba" class="form-input" style="width:100%;padding:8px">
+              <option value="">—</option>
+              <option>Not Started</option><option>On Progress BRI</option><option>Revise</option><option>Done</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:180px">
+            <label class="filter-label" for="me_status_rekon" style="display:block;margin-bottom:6px">Status Rekon</label>
+            <select id="me_status_rekon" class="form-input" style="width:100%;padding:8px">
+              <option value="">—</option>
+              <option>Not Started</option><option>Done</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-section">
+        <div class="modal-section-title">Dokumen & Tanggal</div>
+        <label class="filter-label" for="me_no_invoice" style="display:block;margin:8px 0 6px">No. Invoice</label>
+        <input type="text" id="me_no_invoice" class="form-input" style="width:100%;padding:8px">
+
+        <label class="filter-label" for="me_dok_lp" style="display:block;margin:12px 0 6px">No. Dokumen BA LP</label>
+        <input type="text" id="me_dok_lp" class="form-input" style="width:100%;padding:8px">
+
+        <label class="filter-label" for="me_keterangan" style="display:block;margin:12px 0 6px">Keterangan</label>
+        <textarea id="me_keterangan" class="form-input" rows="2" style="width:100%;padding:8px;resize:vertical"></textarea>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+          <div style="flex:1;min-width:150px">
+            <label class="filter-label" for="me_tgl_serah_ba" style="display:block;margin-bottom:6px">Serah BA</label>
+            <input type="date" id="me_tgl_serah_ba" class="form-input" style="width:100%;padding:8px">
+          </div>
+          <div style="flex:1;min-width:150px">
+            <label class="filter-label" for="me_tgl_masuk_ba" style="display:block;margin-bottom:6px">Masuk BA</label>
+            <input type="date" id="me_tgl_masuk_ba" class="form-input" style="width:100%;padding:8px">
+          </div>
+          <div style="flex:1;min-width:150px">
+            <label class="filter-label" for="me_tgl_rekon" style="display:block;margin-bottom:6px">Rekon</label>
+            <input type="date" id="me_tgl_rekon" class="form-input" style="width:100%;padding:8px">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-section" id="me_result" style="display:none"></div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closeMonthlyEdit()">Batal</button>
+        <button class="btn btn-primary" id="me_saveBtn" onclick="saveMonthlyEdit()">
+          <span id="me_saveIcon">💾</span> Simpan ke Notion
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- Footer -->
 <footer class="footer">
   EXO Dashboard · Notion API · Auto-refresh every 5 minutes
@@ -1531,6 +1645,8 @@ function renderKPI(d) {
 function makeSortable(table) {
   table.querySelectorAll('th').forEach((th, idx) => {
     th.addEventListener('click', () => {
+      // Abaikan klik yang berasal dari akhir aksi drag (reorder kolom).
+      if (th.dataset.justDragged === '1') { delete th.dataset.justDragged; return; }
       const tbody = table.querySelector('tbody');
       const rows = Array.from(tbody.querySelectorAll('tr'));
       const asc = th.dataset.sort !== 'asc';
@@ -2279,6 +2395,7 @@ function renderMonthly() {
   if (!MONTHLY_DATA) return;
   // Baris sudah difilter di server; render langsung.
   const rows = MONTHLY_DATA.monthly || [];
+  window._monthlyRows = rows;  // untuk diakses modal edit
 
   document.getElementById('monthlyCount').textContent = rows.length + ' baris';
 
@@ -2300,34 +2417,222 @@ function renderMonthly() {
   </div>`).join('');
 
   const table = document.getElementById('monthlyTable');
-  table.querySelector('thead tr').innerHTML = [
-    '#', 'Name', 'Periode', 'No SPK', 'Nilai Tagihan', 'Prognosa',
-    'Status Invoice', 'Status Pembayaran', 'Status BA Performansi', 'Status Rekon',
-    'No. Dokumen BA LP', 'Serah BA', 'Masuk BA', 'Rekon'
-  ].map(h => `<th>${h}</th>`).join('');
 
-  table.querySelector('tbody').innerHTML = rows.map((x, i) => {
-    const tagihan  = x.nilai_tagihan ? `<span style="font-weight:600;color:var(--green)">${fmtRp(x.nilai_tagihan)}</span>` : '-';
-    const prognosa = x.prognosa      ? `<span style="color:var(--yellow)">${fmtRp(x.prognosa)}</span>` : '-';
-    const dt = v => v ? `<span style="color:var(--text2);font-size:12px">${v}</span>` : '-';
-    return `<tr>
-      <td class="col-num">${i + 1}</td>
-      <td style="font-weight:600">${x.name || '-'}</td>
-      <td>${dt(x.periode ? x.periode.slice(0,7) : '')}</td>
-      <td style="white-space:nowrap;font-size:12px">${x.no_spk || '-'}</td>
-      <td>${tagihan}</td>
-      <td>${prognosa}</td>
-      <td>${x.status_invoice ? statusBadge(x.status_invoice) : '-'}</td>
-      <td>${x.status_bayar ? statusBadge(x.status_bayar) : '-'}</td>
-      <td>${x.status_ba ? statusBadge(x.status_ba) : '-'}</td>
-      <td>${x.status_rekon ? statusBadge(x.status_rekon) : '-'}</td>
-      <td style="font-size:12px">${x.dok_lp || '-'}</td>
-      <td>${dt(x.tgl_serah_ba)}</td>
-      <td>${dt(x.tgl_masuk_ba)}</td>
-      <td>${dt(x.tgl_rekon)}</td>
-    </tr>`;
-  }).join('') || emptyState(14);
+  // Definisi kolom (key stabil + label + cara render sel).
+  const dt = v => v ? `<span style="color:var(--text2);font-size:12px">${v}</span>` : '-';
+  const fileLinks = arr => (arr && arr.length)
+    ? arr.map(f => f.url
+        ? `<a href="${f.url}" target="_blank" rel="noopener" style="color:var(--blue,#3b82f6);font-size:12px;text-decoration:underline" title="${(f.name||'file').replace(/"/g,'&quot;')}">📎 ${f.name || 'file'}</a>`
+        : `<span style="font-size:12px">📎 ${f.name || 'file'}</span>`).join('<br>')
+    : '-';
+  const MONTHLY_COLUMNS = [
+    { key: 'num',          label: '#',                     cell: (x, i) => `<td class="col-num">${i + 1}</td>` },
+    { key: 'id',           label: 'ID',                    cell: x => `<td style="font-size:12px;color:var(--text2)">${x.id || '-'}</td>` },
+    { key: 'name',         label: 'Name',                  cell: (x, i) => `<td><a href="javascript:void(0)" onclick="openMonthlyEdit(${i})" style="font-weight:600;color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${x.name || '-'}</a></td>` },
+    { key: 'periode',      label: 'Periode',               cell: x => `<td>${dt(x.periode ? x.periode.slice(0,7) : '')}</td>` },
+    { key: 'no_spk',       label: 'No SPK',                cell: x => `<td style="white-space:nowrap;font-size:12px">${x.no_spk || '-'}</td>` },
+    { key: 'nilai_tagihan',label: 'Nilai Tagihan',         cell: x => `<td>${x.nilai_tagihan ? `<span style="font-weight:600;color:var(--green)">${fmtRp(x.nilai_tagihan)}</span>` : '-'}</td>` },
+    { key: 'prognosa',     label: 'Prognosa',              cell: x => `<td>${x.prognosa ? `<span style="color:var(--yellow)">${fmtRp(x.prognosa)}</span>` : '-'}</td>` },
+    { key: 'status_invoice',label: 'Status Invoice',       cell: x => `<td>${x.status_invoice ? statusBadge(x.status_invoice) : '-'}</td>` },
+    { key: 'status_bayar', label: 'Status Pembayaran',     cell: x => `<td>${x.status_bayar ? statusBadge(x.status_bayar) : '-'}</td>` },
+    { key: 'status_ba',    label: 'Status BA Performansi', cell: x => `<td>${x.status_ba ? statusBadge(x.status_ba) : '-'}</td>` },
+    { key: 'status_rekon', label: 'Status Rekon',          cell: x => `<td>${x.status_rekon ? statusBadge(x.status_rekon) : '-'}</td>` },
+    { key: 'no_invoice',   label: 'No. Invoice',           cell: x => `<td style="font-size:12px">${x.no_invoice || '-'}</td>` },
+    { key: 'dok_lp',       label: 'No. Dokumen BA LP',     cell: x => `<td style="font-size:12px">${x.dok_lp || '-'}</td>` },
+    { key: 'keterangan',   label: 'Keterangan',            cell: x => `<td style="font-size:12px;max-width:240px;white-space:normal">${x.keterangan || '-'}</td>` },
+    { key: 'tgl_serah_ba', label: 'Serah BA',              cell: x => `<td>${dt(x.tgl_serah_ba)}</td>` },
+    { key: 'tgl_masuk_ba', label: 'Masuk BA',              cell: x => `<td>${dt(x.tgl_masuk_ba)}</td>` },
+    { key: 'tgl_rekon',    label: 'Rekon',                 cell: x => `<td>${dt(x.tgl_rekon)}</td>` },
+    { key: 'files_bast',   label: 'File BAST',             cell: x => `<td style="font-size:12px">${fileLinks(x.files_bast)}</td>` },
+    { key: 'files_balp',   label: 'File BALP',             cell: x => `<td style="font-size:12px">${fileLinks(x.files_balp)}</td>` },
+  ];
+
+  // Terapkan urutan kolom tersimpan (drag & drop) bila ada.
+  const ordered = applyMonthlyColumnOrder(MONTHLY_COLUMNS);
+
+  table.querySelector('thead tr').innerHTML = ordered
+    .map(c => `<th draggable="true" data-col-key="${c.key}" title="Seret untuk memindah kolom">${c.label}</th>`)
+    .join('');
+
+  table.querySelector('tbody').innerHTML = rows
+    .map((x, i) => `<tr>${ordered.map(c => c.cell(x, i)).join('')}</tr>`)
+    .join('') || emptyState(ordered.length);
+
   makeSortable(table);
+  makeColumnsReorderable(table, ordered.map(c => c.key));
+}
+
+// ===== REORDER KOLOM MONTHLY (DRAG & DROP) =====
+const MONTHLY_COL_ORDER_KEY = 'monthlyColumnOrder';
+
+// Kembalikan array kolom sesuai urutan tersimpan di localStorage. Kolom baru
+// yang belum ada di urutan tersimpan ditambahkan di akhir; key usang diabaikan.
+function applyMonthlyColumnOrder(columns) {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(MONTHLY_COL_ORDER_KEY)) || []; } catch (e) { saved = []; }
+  if (!Array.isArray(saved) || !saved.length) return columns.slice();
+  const byKey = new Map(columns.map(c => [c.key, c]));
+  const result = [];
+  saved.forEach(k => { if (byKey.has(k)) { result.push(byKey.get(k)); byKey.delete(k); } });
+  byKey.forEach(c => result.push(c)); // sisa kolom yang belum tercantum
+  return result;
+}
+
+function saveMonthlyColumnOrder(order) {
+  try { localStorage.setItem(MONTHLY_COL_ORDER_KEY, JSON.stringify(order)); } catch (e) {}
+}
+
+// Pasang drag & drop pada header untuk menyusun ulang kolom. `keys` adalah
+// urutan key saat ini (paralel dengan urutan <th>). Setelah drop, urutan baru
+// disimpan dan tabel dirender ulang agar sel body ikut berpindah.
+function makeColumnsReorderable(table, keys) {
+  const ths = Array.from(table.querySelectorAll('thead th'));
+  let dragKey = null;
+
+  ths.forEach(th => {
+    th.style.cursor = 'grab';
+
+    th.addEventListener('dragstart', e => {
+      dragKey = th.dataset.colKey;
+      e.dataTransfer.effectAllowed = 'move';
+      // Firefox butuh setData agar drag berjalan.
+      try { e.dataTransfer.setData('text/plain', dragKey); } catch (err) {}
+      th.style.opacity = '0.4';
+    });
+
+    th.addEventListener('dragend', () => {
+      dragKey = null;
+      th.style.opacity = '';
+      // Cegah event 'click' yang tersulut tepat setelah drag agar tidak men-sort.
+      th.dataset.justDragged = '1';
+      setTimeout(() => { delete th.dataset.justDragged; }, 300);
+      ths.forEach(h => h.classList.remove('col-drop-target'));
+    });
+
+    th.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (th.dataset.colKey !== dragKey) th.classList.add('col-drop-target');
+    });
+
+    th.addEventListener('dragleave', () => th.classList.remove('col-drop-target'));
+
+    th.addEventListener('drop', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      th.classList.remove('col-drop-target');
+      const targetKey = th.dataset.colKey;
+      if (!dragKey || dragKey === targetKey) return;
+
+      const order = keys.slice();
+      const from = order.indexOf(dragKey);
+      const to   = order.indexOf(targetKey);
+      if (from === -1 || to === -1) return;
+      order.splice(from, 1);
+      order.splice(to, 0, dragKey);
+
+      saveMonthlyColumnOrder(order);
+      renderMonthly(); // render ulang dengan urutan baru
+    });
+  });
+}
+
+// ===== MONTHLY PERFORMANCE EDIT MODAL =====
+function openMonthlyEdit(idx) {
+  const rows = window._monthlyRows || [];
+  const x = rows[idx];
+  if (!x) return;
+  if (!x.page_id) { showToast('Baris ini belum punya page_id (perlu sync ulang)', '⚠️'); return; }
+
+  const $ = id => document.getElementById(id);
+  $('me_page_id').value       = x.page_id;
+  $('me_name').value          = x.name || '';
+  $('me_periode').value       = x.periode ? x.periode.slice(0, 7) : '';  // input type=month → YYYY-MM
+  $('me_nilai_tagihan').value = (x.nilai_tagihan ?? '') === '' ? '' : x.nilai_tagihan;
+  $('me_prognosa').value      = (x.prognosa ?? '') === '' ? '' : x.prognosa;
+  $('me_status_invoice').value= x.status_invoice || '';
+  $('me_status_bayar').value  = x.status_bayar || '';
+  $('me_status_ba').value     = x.status_ba || '';
+  $('me_status_rekon').value  = x.status_rekon || '';
+  $('me_no_invoice').value    = x.no_invoice || '';
+  $('me_dok_lp').value        = x.dok_lp || '';
+  $('me_keterangan').value    = x.keterangan || '';
+  $('me_tgl_serah_ba').value  = x.tgl_serah_ba || '';
+  $('me_tgl_masuk_ba').value  = x.tgl_masuk_ba || '';
+  $('me_tgl_rekon').value     = x.tgl_rekon || '';
+
+  $('monthlyEditSubtitle').textContent = (x.id ? x.id + ' · ' : '') + (x.name || '');
+  const res = $('me_result'); res.style.display = 'none'; res.innerHTML = '';
+
+  $('monthlyEditModal').classList.add('active');
+}
+
+function closeMonthlyEdit() {
+  document.getElementById('monthlyEditModal').classList.remove('active');
+}
+
+function saveMonthlyEdit() {
+  const $ = id => document.getElementById(id);
+  const btn = $('me_saveBtn');
+  const icon = $('me_saveIcon');
+  const res = $('me_result');
+
+  // input type=month memberi 'YYYY-MM'; kirim sebagai 'YYYY-MM-01' agar
+  // normalisasi tanggal di server valid (Periode akan dijadikan rentang bulan).
+  const periodeMonth = $('me_periode').value;
+  const periodeVal = periodeMonth ? (periodeMonth + '-01') : '';
+
+  const payload = {
+    page_id:        $('me_page_id').value,
+    name:           $('me_name').value,
+    periode:        periodeVal,
+    nilai_tagihan:  $('me_nilai_tagihan').value,
+    prognosa:       $('me_prognosa').value,
+    status_invoice: $('me_status_invoice').value,
+    status_bayar:   $('me_status_bayar').value,
+    status_ba:      $('me_status_ba').value,
+    status_rekon:   $('me_status_rekon').value,
+    no_invoice:     $('me_no_invoice').value,
+    dok_lp:         $('me_dok_lp').value,
+    keterangan:     $('me_keterangan').value,
+    tgl_serah_ba:   $('me_tgl_serah_ba').value,
+    tgl_masuk_ba:   $('me_tgl_masuk_ba').value,
+    tgl_rekon:      $('me_tgl_rekon').value,
+  };
+
+  if (!payload.page_id) { showToast('page_id kosong', '⚠️'); return; }
+
+  btn.disabled = true;
+  icon.textContent = '⏳';
+  res.style.display = 'none';
+
+  fetch('/api/monthly/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        showToast('Perubahan tersimpan ke Notion', '✅');
+        closeMonthlyEdit();
+        loadMonthly();  // muat ulang tabel dari server (data terbaru)
+      } else {
+        const errs = (d.errors && d.errors.length) ? '<br>• ' + d.errors.join('<br>• ') : '';
+        res.style.display = 'block';
+        res.style.color = 'var(--red,#ef4444)';
+        res.innerHTML = `Gagal menyimpan: ${d.error || 'unknown'}${errs}`;
+      }
+    })
+    .catch(e => {
+      res.style.display = 'block';
+      res.style.color = 'var(--red,#ef4444)';
+      res.innerHTML = 'Gagal menghubungi server: ' + e;
+    })
+    .finally(() => {
+      btn.disabled = false;
+      icon.textContent = '💾';
+    });
 }
 
 // ===== PROJECT MODAL =====
@@ -2361,7 +2666,7 @@ function showProjDetail(idx) {
 }
 
 function closeProjModal() { document.getElementById('projModal').classList.remove('active'); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeImportModal(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeImportModal(); closeMonthlyEdit(); } });
 
 // ===== TOAST =====
 function showToast(msg, icon = '✅') {
