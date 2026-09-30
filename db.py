@@ -208,6 +208,30 @@ def oldest_sync_time():
         conn.close()
 
 
+def oldest_full_sync_time():
+    """Return the oldest last_full_sync across all databases (ISO string), or None.
+
+    Used by the web app to decide whether an on-demand FULL sync is due. A full
+    sync reconciles deletions (rows removed directly in Notion), which the
+    incremental sync cannot detect. Returns None (treated as "due") if any
+    database has never had a full sync recorded.
+    """
+    conn = get_conn()
+    try:
+        try:
+            rows = conn.execute("SELECT last_full_sync FROM sync_meta").fetchall()
+        except sqlite3.OperationalError:
+            # sync_meta table not created yet -> treat as due.
+            return None
+        times = [r["last_full_sync"] for r in rows if r["last_full_sync"]]
+        if not times or len(times) < len(TABLES):
+            # If any database has never had a full sync, treat as due.
+            return None
+        return min(times)
+    finally:
+        conn.close()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # USER / AUTH LAYER
 # ─────────────────────────────────────────────────────────────────────────────

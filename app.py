@@ -33,6 +33,16 @@ app.config.update(
 # to whatever is already cached.
 SYNC_TTL_SECONDS = int(os.environ.get('SYNC_TTL_SECONDS', '300'))
 
+# Full sync interval (Option B). Incremental sync cannot detect rows deleted
+# directly in Notion (the last_edited_time filter never returns removed rows),
+# so ghost rows would linger in the cache indefinitely. To reconcile deletions
+# without an external scheduler, a full_sync() (which pulls every row and prunes
+# rows no longer present in Notion) is triggered on-demand when the last full
+# sync is older than FULL_SYNC_TTL_SECONDS. Default: 12 hours. A full sync is
+# heavier than an incremental one, so this interval is intentionally long; the
+# request that happens to trigger it will be slightly slower.
+FULL_SYNC_TTL_SECONDS = int(os.environ.get('FULL_SYNC_TTL_SECONDS', '43200'))
+
 # Ensure the SQLite schema exists at import time. Under WSGI (PythonAnywhere)
 # the __main__ block never runs, so tables must be created here.
 try:
@@ -52,9 +62,31 @@ def _sync_is_due():
     return datetime.now(timezone.utc) - oldest_dt > timedelta(seconds=SYNC_TTL_SECONDS)
 
 
+def _full_sync_is_due():
+    """True if a full sync (deletion reconciliation) is overdue.
+
+    Returns True when no full sync has ever been recorded, when the stored
+    timestamp is unparseable, or when the oldest last_full_sync is older than
+    FULL_SYNC_TTL_SECONDS.
+    """
+    oldest = db.oldest_full_sync_time()
+    if not oldest:
+        return True
+    try:
+        oldest_dt = datetime.strptime(oldest, '%Y-%m-%dT%H:%M:%S.000Z').replace(tzinfo=timezone.utc)
+    except ValueError:
+        return True
+    return datetime.now(timezone.utc) - oldest_dt > timedelta(seconds=FULL_SYNC_TTL_SECONDS)
+
+
 def _ensure_fresh():
     try:
-        if _sync_is_due():
+        # Prefer a full sync when it is due: it both refreshes changed rows AND
+        # reconciles deletions, so there is no need to also run an incremental
+        # sync in the same request.
+        if _full_sync_is_due():
+            sync.full_sync()
+        elif _sync_is_due():
             sync.incremental_sync()
     except Exception as e:  # noqa: BLE001 - never fail the request on sync error
         app.logger.warning('On-demand sync failed, serving cached data: %s', e)
