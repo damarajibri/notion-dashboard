@@ -102,7 +102,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
       <thead>
         <tr>
           <th>#</th><th>Username</th><th>Nama Lengkap</th>
-          <th>Role</th><th>Status</th><th>Dibuat</th><th style="text-align:right">Aksi</th>
+          <th>Role</th><th>Status</th><th>Dibuat</th><th>Last Login</th><th style="text-align:right">Aksi</th>
         </tr>
       </thead>
       <tbody id="userTbody"></tbody>
@@ -169,6 +169,17 @@ function esc(s) {
     {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+function fmtLastLogin(iso) {
+  if (!iso) return '<span style="color:var(--text2)">Belum pernah</span>';
+  // Stored as UTC ISO (e.g. 2026-09-30T14:47:00Z). Render in local time.
+  const d = new Date(iso);
+  if (isNaN(d)) return esc(iso);
+  return d.toLocaleString('id-ID', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
 async function loadUsers() {
   const res = await fetch('/api/users');
   const data = await res.json();
@@ -185,6 +196,7 @@ async function loadUsers() {
       <td>${badge(u.role)}</td>
       <td><span class="dot ${u.is_active ? 'dot-on' : 'dot-off'}"></span>${u.is_active ? 'Aktif' : 'Nonaktif'}</td>
       <td style="color:var(--text2)">${(u.created_at||'').slice(0,10)}</td>
+      <td style="color:var(--text2)">${fmtLastLogin(u.last_login)}</td>
       <td>
         <div class="row-actions" style="justify-content:flex-end">
           <button class="btn btn-sm" onclick='openEdit(${JSON.stringify(u)})'>✏️ Edit</button>

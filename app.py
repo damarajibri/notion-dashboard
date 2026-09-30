@@ -653,6 +653,7 @@ def login():
         else:
             user = db.authenticate(username, password)
             if user:
+                db.touch_last_login(user['id'])
                 session.clear()
                 session.permanent = True
                 session['uid'] = user['id']

@@ -75,10 +75,15 @@ def init_db():
                 password_hash TEXT NOT NULL,
                 is_active     INTEGER NOT NULL DEFAULT 1,
                 created_at    TEXT,
-                updated_at    TEXT
+                updated_at    TEXT,
+                last_login    TEXT
             );
             """
         )
+        # Migration: add last_login to pre-existing user tables that lack it.
+        cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+        if "last_login" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_login TEXT;")
         conn.commit()
     finally:
         conn.close()
@@ -300,6 +305,7 @@ def _row_to_user(row):
         "is_active": bool(row["is_active"]),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
+        "last_login": row["last_login"] if "last_login" in row.keys() else None,
     }
 
 
@@ -357,6 +363,19 @@ def authenticate(username, password):
     if verify_password(password, row["password_hash"]):
         return _row_to_user(row)
     return None
+
+
+def touch_last_login(user_id):
+    """Record the current UTC time as the user's last successful login."""
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE users SET last_login = ? WHERE id = ?",
+            (_now_iso(), user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def list_users():
