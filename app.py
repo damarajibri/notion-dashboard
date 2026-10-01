@@ -1,4 +1,4 @@
-import json, os, io, csv, urllib.request, urllib.error, random, secrets
+import json, os, io, csv, urllib.request, urllib.error, random, secrets, uuid, mimetypes
 from functools import wraps
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -184,6 +184,63 @@ def notion_get(url):
     hdrs = {k: v for k, v in HEADERS.items() if k != 'Content-Type'}
     req = urllib.request.Request(url, headers=hdrs)
     return json.loads(urllib.request.urlopen(req).read())
+
+
+# ─── Notion Direct Upload (file upload) ───────────────────────────────────────
+# Alur: (1) create file_upload → dapat id+upload_url, (2) send bytes (multipart),
+# (3) attach id ke properti 'files' via Update Page. File harus di-attach dalam
+# ~1 jam. Endpoint file_uploads bekerja dengan Notion-Version yang dipakai proyek
+# (diverifikasi). Tidak menambah dependensi: multipart dibangun manual via urllib.
+
+def notion_create_file_upload(filename, content_type):
+    """Langkah 1: buat objek file_upload. Return dict berisi id & upload_url."""
+    body = {'filename': filename}
+    if content_type:
+        body['content_type'] = content_type
+    return notion_post('https://api.notion.com/v1/file_uploads', body)
+
+
+def _build_multipart(file_bytes, filename, content_type):
+    """Bangun body multipart/form-data dengan satu field 'file'. Return (body, boundary)."""
+    boundary = '----NotionUpload' + uuid.uuid4().hex
+    ct = content_type or 'application/octet-stream'
+    # Escape tanda kutip pada nama file (RFC 2388).
+    safe_name = (filename or 'file').replace('"', '')
+    pre = (
+        f'--{boundary}\r\n'
+        f'Content-Disposition: form-data; name="file"; filename="{safe_name}"\r\n'
+        f'Content-Type: {ct}\r\n\r\n'
+    ).encode('utf-8')
+    post = f'\r\n--{boundary}--\r\n'.encode('utf-8')
+    return pre + file_bytes + post, boundary
+
+
+def notion_send_file_upload(file_upload_id, file_bytes, filename, content_type):
+    """Langkah 2: kirim isi file (multipart) ke endpoint send. Return objek file_upload."""
+    url = f'https://api.notion.com/v1/file_uploads/{file_upload_id}/send'
+    data, boundary = _build_multipart(file_bytes, filename, content_type)
+    hdrs = {
+        'Authorization': HEADERS['Authorization'],
+        'Notion-Version': HEADERS['Notion-Version'],
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+    }
+    req = urllib.request.Request(url, data=data, headers=hdrs, method='POST')
+    return json.loads(urllib.request.urlopen(req).read())
+
+
+def notion_set_files_property(page_id, field, files_list):
+    """Langkah 3 / edit: tulis ulang properti 'files' sebuah halaman.
+
+    `files_list` adalah daftar objek file Notion. Notion menerima penulisan:
+      - {'type':'file_upload','file_upload':{'id':...},'name':...}  (hasil upload)
+      - {'type':'external','external':{'url':...},'name':...}        (link eksternal)
+      - {'type':'file','file':{...},'name':...}                      (entri lama;
+        diverifikasi dapat ditulis ulang apa adanya untuk dipertahankan)
+    Untuk add/delete: ambil halaman SEGAR, modifikasi array, lalu PATCH.
+    """
+    body = {'properties': {field: {'files': files_list}}}
+    return notion_patch(f'https://api.notion.com/v1/pages/{page_id}', body)
+
 
 def query_all(db_id, filt=None):
     url = f'https://api.notion.com/v1/databases/{db_id}/query'
@@ -902,6 +959,162 @@ def api_file():
 
     # Redirect langsung ke URL file (presigned fresh untuk type=file).
     return redirect(url)
+
+
+# Daftar properti bertipe 'files' yang boleh dimodifikasi lewat endpoint upload/
+# delete. Membatasi ini mencegah penulisan ke properti sembarang.
+_ALLOWED_FILE_FIELDS = set(PROJECT_FILE_FIELDS) | {
+    'SPK File', 'File & media',   # SPK
+    'Files BAST', 'Files BALP',   # Monthly Performance
+}
+
+# Batas ukuran unggah (Direct Upload "small file" Notion = 20 MB).
+_MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+
+
+def _fresh_files(page_id, field):
+    """Ambil daftar file TERKINI dari Notion untuk (page_id, field).
+
+    Mengembalikan objek file apa adanya (type file/external/file_upload) yang
+    aman ditulis ulang. Return (files_list, error|None).
+    """
+    try:
+        page = notion_get(f'https://api.notion.com/v1/pages/{page_id}')
+    except Exception as e:  # noqa: BLE001
+        return None, f'Gagal mengambil halaman Notion: {e}'
+    prop = (page.get('properties', {}) or {}).get(field, {}) or {}
+    if prop.get('type') != 'files':
+        return None, 'Properti bukan bertipe files.'
+    return list(prop.get('files') or []), None
+
+
+@app.route('/api/file/upload', methods=['POST'])
+@login_required
+def api_file_upload():
+    """Upload file baru dan lampirkan ke properti 'files' sebuah halaman.
+
+    Form-data: page_id, field, file (biner). File lama dipertahankan; file baru
+    ditambahkan di akhir. Mengembalikan daftar nama file terbaru.
+    """
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    page_id = (request.form.get('page_id') or '').strip()
+    field   = (request.form.get('field') or '').strip()
+    upload  = request.files.get('file')
+
+    if not page_id or not field:
+        return jsonify({'ok': False, 'error': 'page_id dan field wajib diisi.'}), 400
+    if field not in _ALLOWED_FILE_FIELDS:
+        return jsonify({'ok': False, 'error': f'Field tidak diizinkan: {field}'}), 400
+    if upload is None or not upload.filename:
+        return jsonify({'ok': False, 'error': 'File tidak ada.'}), 400
+
+    file_bytes = upload.read()
+    if not file_bytes:
+        return jsonify({'ok': False, 'error': 'File kosong.'}), 400
+    if len(file_bytes) > _MAX_UPLOAD_BYTES:
+        return jsonify({'ok': False, 'error': 'Ukuran file melebihi 20 MB.'}), 400
+
+    filename = upload.filename
+    content_type = (
+        upload.mimetype
+        or mimetypes.guess_type(filename)[0]
+        or 'application/octet-stream'
+    )
+
+    # 1) buat objek upload, 2) kirim bytes
+    try:
+        created = notion_create_file_upload(filename, content_type)
+        fu_id = created.get('id')
+        if not fu_id:
+            return jsonify({'ok': False, 'error': 'Gagal membuat file upload.'}), 502
+        sent = notion_send_file_upload(fu_id, file_bytes, filename, content_type)
+        if sent.get('status') != 'uploaded':
+            return jsonify({'ok': False, 'error': f"Status upload tidak 'uploaded': {sent.get('status')}"}), 502
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': f'Notion HTTP {e.code}: {detail}'}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal upload: {e}'}), 502
+
+    # 3) gabungkan dgn file lama (SEGAR) lalu PATCH
+    existing, err = _fresh_files(page_id, field)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 502
+    new_entry = {'type': 'file_upload', 'file_upload': {'id': fu_id}, 'name': filename}
+    files_list = existing + [new_entry]
+    try:
+        notion_set_files_property(page_id, field, files_list)
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': f'Notion HTTP {e.code}: {detail}'}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal attach: {e}'}), 502
+
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-upload sync failed: %s', e)
+
+    names = [f.get('name', 'file') for f in files_list]
+    return jsonify({'ok': True, 'count': len(files_list), 'files': names})
+
+
+@app.route('/api/file/delete', methods=['POST'])
+@login_required
+def api_file_delete():
+    """Hapus satu file (berdasarkan idx) dari properti 'files' sebuah halaman."""
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    page_id = (payload.get('page_id') or '').strip()
+    field   = (payload.get('field') or '').strip()
+    try:
+        idx = int(payload.get('idx'))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'idx tidak valid.'}), 400
+
+    if not page_id or not field:
+        return jsonify({'ok': False, 'error': 'page_id dan field wajib diisi.'}), 400
+    if field not in _ALLOWED_FILE_FIELDS:
+        return jsonify({'ok': False, 'error': f'Field tidak diizinkan: {field}'}), 400
+
+    existing, err = _fresh_files(page_id, field)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 502
+    if idx < 0 or idx >= len(existing):
+        return jsonify({'ok': False, 'error': 'Indeks file di luar jangkauan.'}), 404
+
+    files_list = [f for i, f in enumerate(existing) if i != idx]
+    try:
+        notion_set_files_property(page_id, field, files_list)
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': f'Notion HTTP {e.code}: {detail}'}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal hapus: {e}'}), 502
+
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-delete sync failed: %s', e)
+
+    names = [f.get('name', 'file') for f in files_list]
+    return jsonify({'ok': True, 'count': len(files_list), 'files': names})
 
 
 @app.route('/api/data')

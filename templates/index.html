@@ -1517,6 +1517,11 @@ span.file-chip { cursor: default; opacity: .7; }
         </div>
       </div>
 
+      <div class="modal-section">
+        <div class="modal-section-title">File (BAST & BALP)</div>
+        <div id="me_files" style="font-size:13px"></div>
+      </div>
+
       <div class="modal-section" id="me_result" style="display:none"></div>
 
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
@@ -1689,6 +1694,149 @@ function fileLinks(arr) {
       ? `<a href="${fileHref(f)}" target="_blank" rel="noopener" class="file-chip" data-file="${name}" title="${name}" aria-label="${name}">📎</a>`
       : `<span class="file-chip" data-file="${name}" title="${name}" aria-label="${name}">📎</span>`;
   }).join('');
+}
+
+// ===== FILE MANAGER (upload + hapus) =====
+// Merender daftar file (buka + hapus) dan form upload. Dipakai di modal detail
+// SPK / Project / Monthly. `files` = array {page_id, field, idx, name, external_url?}.
+// `fieldOptions` = daftar nama properti files yang bisa jadi tujuan upload.
+// `onChanged` = nama fungsi global (string) yang dipanggil setelah upload/hapus
+// untuk memuat ulang modal + data.
+function fileManager(pageId, files, fieldOptions, onChanged) {
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const rows = (files && files.length)
+    ? files.map(f => {
+        const name = esc(f.name || 'file');
+        const href = fileHref(f);
+        const canDel = !!(f.page_id && f.field != null && f.idx != null);
+        const delBtn = canDel
+          ? `<button class="btn btn-sm btn-danger" title="Hapus file"
+               onclick="deleteFile('${esc(f.page_id)}','${esc(f.field)}',${Number(f.idx)},'${esc(onChanged)}')">🗑️</button>`
+          : '';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+            <a href="${href}" target="_blank" rel="noopener" style="flex:1;color:var(--blue,#3b82f6);font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">📎 ${name}</a>
+            ${delBtn}
+          </div>`;
+      }).join('')
+    : '<div style="color:var(--text2);font-size:13px;padding:4px 0">Belum ada file</div>';
+
+  const uid = 'fm_' + Math.random().toString(36).slice(2, 8);
+  const fieldSelect = (fieldOptions && fieldOptions.length)
+    ? `<select id="${uid}_field" class="form-input" style="padding:7px;min-width:140px">
+         ${fieldOptions.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+       </select>`
+    : `<input type="hidden" id="${uid}_field" value="${esc((fieldOptions && fieldOptions[0]) || '')}">`;
+
+  return `
+    <div>${rows}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
+      ${fieldSelect}
+      <input type="file" id="${uid}_input" class="form-input" style="padding:6px;flex:1;min-width:160px">
+      <button class="btn btn-sm btn-primary" onclick="uploadFile('${esc(pageId)}','${uid}','${esc(onChanged)}')">⬆️ Upload</button>
+    </div>
+    <div id="${uid}_msg" style="font-size:12px;margin-top:6px"></div>`;
+}
+
+function uploadFile(pageId, uid, onChanged) {
+  const $ = id => document.getElementById(id);
+  const input = $(uid + '_input');
+  const field = $(uid + '_field').value;
+  const msg = $(uid + '_msg');
+  if (!input || !input.files || !input.files.length) { msg.style.color = 'var(--yellow)'; msg.textContent = 'Pilih file dulu.'; return; }
+  const file = input.files[0];
+  if (file.size > 20 * 1024 * 1024) { msg.style.color = 'var(--red)'; msg.textContent = 'Ukuran file melebihi 20 MB.'; return; }
+
+  const fd = new FormData();
+  fd.append('page_id', pageId);
+  fd.append('field', field);
+  fd.append('file', file);
+
+  msg.style.color = 'var(--text2)';
+  msg.textContent = '⏳ Mengunggah...';
+  fetch('/api/file/upload', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        showToast('File terunggah ke Notion', '✅');
+        if (onChanged && window[onChanged]) window[onChanged]();
+      } else {
+        msg.style.color = 'var(--red)';
+        msg.textContent = 'Gagal: ' + (d.error || 'unknown');
+      }
+    })
+    .catch(e => { msg.style.color = 'var(--red)'; msg.textContent = 'Gagal menghubungi server: ' + e; });
+}
+
+function deleteFile(pageId, field, idx, onChanged) {
+  if (!confirm('Hapus file ini dari Notion? Tindakan ini mengubah data di Notion.')) return;
+  fetch('/api/file/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ page_id: pageId, field: field, idx: idx }),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        showToast('File dihapus', '✅');
+        if (onChanged && window[onChanged]) window[onChanged]();
+      } else {
+        showToast('Gagal hapus: ' + (d.error || 'unknown'), '❌');
+      }
+    })
+    .catch(e => showToast('Gagal menghubungi server: ' + e, '❌'));
+}
+
+// Daftar properti file di database Projects (untuk dropdown tujuan upload).
+const PROJECT_FILE_FIELDS_JS = [
+  'TOR File', 'FS File', 'Izin Prinsip File', 'Izin Anggaran FIle',
+  'Penilaian Teknis File', 'PI file (Pakta Integritas)', 'TPRA File',
+  'Benchmark File', 'Risk Assessment File',
+];
+
+// Callback setelah upload/hapus: muat ulang data lalu buka kembali modal yang
+// sama (dicocokkan berdasarkan page_id) agar daftar file ter-refresh.
+function _refreshSpkModal() {
+  const pid = window._editingSpk && window._editingSpk.page_id;
+  _reloadDataThen(() => {
+    const list = (DATA && DATA.spk) || [];
+    const i = list.findIndex(s => s.page_id === pid);
+    if (i >= 0) { window._filteredSpk = list; showSpkDetail(i); }
+    else closeSpkModal();
+  });
+}
+function _refreshProjModal() {
+  const pid = window._editingProject && window._editingProject.page_id;
+  _reloadDataThen(() => {
+    const list = (DATA && DATA.projects) || [];
+    const i = list.findIndex(p => p.page_id === pid);
+    if (i >= 0) { window._filteredProjects = list; showProjDetail(i); }
+    else closeProjModal();
+  });
+}
+function _refreshMonthlyModal() {
+  const pid = window._editingMonthlyPageId;
+  _reloadMonthlyThen(() => {
+    const list = window._monthlyRows || [];
+    const i = list.findIndex(x => x.page_id === pid);
+    if (i >= 0) openMonthlyEdit(i);
+    else closeMonthlyEdit();
+  });
+}
+
+// Muat ulang /api/data lalu jalankan cb (sekali).
+function _reloadDataThen(cb) {
+  fetch('/api/data').then(r => r.json()).then(d => {
+    DATA = d;
+    renderKPI(d); renderCharts(d); renderPeopleCharts(d);
+    renderTasksTable(d); renderProjectsTable(d); renderAchievements(d); renderSpk(d);
+    if (cb) cb();
+  }).catch(() => { if (cb) cb(); });
+}
+// Muat ulang data Monthly lalu jalankan cb.
+function _reloadMonthlyThen(cb) {
+  if (typeof loadMonthly === 'function') { loadMonthly(); }
+  // loadMonthly async; beri jeda singkat agar _monthlyRows ter-update.
+  setTimeout(() => { if (cb) cb(); }, 600);
 }
 
 // ===== KPI RENDER =====
@@ -2650,6 +2798,11 @@ function openMonthlyEdit(idx) {
   $('monthlyEditSubtitle').textContent = (x.id ? x.id + ' · ' : '') + (x.name || '');
   const res = $('me_result'); res.style.display = 'none'; res.innerHTML = '';
 
+  // File BAST & BALP (upload + hapus). Gabungkan kedua field.
+  window._editingMonthlyPageId = x.page_id;
+  const mfiles = [].concat(x.files_bast || [], x.files_balp || []);
+  $('me_files').innerHTML = fileManager(x.page_id, mfiles, ['Files BAST', 'Files BALP'], '_refreshMonthlyModal');
+
   $('monthlyEditModal').classList.add('active');
 }
 
@@ -2756,8 +2909,6 @@ function showProjDetail(idx) {
     </div>`).join('');
 
   // File (tautan fetch-on-click; ikon + tooltip nama file).
-  const filesHtml = (p.files && p.files.length) ? fileLinks(p.files) : '<span style="color:var(--text2)">Tidak ada file</span>';
-
   document.getElementById('projModalBody').innerHTML = `
     <input type="hidden" id="pe_page_id" value="${esc(p.page_id || '')}">
     <div class="modal-section">
@@ -2784,7 +2935,7 @@ function showProjDetail(idx) {
 
     <div class="modal-section">
       <div class="modal-section-title">File</div>
-      <div style="font-size:13px">${filesHtml}</div>
+      <div style="font-size:13px">${fileManager(p.page_id, p.files, PROJECT_FILE_FIELDS_JS, '_refreshProjModal')}</div>
     </div>
 
     <div class="modal-section">
@@ -2875,8 +3026,6 @@ function showSpkDetail(idx) {
     return `<select id="${id}" class="form-input" style="width:100%;padding:8px"><option value="">—</option>${extra}${opts}</select>`;
   };
 
-  const filesHtml = (s.files && s.files.length) ? fileLinks(s.files) : '<span style="color:var(--text2)">Tidak ada file</span>';
-
   document.getElementById('spkModalBody').innerHTML = `
     <input type="hidden" id="se_page_id" value="${esc(s.page_id || '')}">
     <div class="modal-section">
@@ -2935,7 +3084,7 @@ function showSpkDetail(idx) {
 
     <div class="modal-section">
       <div class="modal-section-title">File</div>
-      <div style="font-size:13px">${filesHtml}</div>
+      <div style="font-size:13px">${fileManager(s.page_id, s.files, ['SPK File', 'File & media'], '_refreshSpkModal')}</div>
     </div>
 
     <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
