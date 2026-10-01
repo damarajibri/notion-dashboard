@@ -2710,30 +2710,131 @@ function saveMonthlyEdit() {
 function showProjDetail(idx) {
   const p = window._filteredProjects[idx];
   if (!p) return;
+  window._editingProject = p;  // simpan referensi utk save
 
   document.getElementById('projModalTitle').textContent = p.title;
   document.getElementById('projModalSubtitle').textContent = `${p.status} · Last edited: ${p.edited}`;
 
-  const rd = p.remaining_days !== null && p.remaining_days !== undefined ? sisaBadge(p.remaining_days) : '-';
-  const spkb = p.spk_baru && p.spk_baru.length ? p.spk_baru.map(s => `<span class="tag">${s}</span>`).join('') : '-';
-  const docs = p.doc_detail ? Object.entries(p.doc_detail).map(([k, v]) => `<div style="padding:4px 0;font-size:13px">${v} <span style="color:var(--text2)">${k}</span></div>`).join('') : p.docs;
+  const canEdit = !!p.page_id;
+  const esc = s => (s == null ? '' : String(s)).replace(/"/g, '&quot;');
+
+  // Opsi status umum untuk dokumen (Notion menerima nama status yang valid).
+  const DOC_OPTS = ['Not started', 'In progress', 'Done', 'Not Required'];
+  const STATUS_OPTS = ['Planning', 'In Progress', 'Done', 'Canceled'];
+  const PRIO_OPTS = ['High', 'Medium', 'Low'];
+
+  const sel = (id, options, current, extraStyle = '') => {
+    const opts = options.map(o =>
+      `<option value="${esc(o)}"${o === current ? ' selected' : ''}>${o}</option>`).join('');
+    // Jika nilai saat ini tidak ada di daftar opsi, tambahkan agar tidak hilang.
+    const extra = (current && !options.includes(current))
+      ? `<option value="${esc(current)}" selected>${esc(current)}</option>` : '';
+    return `<select id="${id}" class="form-input" style="width:100%;padding:8px;${extraStyle}"><option value="">—</option>${extra}${opts}</select>`;
+  };
+
+  // Dokumen: tiap baris = select status (nilai mentah dari doc_status).
+  const docStatus = p.doc_status || {};
+  const docRows = Object.keys(docStatus).map(k => `
+    <div class="modal-row" style="align-items:center">
+      <div class="label">${k}</div>
+      <div class="value">${sel('pe_doc_' + btoa(unescape(encodeURIComponent(k))), DOC_OPTS, docStatus[k])}</div>
+    </div>`).join('');
+
+  // File (tautan fetch-on-click; ikon + tooltip nama file).
+  const filesHtml = (p.files && p.files.length) ? fileLinks(p.files) : '<span style="color:var(--text2)">Tidak ada file</span>';
 
   document.getElementById('projModalBody').innerHTML = `
+    <input type="hidden" id="pe_page_id" value="${esc(p.page_id || '')}">
     <div class="modal-section">
       <div class="modal-section-title">Informasi Umum</div>
-      <div class="modal-row"><div class="label">Status</div><div class="value">${statusBadge(p.status)}</div></div>
-      <div class="modal-row"><div class="label">Priority</div><div class="value">${priorityBadge(p.priority)}</div></div>
+      <label class="filter-label" for="pe_title" style="display:block;margin:8px 0 6px">Nama Project</label>
+      <input type="text" id="pe_title" class="form-input" style="width:100%;padding:8px" value="${esc(p.title)}">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" style="display:block;margin-bottom:6px">Status</label>
+          ${sel('pe_status', STATUS_OPTS, p.status)}
+        </div>
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" style="display:block;margin-bottom:6px">Priority</label>
+          ${sel('pe_priority', PRIO_OPTS, p.priority_raw || '')}
+        </div>
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" for="pe_due" style="display:block;margin-bottom:6px">Due Date</label>
+          <input type="date" id="pe_due" class="form-input" style="width:100%;padding:8px" value="${esc(p.due || '')}">
+        </div>
+      </div>
+      <div class="modal-row" style="margin-top:12px"><div class="label">Completion</div><div class="value">${progBar(p.completion)}</div></div>
       <div class="modal-row"><div class="label">Assignee</div><div class="value">${p.assignees.length ? `<div class="avatar-stack">${p.assignees.map(a => renderAvatar(a) + ' ' + a).join(', ')}</div>` : '-'}</div></div>
-      <div class="modal-row"><div class="label">Due Date</div><div class="value">${p.due || '-'}</div></div>
-      <div class="modal-row"><div class="label">Sisa Hari</div><div class="value">${rd}</div></div>
-      <div class="modal-row"><div class="label">Completion</div><div class="value">${progBar(p.completion)}</div></div>
     </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">File</div>
+      <div style="font-size:13px">${filesHtml}</div>
+    </div>
+
     <div class="modal-section">
       <div class="modal-section-title">Dokumen (${p.docs} selesai)</div>
-      ${docs}
+      ${docRows || '<span style="color:var(--text2)">Tidak ada dokumen</span>'}
+    </div>
+
+    <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+      <span id="pe_result" style="font-size:13px;margin-right:auto"></span>
+      <button class="btn btn-ghost" onclick="closeProjModal()">Tutup</button>
+      <button class="btn btn-primary" id="pe_saveBtn" onclick="saveProjDetail()" ${canEdit ? '' : 'disabled title="Butuh page_id (sync ulang)"'}>
+        <span id="pe_saveIcon">💾</span> Simpan ke Notion
+      </button>
     </div>`;
 
   document.getElementById('projModal').classList.add('active');
+}
+
+function saveProjDetail() {
+  const p = window._editingProject;
+  if (!p) return;
+  const $ = id => document.getElementById(id);
+  const btn = $('pe_saveBtn'), icon = $('pe_saveIcon'), res = $('pe_result');
+
+  const payload = {
+    page_id:  $('pe_page_id').value,
+    title:    $('pe_title').value,
+    status:   $('pe_status').value,
+    priority: $('pe_priority').value,
+    due:      $('pe_due').value,
+  };
+  // Dokumen: kirim hanya yang punya elemen select.
+  const docStatus = p.doc_status || {};
+  Object.keys(docStatus).forEach(k => {
+    const el = $('pe_doc_' + btoa(unescape(encodeURIComponent(k))));
+    if (el) payload[k] = el.value;
+  });
+
+  if (!payload.page_id) { showToast('page_id kosong', '⚠️'); return; }
+
+  btn.disabled = true; icon.textContent = '⏳';
+  res.textContent = '';
+
+  fetch('/api/project/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        showToast('Perubahan tersimpan ke Notion', '✅');
+        closeProjModal();
+        loadData();  // muat ulang data dashboard
+      } else {
+        const errs = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : '';
+        res.style.color = 'var(--red,#ef4444)';
+        res.textContent = 'Gagal: ' + (d.error || 'unknown') + errs;
+      }
+    })
+    .catch(e => {
+      res.style.color = 'var(--red,#ef4444)';
+      res.textContent = 'Gagal menghubungi server: ' + e;
+    })
+    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
 }
 
 function closeProjModal() { document.getElementById('projModal').classList.remove('active'); }

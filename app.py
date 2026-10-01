@@ -398,17 +398,22 @@ def extract_project(r, personel):
     # Dokumen checklist (10 dokumen termasuk Risk Assessment)
     doc_done   = 0
     doc_detail = {}
+    doc_status = {}
     done_statuses = {'Done', 'Complete', 'Not Required'}
     for df in DOC_FIELDS:
         val  = props.get(df, {})
         done = False
+        raw_name = ''
         if val.get('type') == 'status':
-            done = val.get('status', {}).get('name', '') in done_statuses
+            raw_name = (val.get('status') or {}).get('name', '') or ''
+            done = raw_name in done_statuses
         elif val.get('type') == 'checkbox':
             done = bool(val.get('checkbox'))
+            raw_name = 'Done' if done else 'Not started'
         if done:
             doc_done += 1
         doc_detail[df] = '✅' if done else '❌'
+        doc_status[df] = raw_name
 
     total_docs = len(DOC_FIELDS)
 
@@ -421,12 +426,14 @@ def extract_project(r, personel):
         'title':      title,
         'status':     status_name,
         'priority':   priority_name,
+        'priority_raw': priority_obj.get('name', '') or '',
         'assignees':  assignees,
         'completion': comp_val,
         'docs':       f'{doc_done}/{total_docs}',
         'doc_done':   doc_done,
         'doc_total':  total_docs,
         'doc_detail': doc_detail,
+        'doc_status': doc_status,
         'created':    r['created_time'][:10],
         'edited':     r['last_edited_time'][:10],
         'due':        due,
@@ -1269,6 +1276,98 @@ def api_monthly_update():
         app.logger.warning('Post-update sync failed: %s', e)
 
     return jsonify({'ok': True, 'updated': list(props.keys())})
+
+# ─── Project Submission: edit → Notion ─────────────────────────────────────────
+# Peta field frontend → (nama properti Notion, tipe). Hanya field skalar yang
+# aman diedit. 'Completion' adalah rollup (read-only) dan 'Assignee' adalah
+# relation (dikelola di Notion), jadi tidak disertakan di sini.
+# 10 dokumen di bawah bertipe 'status' di Notion.
+_PROJECT_EDITABLE = {
+    'title':    ('Project name', 'title'),
+    'status':   ('Status', 'status'),
+    'priority': ('Priority', 'select'),
+    'due':      ('Dates', 'date'),
+    # Dokumen (status). Key frontend memakai nama properti apa adanya.
+    'TOR':                                 ('TOR', 'status'),
+    'FS (Feasibility Study)':              ('FS (Feasibility Study)', 'status'),
+    'Izin Prinsip':                        ('Izin Prinsip', 'status'),
+    'Izin Anggaran':                       ('Izin Anggaran', 'status'),
+    'Penilaian Teknis':                    ('Penilaian Teknis', 'status'),
+    'PI (Pakta Integritas)':               ('PI (Pakta Integritas)', 'status'),
+    'TPRA (Third Party Risk Assesment)':   ('TPRA (Third Party Risk Assesment)', 'status'),
+    'BenchMark':                           ('BenchMark', 'status'),
+    'Aanwidjzing':                         ('Aanwidjzing', 'status'),
+    'Risk Assessment':                     ('Risk Assessment', 'status'),
+}
+
+
+@app.route('/api/project/update', methods=['POST'])
+@login_required
+def api_project_update():
+    """Update satu Project Submission ke Notion (PATCH).
+
+    Hanya field yang dikirim di payload yang diubah. Mendukung tipe:
+    title, select, status, date. page_id wajib.
+    """
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    page_id = (payload.get('page_id') or '').strip()
+    if not page_id:
+        return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
+
+    props = {}
+    errors = []
+    for fkey, (notion_name, ftype) in _PROJECT_EDITABLE.items():
+        if fkey not in payload:
+            continue  # hanya ubah field yang dikirim
+        raw = payload.get(fkey)
+        val = ('' if raw is None else str(raw)).strip()
+
+        if ftype == 'title':
+            props[notion_name] = {'title': [{'text': {'content': val}}] if val else []}
+        elif ftype == 'select':
+            props[notion_name] = {'select': {'name': val} if val else None}
+        elif ftype == 'status':
+            # Status tidak boleh null; kalau kosong, lewati (jangan ubah).
+            if val:
+                props[notion_name] = {'status': {'name': val}}
+        elif ftype == 'date':
+            if val == '':
+                props[notion_name] = {'date': None}
+            else:
+                iso, derr = normalize_date(val)
+                if iso:
+                    props[notion_name] = {'date': {'start': iso}}
+                else:
+                    errors.append(f"'{notion_name}': {derr}")
+
+    if errors:
+        return jsonify({'ok': False, 'error': 'Validasi gagal.', 'errors': errors}), 400
+    if not props:
+        return jsonify({'ok': False, 'error': 'Tidak ada field yang diubah.'}), 400
+
+    try:
+        notion_patch(f'https://api.notion.com/v1/pages/{page_id}', {'properties': props})
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': f'Notion HTTP {e.code}: {detail}'}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal update: {e}'}), 502
+
+    # Refresh cache agar dashboard mencerminkan perubahan (best-effort).
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-update sync failed: %s', e)
+
+    return jsonify({'ok': True, 'updated': list(props.keys())})
+
 
 
 # ─── CSV IMPORT → Monthly Performance ──────────────────────────────────────────
