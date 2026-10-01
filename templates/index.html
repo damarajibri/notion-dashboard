@@ -597,8 +597,11 @@ tbody tr:last-child td { border-bottom: none; }
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.72);
+  /* NOTE: backdrop-filter: blur() dihapus karena sangat membebani GPU —
+     ia mem-blur SELURUH konten di belakang modal (tabel Monthly bisa ribuan
+     sel) secara real-time selama modal terbuka. Overlay gelap biasa sudah
+     cukup memberi efek fokus tanpa beban render. */
   z-index: 200;
   justify-content: center;
   align-items: center;
@@ -740,8 +743,9 @@ tbody tr:last-child td { border-bottom: none; }
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(13,13,26,0.75);
-  backdrop-filter: blur(8px);
+  background: rgba(13,13,26,0.85);
+  /* backdrop-filter: blur() dihapus — membebani GPU saat mem-blur seluruh
+     halaman tiap kali loading (termasuk auto-refresh 5 menit). */
   z-index: 300;
   justify-content: center;
   align-items: center;
@@ -889,6 +893,53 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ===== DIVIDER ===== */
 .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* ===== FILE CHIP (ikon attach + tooltip nama file saat hover) ===== */
+.file-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  margin: 1px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .15s, transform .15s;
+}
+a.file-chip:hover { background: var(--blue-bg, rgba(56,189,248,.12)); transform: translateY(-1px); }
+span.file-chip { cursor: default; opacity: .7; }
+/* Tooltip: tampilkan nama file dari atribut data-file saat hover/focus */
+.file-chip[data-file]::after {
+  content: attr(data-file);
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: var(--surface2, #1c1c35);
+  color: var(--text, #e8e8f0);
+  border: 1px solid var(--border, #2a2a4a);
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 60;
+  transition: opacity .15s, transform .15s;
+}
+.file-chip[data-file]:hover::after,
+.file-chip[data-file]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
 
 </style>
 </head>
@@ -1615,10 +1666,15 @@ function fileHref(f) {
     : `/api/file?page_id=${encodeURIComponent(f.page_id)}&field=${encodeURIComponent(f.field)}&idx=${encodeURIComponent(f.idx)}`;
 }
 function fileLinks(arr) {
-  if (!arr || !arr.length) return '-';
-  return arr.map(f => (f.page_id || f.external_url)
-    ? `<a href="${fileHref(f)}" target="_blank" rel="noopener" style="color:var(--blue,#3b82f6);font-size:12px;text-decoration:underline" title="${(f.name||'file').replace(/"/g,'&quot;')}">📎 ${f.name || 'file'}</a>`
-    : `<span style="font-size:12px">📎 ${f.name || 'file'}</span>`).join('<br>');
+  if (!arr || !arr.length) return '<span style="color:var(--text2)">-</span>';
+  return arr.map(f => {
+    const name = (f.name || 'file').replace(/"/g, '&quot;');
+    // Hanya tampilkan ikon attach; nama file muncul sebagai tooltip (data-file)
+    // saat hover. 'title' disertakan sebagai fallback aksesibilitas.
+    return (f.page_id || f.external_url)
+      ? `<a href="${fileHref(f)}" target="_blank" rel="noopener" class="file-chip" data-file="${name}" title="${name}" aria-label="${name}">📎</a>`
+      : `<span class="file-chip" data-file="${name}" title="${name}" aria-label="${name}">📎</span>`;
+  }).join('');
 }
 
 // ===== KPI RENDER =====
