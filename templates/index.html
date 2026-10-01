@@ -1341,6 +1341,20 @@ span.file-chip { cursor: default; opacity: .7; }
   </div>
 </div>
 
+<!-- Modal: Edit SPK -->
+<div class="modal-overlay" id="spkModal" onclick="if(event.target===this)closeSpkModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="spkModalTitle">Edit SPK</div>
+        <div class="modal-subtitle" id="spkModalSubtitle">Ubah data SPK, lalu simpan ke Notion</div>
+      </div>
+      <button class="modal-close" onclick="closeSpkModal()">✕</button>
+    </div>
+    <div class="modal-body" id="spkModalBody"></div>
+  </div>
+</div>
+
 <!-- Modal: Import CSV -->
 <div class="modal-overlay" id="importModal" onclick="if(event.target===this)closeImportModal()">
   <div class="modal">
@@ -2302,7 +2316,7 @@ function applySpkFilters() {
     return `<tr>
       <td class="col-num">${i + 1}</td>
       <td><span class="tag">${s.spk_id}</span></td>
-      <td style="font-weight:600;white-space:nowrap;font-size:12px">${s.no_spk}</td>
+      <td style="font-weight:600;white-space:nowrap;font-size:12px"><a href="javascript:void(0)" onclick="showSpkDetail(${i})" style="color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${s.no_spk || '-'}</a></td>
       <td class="col-project-full"><div>${s.project}</div></td>
       <td style="color:var(--text2);font-size:12px">${s.vendor}</td>
       <td>${statusBadge(s.status)}</td>
@@ -2319,6 +2333,7 @@ function applySpkFilters() {
       <td style="font-size:12px">${fileLinks(s.files)}</td>
     </tr>`;
   }).join('') || emptyState(17);
+  window._filteredSpk = spk;
   makeSortable(table);
 }
 
@@ -2838,7 +2853,151 @@ function saveProjDetail() {
 }
 
 function closeProjModal() { document.getElementById('projModal').classList.remove('active'); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeImportModal(); closeMonthlyEdit(); } });
+
+// ===== SPK EDIT MODAL =====
+function showSpkDetail(idx) {
+  const list = window._filteredSpk || [];
+  const s = list[idx];
+  if (!s) return;
+  window._editingSpk = s;
+
+  document.getElementById('spkModalTitle').textContent = '✏️ ' + (s.no_spk || 'Edit SPK');
+  document.getElementById('spkModalSubtitle').textContent = (s.spk_id ? s.spk_id + ' · ' : '') + (s.project || '');
+
+  const canEdit = !!s.page_id;
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+
+  const STATUS_OPTS = ['Active', 'In progress', 'Extended', 'Cancel', 'Terminated'];
+  const sel = (id, options, current) => {
+    const extra = (current && !options.includes(current))
+      ? `<option value="${esc(current)}" selected>${esc(current)}</option>` : '';
+    const opts = options.map(o => `<option value="${esc(o)}"${o === current ? ' selected' : ''}>${o}</option>`).join('');
+    return `<select id="${id}" class="form-input" style="width:100%;padding:8px"><option value="">—</option>${extra}${opts}</select>`;
+  };
+
+  const filesHtml = (s.files && s.files.length) ? fileLinks(s.files) : '<span style="color:var(--text2)">Tidak ada file</span>';
+
+  document.getElementById('spkModalBody').innerHTML = `
+    <input type="hidden" id="se_page_id" value="${esc(s.page_id || '')}">
+    <div class="modal-section">
+      <div class="modal-section-title">Informasi Umum</div>
+      <label class="filter-label" for="se_no_spk" style="display:block;margin:8px 0 6px">No SPK</label>
+      <input type="text" id="se_no_spk" class="form-input" style="width:100%;padding:8px" value="${esc(s.no_spk)}">
+
+      <label class="filter-label" for="se_project" style="display:block;margin:12px 0 6px">Project Name</label>
+      <input type="text" id="se_project" class="form-input" style="width:100%;padding:8px" value="${esc(s.project)}">
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" style="display:block;margin-bottom:6px">Status</label>
+          ${sel('se_status', STATUS_OPTS, s.status === '-' ? '' : s.status)}
+        </div>
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" for="se_total_anggaran" style="display:block;margin-bottom:6px">Total Anggaran</label>
+          <input type="number" step="any" id="se_total_anggaran" class="form-input" style="width:100%;padding:8px" value="${s.total_anggaran ?? ''}">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Klasifikasi</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" for="se_jenis" style="display:block;margin-bottom:6px">Jenis Anggaran</label>
+          <input type="text" id="se_jenis" class="form-input" style="width:100%;padding:8px" value="${esc(s.jenis_anggaran === '-' ? '' : s.jenis_anggaran)}">
+        </div>
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" for="se_klasifikasi" style="display:block;margin-bottom:6px">Klasifikasi Pengadaan</label>
+          <input type="text" id="se_klasifikasi" class="form-input" style="width:100%;padding:8px" value="${esc(s.klasifikasi === '-' ? '' : s.klasifikasi)}">
+        </div>
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" for="se_tipe" style="display:block;margin-bottom:6px">Baru / Perpanjangan / Sisa Bayar</label>
+          <input type="text" id="se_tipe" class="form-input" style="width:100%;padding:8px" value="${esc(s.tipe === '-' ? '' : s.tipe)}">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Tanggal & Catatan</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" for="se_mulai" style="display:block;margin-bottom:6px">SPK Mulai</label>
+          <input type="date" id="se_mulai" class="form-input" style="width:100%;padding:8px" value="${esc(s.spk_mulai || '')}">
+        </div>
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" for="se_selesai" style="display:block;margin-bottom:6px">SPK Selesai</label>
+          <input type="date" id="se_selesai" class="form-input" style="width:100%;padding:8px" value="${esc(s.spk_selesai || '')}">
+        </div>
+      </div>
+      <label class="filter-label" for="se_notes" style="display:block;margin:12px 0 6px">Notes</label>
+      <textarea id="se_notes" class="form-input" rows="2" style="width:100%;padding:8px;resize:vertical">${esc(s.notes || '')}</textarea>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">File</div>
+      <div style="font-size:13px">${filesHtml}</div>
+    </div>
+
+    <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+      <span id="se_result" style="font-size:13px;margin-right:auto"></span>
+      <button class="btn btn-ghost" onclick="closeSpkModal()">Tutup</button>
+      <button class="btn btn-primary" id="se_saveBtn" onclick="saveSpkDetail()" ${canEdit ? '' : 'disabled title="Butuh page_id (sync ulang)"'}>
+        <span id="se_saveIcon">💾</span> Simpan ke Notion
+      </button>
+    </div>`;
+
+  document.getElementById('spkModal').classList.add('active');
+}
+
+function closeSpkModal() { document.getElementById('spkModal').classList.remove('active'); }
+
+function saveSpkDetail() {
+  const $ = id => document.getElementById(id);
+  const btn = $('se_saveBtn'), icon = $('se_saveIcon'), res = $('se_result');
+
+  const payload = {
+    page_id:         $('se_page_id').value,
+    no_spk:          $('se_no_spk').value,
+    project:         $('se_project').value,
+    status:          $('se_status').value,
+    total_anggaran:  $('se_total_anggaran').value,
+    jenis_anggaran:  $('se_jenis').value,
+    klasifikasi:     $('se_klasifikasi').value,
+    tipe:            $('se_tipe').value,
+    spk_mulai:       $('se_mulai').value,
+    spk_selesai:     $('se_selesai').value,
+    notes:           $('se_notes').value,
+  };
+
+  if (!payload.page_id) { showToast('page_id kosong', '⚠️'); return; }
+
+  btn.disabled = true; icon.textContent = '⏳';
+  res.textContent = '';
+
+  fetch('/api/spk/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        showToast('Perubahan SPK tersimpan ke Notion', '✅');
+        closeSpkModal();
+        loadData();
+      } else {
+        const errs = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : '';
+        res.style.color = 'var(--red,#ef4444)';
+        res.textContent = 'Gagal: ' + (d.error || 'unknown') + errs;
+      }
+    })
+    .catch(e => {
+      res.style.color = 'var(--red,#ef4444)';
+      res.textContent = 'Gagal menghubungi server: ' + e;
+    })
+    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeSpkModal(); closeImportModal(); closeMonthlyEdit(); } });
 
 // ===== TOAST =====
 function showToast(msg, icon = '✅') {

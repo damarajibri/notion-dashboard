@@ -1368,6 +1368,104 @@ def api_project_update():
 
     return jsonify({'ok': True, 'updated': list(props.keys())})
 
+# ─── SPK: edit → Notion ────────────────────────────────────────────────────────
+# Peta field frontend → (nama properti Notion, tipe). Hanya field skalar yang
+# aman diedit. 'Total Terbayar' adalah rollup, 'Sisa Anggaran'/'Sisa Hari'
+# adalah formula (read-only), dan 'Vendor' adalah relation (dikelola di Notion),
+# jadi tidak disertakan.
+_SPK_EDITABLE = {
+    'no_spk':          ('No SPK', 'title'),
+    'project':         ('Project Name', 'rich_text'),
+    'status':          ('Status', 'status'),
+    'jenis_anggaran':  ('Jenis Anggaran', 'select'),
+    'klasifikasi':     ('Klasifikasi Pengadaan', 'select'),
+    'tipe':            ('Baru-Sisa Bayar-Perpanjangan', 'select'),
+    'total_anggaran':  ('Total Anggaran', 'number'),
+    'spk_mulai':       ('SPK Mulai', 'date'),
+    'spk_selesai':     ('SPK Selesai', 'date'),
+    'notes':           ('Notes', 'rich_text'),
+}
+
+
+@app.route('/api/spk/update', methods=['POST'])
+@login_required
+def api_spk_update():
+    """Update satu baris SPK ke Notion (PATCH).
+
+    Hanya field yang dikirim di payload yang diubah. Mendukung tipe:
+    title, rich_text, status, select, number, date. page_id wajib.
+    """
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    page_id = (payload.get('page_id') or '').strip()
+    if not page_id:
+        return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
+
+    props = {}
+    errors = []
+    for fkey, (notion_name, ftype) in _SPK_EDITABLE.items():
+        if fkey not in payload:
+            continue  # hanya ubah field yang dikirim
+        raw = payload.get(fkey)
+        val = ('' if raw is None else str(raw)).strip()
+
+        if ftype == 'title':
+            props[notion_name] = {'title': [{'text': {'content': val}}] if val else []}
+        elif ftype == 'rich_text':
+            props[notion_name] = {'rich_text': [{'text': {'content': val}}] if val else []}
+        elif ftype == 'select':
+            props[notion_name] = {'select': {'name': val} if val else None}
+        elif ftype == 'status':
+            # Status tidak boleh null; kalau kosong, lewati (jangan ubah).
+            if val:
+                props[notion_name] = {'status': {'name': val}}
+        elif ftype == 'number':
+            if val == '':
+                props[notion_name] = {'number': None}
+            else:
+                digits = val.replace(',', '').replace(' ', '')
+                try:
+                    props[notion_name] = {'number': float(digits)}
+                except ValueError:
+                    errors.append(f"'{notion_name}' bukan angka valid: {raw!r}")
+        elif ftype == 'date':
+            if val == '':
+                props[notion_name] = {'date': None}
+            else:
+                iso, derr = normalize_date(val)
+                if iso:
+                    props[notion_name] = {'date': {'start': iso}}
+                else:
+                    errors.append(f"'{notion_name}': {derr}")
+
+    if errors:
+        return jsonify({'ok': False, 'error': 'Validasi gagal.', 'errors': errors}), 400
+    if not props:
+        return jsonify({'ok': False, 'error': 'Tidak ada field yang diubah.'}), 400
+
+    try:
+        notion_patch(f'https://api.notion.com/v1/pages/{page_id}', {'properties': props})
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': f'Notion HTTP {e.code}: {detail}'}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal update: {e}'}), 502
+
+    # Refresh cache agar dashboard mencerminkan perubahan (best-effort).
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-update sync failed: %s', e)
+
+    return jsonify({'ok': True, 'updated': list(props.keys())})
+
+
 
 
 # ─── CSV IMPORT → Monthly Performance ──────────────────────────────────────────
