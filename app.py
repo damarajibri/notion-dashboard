@@ -10,6 +10,34 @@ from flask import (
 import db
 import sync
 
+
+def _load_dotenv():
+    """Muat variabel dari file .env di folder aplikasi ke os.environ.
+
+    Loader ringan tanpa dependensi (python-dotenv tidak selalu tersedia di
+    PythonAnywhere free tier). Hanya mengisi variabel yang BELUM ada di
+    environment, sehingga nilai yang diset lewat WSGI (produksi) tetap menang.
+    Format didukung: baris `KEY=VALUE`, mengabaikan komentar (#) dan baris
+    kosong; tanda kutip di sekeliling nilai dilepas.
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+    try:
+        with open(path, encoding='utf-8') as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, val = line.split('=', 1)
+                key = key.strip()
+                val = val.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = val
+    except FileNotFoundError:
+        pass
+
+
+_load_dotenv()
+
 app = Flask(__name__)
 
 # ── Session / auth secret ─────────────────────────────────────────────────────
