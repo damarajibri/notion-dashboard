@@ -1603,6 +1603,24 @@ function fmtRp(n) {
   return 'Rp ' + n.toLocaleString('id-ID');
 }
 
+// ===== FILE LINKS (fetch-on-click) =====
+// Item file: { page_id, field, idx, name, external_url? }
+// - external_url (URL permanen, mis. link eksternal) dibuka langsung.
+// - selainnya diarahkan ke /api/file yang me-resolve URL SEGAR dari Notion saat
+//   diklik. URL file Notion (type='file') adalah presigned S3 yang kedaluwarsa
+//   ~1 jam, sehingga tidak boleh disimpan; selalu di-resolve on-demand.
+function fileHref(f) {
+  return f.external_url
+    ? f.external_url
+    : `/api/file?page_id=${encodeURIComponent(f.page_id)}&field=${encodeURIComponent(f.field)}&idx=${encodeURIComponent(f.idx)}`;
+}
+function fileLinks(arr) {
+  if (!arr || !arr.length) return '-';
+  return arr.map(f => (f.page_id || f.external_url)
+    ? `<a href="${fileHref(f)}" target="_blank" rel="noopener" style="color:var(--blue,#3b82f6);font-size:12px;text-decoration:underline" title="${(f.name||'file').replace(/"/g,'&quot;')}">📎 ${f.name || 'file'}</a>`
+    : `<span style="font-size:12px">📎 ${f.name || 'file'}</span>`).join('<br>');
+}
+
 // ===== KPI RENDER =====
 function renderKPI(d) {
   const total = d.tasks.length, done = d.task_status['Done'] || 0, open = total - done;
@@ -1984,7 +2002,7 @@ function applyProjFilters() {
   document.getElementById('projCount').textContent = projects.length + ' projects';
 
   const table = document.getElementById('projTable');
-  table.querySelector('thead tr').innerHTML = ['#', 'Project', 'Status', 'Assignee', 'Due', 'Sisa', 'Completion', 'Docs', 'Priority', 'SPK Baru', 'Last Edit', ''].map(h => `<th>${h}</th>`).join('');
+  table.querySelector('thead tr').innerHTML = ['#', 'Project', 'Status', 'Assignee', 'Due', 'Sisa', 'Completion', 'Docs', 'Priority', 'SPK Baru', 'Last Edit', 'File', ''].map(h => `<th>${h}</th>`).join('');
   table.querySelector('tbody').innerHTML = projects.map((p, i) => {
     const spkb = p.spk_baru && p.spk_baru.length > 0 ? p.spk_baru.map(s => `<span class="tag">${s}</span>`).join('') : '-';
     const rd = p.remaining_days !== null && p.remaining_days !== undefined ? sisaBadge(p.remaining_days) : '-';
@@ -2001,9 +2019,10 @@ function applyProjFilters() {
       <td>${priorityBadge(p.priority)}</td>
       <td>${spkb}</td>
       <td style="color:var(--text2);font-size:12px">${p.edited}</td>
+      <td style="font-size:12px">${fileLinks(p.files)}</td>
       <td><button class="action-btn" onclick="showProjDetail(${i})" title="Lihat detail">🔍</button></td>
     </tr>`;
-  }).join('') || emptyState(12);
+  }).join('') || emptyState(13);
   window._filteredProjects = projects;
   makeSortable(table);
 }
@@ -2205,7 +2224,7 @@ function applySpkFilters() {
     '#', 'ID', 'No SPK', 'Project', 'Vendor', 'Status', 'Tipe',
     'Mulai', 'Selesai', 'Sisa Hari',
     'Total Anggaran', 'Terbayar', 'Sisa Anggaran',
-    'Perpanjangan', 'PIC', 'Notes'
+    'Perpanjangan', 'PIC', 'Notes', 'File'
   ].map(h => `<th>${h}</th>`).join('');
 
   table.querySelector('tbody').innerHTML = spk.map((s, i) => {
@@ -2241,8 +2260,9 @@ function applySpkFilters() {
       <td>${perp}</td>
       <td>${s.pic && s.pic.length ? s.pic.map(p => renderAvatar(p)).join('') : '<span style="color:var(--text2)">-</span>'}</td>
       <td style="color:var(--text2);font-size:12px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.notes}">${s.notes || '-'}</td>
+      <td style="font-size:12px">${fileLinks(s.files)}</td>
     </tr>`;
-  }).join('') || emptyState(16);
+  }).join('') || emptyState(17);
   makeSortable(table);
 }
 
@@ -2420,11 +2440,6 @@ function renderMonthly() {
 
   // Definisi kolom (key stabil + label + cara render sel).
   const dt = v => v ? `<span style="color:var(--text2);font-size:12px">${v}</span>` : '-';
-  const fileLinks = arr => (arr && arr.length)
-    ? arr.map(f => f.url
-        ? `<a href="${f.url}" target="_blank" rel="noopener" style="color:var(--blue,#3b82f6);font-size:12px;text-decoration:underline" title="${(f.name||'file').replace(/"/g,'&quot;')}">📎 ${f.name || 'file'}</a>`
-        : `<span style="font-size:12px">📎 ${f.name || 'file'}</span>`).join('<br>')
-    : '-';
   const MONTHLY_COLUMNS = [
     { key: 'num',          label: '#',                     cell: (x, i) => `<td class="col-num">${i + 1}</td>` },
     { key: 'id',           label: 'ID',                    cell: x => `<td style="font-size:12px;color:var(--text2)">${x.id || '-'}</td>` },

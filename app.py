@@ -289,6 +289,50 @@ DOC_FIELDS = [
     'Risk Assessment',
 ]
 
+# Field bertipe "files" di database Projects (untuk ditampilkan sebagai tautan).
+# Catatan: 'Izin Anggaran FIle' mengikuti typo asli di Notion (jangan diperbaiki
+# di sini, harus sama persis dengan nama property di Notion agar cocok).
+PROJECT_FILE_FIELDS = [
+    'TOR File',
+    'FS File',
+    'Izin Prinsip File',
+    'Izin Anggaran FIle',
+    'Penilaian Teknis File',
+    'PI file (Pakta Integritas)',
+    'TPRA File',
+    'Benchmark File',
+    'Risk Assessment File',
+]
+
+
+def _file_meta(props, field, page_id):
+    """Kembalikan metadata file untuk satu property bertipe 'files'.
+
+    Kita sengaja TIDAK menyimpan URL hasil sync, karena URL file Notion
+    (type='file') adalah presigned URL S3 yang kedaluwarsa ~1 jam. Sebagai
+    gantinya kita simpan koordinat (page_id, field, idx) + nama file, lalu URL
+    segar diambil on-demand lewat endpoint /api/file saat user mengklik.
+
+    File bertipe 'external' (URL permanen) kita sertakan url-nya langsung,
+    karena tidak kedaluwarsa dan bisa dibuka tanpa resolve.
+
+    Returns list of dict: {page_id, field, idx, name, external_url?}
+    """
+    out = []
+    files = (props.get(field, {}) or {}).get('files') or []
+    for idx, f in enumerate(files):
+        meta = {
+            'page_id': page_id,
+            'field':   field,
+            'idx':     idx,
+            'name':    f.get('name', 'file'),
+        }
+        if f.get('type') == 'external':
+            meta['external_url'] = f.get('external', {}).get('url', '')
+        out.append(meta)
+    return out
+
+
 def extract_project(r, personel):
     props = r['properties']
 
@@ -340,6 +384,11 @@ def extract_project(r, personel):
 
     total_docs = len(DOC_FIELDS)
 
+    # File metadata (fetch-on-click) dari semua field file project.
+    files = []
+    for ff in PROJECT_FILE_FIELDS:
+        files.extend(_file_meta(props, ff, r['id']))
+
     return {
         'title':      title,
         'status':     status_name,
@@ -353,6 +402,8 @@ def extract_project(r, personel):
         'created':    r['created_time'][:10],
         'edited':     r['last_edited_time'][:10],
         'due':        due,
+        'files':      files,
+        'page_id':    r['id'],
     }
 
 # ─── extract_spk ─────────────────────────────────────────────────────────────
@@ -461,6 +512,10 @@ def extract_spk(r, personel):
         if item.get('type') == 'status' and item.get('status')
     ]
 
+    # File metadata (fetch-on-click) — gabungan 'SPK File' + 'File & media'.
+    # URL tidak disimpan (expiry ~1 jam); hanya koordinat utk /api/file.
+    files = _file_meta(props, 'SPK File', r['id']) + _file_meta(props, 'File & media', r['id'])
+
     return {
         'spk_id':        spk_id,
         'no_spk':        no_spk,
@@ -480,6 +535,8 @@ def extract_spk(r, personel):
         'pic':           pic,
         'perp_ids':      perp_ids,
         'status_perpanjangan': status_perp,
+        'files':         files,
+        'page_id':       r['id'],
         '_id':           r['id'],
     }
 
@@ -522,20 +579,11 @@ def extract_monthly(r, spk_no_map):
     uid    = props.get('ID', {}).get('unique_id') or {}
     doc_id = f"{uid.get('prefix', '')}-{uid.get('number', '')}" if uid.get('number') is not None else ''
 
-    # Files (BAST & BALP) → daftar {name, url}
-    def _files(key):
-        out = []
-        for f in props.get(key, {}).get('files', []) or []:
-            url = ''
-            if f.get('type') == 'file':
-                url = f.get('file', {}).get('url', '')
-            elif f.get('type') == 'external':
-                url = f.get('external', {}).get('url', '')
-            out.append({'name': f.get('name', 'file'), 'url': url})
-        return out
-
-    files_bast = _files('Files BAST')
-    files_balp = _files('Files BALP')
+    # Files (BAST & BALP) → metadata fetch-on-click (bukan URL basi).
+    # URL file Notion type='file' kedaluwarsa ~1 jam, jadi kita simpan
+    # koordinat (page_id, field, idx) dan resolve URL segar lewat /api/file.
+    files_bast = _file_meta(props, 'Files BAST', r['id'])
+    files_balp = _file_meta(props, 'Files BALP', r['id'])
 
     # Relation SPK → tampilkan No SPK-nya
     spk_rel = props.get('📋 SPK', {}).get('relation', [])
@@ -767,6 +815,59 @@ def download_template_csv():
         download_name='template_monthly_performance.csv',
         mimetype='text/csv',
     )
+
+@app.route('/api/file')
+@login_required
+def api_file():
+    """Resolve & redirect ke URL file Notion yang SELALU segar (fetch-on-click).
+
+    URL file Notion bertipe 'file' adalah presigned URL S3 yang kedaluwarsa
+    ~1 jam, sehingga tidak boleh disimpan di cache. Endpoint ini mengambil
+    halaman terbaru dari Notion API saat diklik, membaca file pada
+    (field, idx), lalu me-redirect user ke URL yang baru dibuat Notion.
+
+    Query params:
+      - page_id : id halaman Notion (wajib)
+      - field   : nama property bertipe 'files' (wajib)
+      - idx     : indeks file dalam property tsb (opsional, default 0)
+    """
+    page_id = (request.args.get('page_id') or '').strip()
+    field   = (request.args.get('field') or '').strip()
+    try:
+        idx = int(request.args.get('idx') or 0)
+    except (TypeError, ValueError):
+        idx = 0
+
+    if not page_id or not field:
+        return jsonify({'ok': False, 'error': 'page_id dan field wajib diisi.'}), 400
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN tidak diset di server.'}), 503
+
+    try:
+        page = notion_get(f'https://api.notion.com/v1/pages/{page_id}')
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal mengambil halaman Notion: {e}'}), 502
+
+    prop  = (page.get('properties', {}) or {}).get(field, {}) or {}
+    files = prop.get('files') or []
+    if prop.get('type') != 'files' or idx < 0 or idx >= len(files):
+        return jsonify({'ok': False, 'error': 'File tidak ditemukan.'}), 404
+
+    f = files[idx]
+    ftype = f.get('type')
+    if ftype == 'file':
+        url = f.get('file', {}).get('url', '')
+    elif ftype == 'external':
+        url = f.get('external', {}).get('url', '')
+    else:
+        url = ''
+
+    if not url:
+        return jsonify({'ok': False, 'error': 'URL file kosong.'}), 404
+
+    # Redirect langsung ke URL file (presigned fresh untuk type=file).
+    return redirect(url)
+
 
 @app.route('/api/data')
 @login_required
