@@ -1490,6 +1490,76 @@ def api_monthly_update():
 
     return jsonify({'ok': True, 'updated': list(props.keys())})
 
+# ─── Shared: bangun properties Notion dari peta editable ───────────────────────
+def _build_props_from_map(editable_map, payload, only_present=True):
+    """Bangun dict `properties` Notion dari peta editable + payload frontend.
+
+    Mendukung tipe: title, rich_text, select, status, number, date.
+    - only_present=True (update): hanya proses field yang ADA di payload.
+    - only_present=False (create): proses semua field di peta (yang kosong
+      dilewati utk status/select agar tidak kirim null tak perlu).
+    Return (props, errors).
+    """
+    props, errors = {}, []
+    for fkey, (notion_name, ftype) in editable_map.items():
+        if only_present and fkey not in payload:
+            continue
+        raw = payload.get(fkey)
+        val = ('' if raw is None else str(raw)).strip()
+
+        if ftype == 'title':
+            props[notion_name] = {'title': [{'text': {'content': val}}] if val else []}
+        elif ftype == 'rich_text':
+            props[notion_name] = {'rich_text': [{'text': {'content': val}}] if val else []}
+        elif ftype == 'select':
+            if val:
+                props[notion_name] = {'select': {'name': val}}
+            elif only_present:
+                props[notion_name] = {'select': None}
+        elif ftype == 'status':
+            # Status tidak boleh null; hanya set bila ada nilai.
+            if val:
+                props[notion_name] = {'status': {'name': val}}
+        elif ftype == 'number':
+            if val == '':
+                if only_present:
+                    props[notion_name] = {'number': None}
+            else:
+                digits = val.replace(',', '').replace(' ', '')
+                try:
+                    props[notion_name] = {'number': float(digits)}
+                except ValueError:
+                    errors.append(f"'{notion_name}' bukan angka valid: {raw!r}")
+        elif ftype == 'date':
+            if val == '':
+                if only_present:
+                    props[notion_name] = {'date': None}
+            else:
+                iso, derr = normalize_date(val)
+                if iso:
+                    props[notion_name] = {'date': {'start': iso}}
+                else:
+                    errors.append(f"'{notion_name}': {derr}")
+    return props, errors
+
+
+def _create_notion_page(db_id, props):
+    """Buat halaman baru di database Notion. Return (ok, result_or_error, http_code)."""
+    try:
+        res = notion_post('https://api.notion.com/v1/pages',
+                          {'parent': {'database_id': db_id}, 'properties': props})
+        return True, res, 200
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return False, f'Notion HTTP {e.code}: {detail}', 502
+    except Exception as e:  # noqa: BLE001
+        return False, f'Gagal membuat halaman: {e}', 502
+
+
 # ─── Project Submission: edit → Notion ─────────────────────────────────────────
 # Peta field frontend → (nama properti Notion, tipe). Hanya field skalar yang
 # aman diedit. 'Completion' adalah rollup (read-only) dan 'Assignee' adalah
@@ -1677,6 +1747,65 @@ def api_spk_update():
         app.logger.warning('Post-update sync failed: %s', e)
 
     return jsonify({'ok': True, 'updated': list(props.keys())})
+
+# ─── Create: SPK & Project baru → Notion ───────────────────────────────────────
+@app.route('/api/spk/create', methods=['POST'])
+@login_required
+def api_spk_create():
+    """Buat SPK baru di Notion. Wajib: no_spk (title)."""
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    if not (payload.get('no_spk') or '').strip():
+        return jsonify({'ok': False, 'error': 'No SPK wajib diisi.'}), 400
+
+    props, errors = _build_props_from_map(_SPK_EDITABLE, payload, only_present=False)
+    if errors:
+        return jsonify({'ok': False, 'error': 'Validasi gagal.', 'errors': errors}), 400
+    if 'No SPK' not in props:
+        return jsonify({'ok': False, 'error': 'No SPK wajib diisi.'}), 400
+
+    ok, res, code = _create_notion_page(SPK_DB, props)
+    if not ok:
+        return jsonify({'ok': False, 'error': res}), code
+
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-create sync failed: %s', e)
+
+    return jsonify({'ok': True, 'page_id': res.get('id'), 'created': list(props.keys())})
+
+
+@app.route('/api/project/create', methods=['POST'])
+@login_required
+def api_project_create():
+    """Buat Project Submission baru di Notion. Wajib: title (Project name)."""
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    if not (payload.get('title') or '').strip():
+        return jsonify({'ok': False, 'error': 'Nama Project wajib diisi.'}), 400
+
+    props, errors = _build_props_from_map(_PROJECT_EDITABLE, payload, only_present=False)
+    if errors:
+        return jsonify({'ok': False, 'error': 'Validasi gagal.', 'errors': errors}), 400
+    if 'Project name' not in props:
+        return jsonify({'ok': False, 'error': 'Nama Project wajib diisi.'}), 400
+
+    ok, res, code = _create_notion_page(PROJECTS_DB, props)
+    if not ok:
+        return jsonify({'ok': False, 'error': res}), code
+
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-create sync failed: %s', e)
+
+    return jsonify({'ok': True, 'page_id': res.get('id'), 'created': list(props.keys())})
+
 
 
 

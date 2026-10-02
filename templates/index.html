@@ -1211,7 +1211,10 @@ span.file-chip { cursor: default; opacity: .7; }
         <div class="section-title">
           <span>🏗️</span> All Projects Submission
         </div>
-        <span class="section-count" id="projCount">0 projects</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-sm btn-primary" onclick="openProjCreate()">➕ Tambah Project</button>
+          <span class="section-count" id="projCount">0 projects</span>
+        </div>
       </div>
       <div class="table-wrapper">
         <div class="scroll-table">
@@ -1326,7 +1329,10 @@ span.file-chip { cursor: default; opacity: .7; }
     <div class="card full">
       <div class="section-header">
         <div class="section-title"><span>📄</span> All SPK</div>
-        <span class="section-count" id="spkCount">0 SPK</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-sm btn-primary" onclick="openSpkCreate()">➕ Tambah SPK</button>
+          <span class="section-count" id="spkCount">0 SPK</span>
+        </div>
       </div>
       <div class="table-wrapper">
         <div class="scroll-table">
@@ -1427,6 +1433,34 @@ span.file-chip { cursor: default; opacity: .7; }
       <button class="modal-close" onclick="closeSpkModal()">✕</button>
     </div>
     <div class="modal-body" id="spkModalBody"></div>
+  </div>
+</div>
+
+<!-- Modal: Tambah SPK -->
+<div class="modal-overlay" id="spkCreateModal" onclick="if(event.target===this)closeSpkCreate()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">➕ Tambah SPK</div>
+        <div class="modal-subtitle">Buat SPK baru di Notion</div>
+      </div>
+      <button class="modal-close" onclick="closeSpkCreate()">✕</button>
+    </div>
+    <div class="modal-body" id="spkCreateBody"></div>
+  </div>
+</div>
+
+<!-- Modal: Tambah Project -->
+<div class="modal-overlay" id="projCreateModal" onclick="if(event.target===this)closeProjCreate()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">➕ Tambah Project</div>
+        <div class="modal-subtitle">Buat Project Submission baru di Notion</div>
+      </div>
+      <button class="modal-close" onclick="closeProjCreate()">✕</button>
+    </div>
+    <div class="modal-body" id="projCreateBody"></div>
   </div>
 </div>
 
@@ -3338,7 +3372,132 @@ function saveSpkDetail() {
     })
     .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeSpkModal(); closeImportModal(); closeMonthlyEdit(); } });
+
+// ===== CREATE SPK / PROJECT =====
+// Helper select untuk form create.
+function _createSelect(id, options, extraStyle) {
+  const opts = options.map(o => `<option value="${o}">${o}</option>`).join('');
+  return `<select id="${id}" class="form-input" style="width:100%;padding:8px;${extraStyle || ''}"><option value="">—</option>${opts}</select>`;
+}
+
+function openSpkCreate() {
+  const STATUS_OPTS = ['Active', 'In progress', 'Extended', 'Cancel', 'Terminated'];
+  document.getElementById('spkCreateBody').innerHTML = `
+    <div class="modal-section">
+      <div class="modal-section-title">Informasi Umum</div>
+      <label class="filter-label" style="display:block;margin:8px 0 6px">No SPK <span style="color:var(--red)">*</span></label>
+      <input type="text" id="sc_no_spk" class="form-input" style="width:100%;padding:8px" placeholder="mis. B.123-INF/OSP/10/2026">
+      <label class="filter-label" style="display:block;margin:12px 0 6px">Project Name</label>
+      <input type="text" id="sc_project" class="form-input" style="width:100%;padding:8px">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" style="display:block;margin-bottom:6px">Status</label>
+          ${_createSelect('sc_status', STATUS_OPTS)}
+        </div>
+        <div style="flex:1;min-width:160px">
+          <label class="filter-label" style="display:block;margin-bottom:6px">Total Anggaran</label>
+          <input type="number" step="any" id="sc_total_anggaran" class="form-input" style="width:100%;padding:8px">
+        </div>
+      </div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">Klasifikasi</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Jenis Anggaran</label><input type="text" id="sc_jenis" class="form-input" style="width:100%;padding:8px"></div>
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Klasifikasi</label><input type="text" id="sc_klasifikasi" class="form-input" style="width:100%;padding:8px"></div>
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Baru/Perpanjangan/Sisa Bayar</label><input type="text" id="sc_tipe" class="form-input" style="width:100%;padding:8px"></div>
+      </div>
+    </div>
+    <div class="modal-section">
+      <div class="modal-section-title">Tanggal & Catatan</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px"><label class="filter-label" style="display:block;margin-bottom:6px">SPK Mulai</label><input type="date" id="sc_mulai" class="form-input" style="width:100%;padding:8px"></div>
+        <div style="flex:1;min-width:160px"><label class="filter-label" style="display:block;margin-bottom:6px">SPK Selesai</label><input type="date" id="sc_selesai" class="form-input" style="width:100%;padding:8px"></div>
+      </div>
+      <label class="filter-label" style="display:block;margin:12px 0 6px">Notes</label>
+      <textarea id="sc_notes" class="form-input" rows="2" style="width:100%;padding:8px;resize:vertical"></textarea>
+    </div>
+    <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+      <span id="sc_result" style="font-size:13px;margin-right:auto"></span>
+      <button class="btn btn-ghost" onclick="closeSpkCreate()">Batal</button>
+      <button class="btn btn-primary" id="sc_saveBtn" onclick="saveSpkCreate()"><span id="sc_saveIcon">💾</span> Simpan ke Notion</button>
+    </div>`;
+  document.getElementById('spkCreateModal').classList.add('active');
+}
+function closeSpkCreate() { document.getElementById('spkCreateModal').classList.remove('active'); }
+
+function saveSpkCreate() {
+  const $ = id => document.getElementById(id);
+  const btn = $('sc_saveBtn'), icon = $('sc_saveIcon'), res = $('sc_result');
+  const payload = {
+    no_spk:         $('sc_no_spk').value,
+    project:        $('sc_project').value,
+    status:         $('sc_status').value,
+    total_anggaran: $('sc_total_anggaran').value,
+    jenis_anggaran: $('sc_jenis').value,
+    klasifikasi:    $('sc_klasifikasi').value,
+    tipe:           $('sc_tipe').value,
+    spk_mulai:      $('sc_mulai').value,
+    spk_selesai:    $('sc_selesai').value,
+    notes:          $('sc_notes').value,
+  };
+  if (!payload.no_spk.trim()) { res.style.color = 'var(--red)'; res.textContent = 'No SPK wajib diisi.'; return; }
+  btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
+  fetch('/api/spk/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) { showToast('SPK baru dibuat di Notion', '✅'); closeSpkCreate(); loadData(); }
+      else { const e = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : ''; res.style.color = 'var(--red)'; res.textContent = 'Gagal: ' + (d.error || 'unknown') + e; }
+    })
+    .catch(e => { res.style.color = 'var(--red)'; res.textContent = 'Gagal menghubungi server: ' + e; })
+    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+}
+
+function openProjCreate() {
+  const STATUS_OPTS = ['Planning', 'In Progress', 'Done', 'Canceled'];
+  const PRIO_OPTS = ['High', 'Medium', 'Low'];
+  document.getElementById('projCreateBody').innerHTML = `
+    <div class="modal-section">
+      <div class="modal-section-title">Informasi Umum</div>
+      <label class="filter-label" style="display:block;margin:8px 0 6px">Nama Project <span style="color:var(--red)">*</span></label>
+      <input type="text" id="pc_title" class="form-input" style="width:100%;padding:8px" placeholder="Nama project submission">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:160px"><label class="filter-label" style="display:block;margin-bottom:6px">Status</label>${_createSelect('pc_status', STATUS_OPTS)}</div>
+        <div style="flex:1;min-width:160px"><label class="filter-label" style="display:block;margin-bottom:6px">Priority</label>${_createSelect('pc_priority', PRIO_OPTS)}</div>
+        <div style="flex:1;min-width:160px"><label class="filter-label" style="display:block;margin-bottom:6px">Due Date</label><input type="date" id="pc_due" class="form-input" style="width:100%;padding:8px"></div>
+      </div>
+    </div>
+    <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+      <span id="pc_result" style="font-size:13px;margin-right:auto"></span>
+      <button class="btn btn-ghost" onclick="closeProjCreate()">Batal</button>
+      <button class="btn btn-primary" id="pc_saveBtn" onclick="saveProjCreate()"><span id="pc_saveIcon">💾</span> Simpan ke Notion</button>
+    </div>`;
+  document.getElementById('projCreateModal').classList.add('active');
+}
+function closeProjCreate() { document.getElementById('projCreateModal').classList.remove('active'); }
+
+function saveProjCreate() {
+  const $ = id => document.getElementById(id);
+  const btn = $('pc_saveBtn'), icon = $('pc_saveIcon'), res = $('pc_result');
+  const payload = {
+    title:    $('pc_title').value,
+    status:   $('pc_status').value,
+    priority: $('pc_priority').value,
+    due:      $('pc_due').value,
+  };
+  if (!payload.title.trim()) { res.style.color = 'var(--red)'; res.textContent = 'Nama Project wajib diisi.'; return; }
+  btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
+  fetch('/api/project/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) { showToast('Project baru dibuat di Notion', '✅'); closeProjCreate(); loadData(); }
+      else { const e = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : ''; res.style.color = 'var(--red)'; res.textContent = 'Gagal: ' + (d.error || 'unknown') + e; }
+    })
+    .catch(e => { res.style.color = 'var(--red)'; res.textContent = 'Gagal menghubungi server: ' + e; })
+    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeSpkModal(); closeSpkCreate(); closeProjCreate(); closeImportModal(); closeMonthlyEdit(); } });
 
 // ===== TOAST =====
 function showToast(msg, icon = '✅') {
