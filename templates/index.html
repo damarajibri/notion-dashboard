@@ -287,6 +287,9 @@ body {
 .spk-card:hover { border-color: var(--accent, #7c6af7); transform: translateY(-1px); }
 .spk-card-no { font-size: 13px; font-weight: 700; color: var(--text); word-break: break-word; }
 .spk-card-proj { font-size: 12px; color: var(--text2); line-height: 1.4; }
+.spk-card-perp { display: flex; flex-direction: column; gap: 3px; }
+.spk-card-perp-item { font-size: 12px; color: var(--text); line-height: 1.4; display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.spk-card-perp-title { color: var(--accent, #7c6af7); text-decoration: underline; text-underline-offset: 2px; }
 .spk-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
 .spk-card-vendor { color: var(--text2); display: inline-flex; align-items: center; gap: 4px; }
 .spk-card-value { font-weight: 700; color: var(--green, #22d4a0); font-size: 12px; }
@@ -2682,10 +2685,17 @@ function renderSpkGrouping() {
       const vendor = (s.vendor && s.vendor !== '-' && s.vendor !== '?')
         ? `<span class="spk-card-vendor">📄 ${s.vendor}</span>` : '';
       const value = s.total_anggaran ? `<span class="spk-card-value">${fmtRp(s.total_anggaran)}</span>` : '';
+      // Project Perpanjangan (🎯) — posisi di bawah nama proyek, seperti di Notion.
+      const perp = (s.perpanjangan && s.perpanjangan.length)
+        ? `<div class="spk-card-perp">${s.perpanjangan.map(pp =>
+            `<div class="spk-card-perp-item">🎯 <span class="spk-card-perp-title">${pp.title || '-'}</span>${pp.status ? ' ' + statusBadge(pp.status) : ''}</div>`
+          ).join('')}</div>`
+        : '';
       const clickAttr = s.page_id ? `onclick="showSpkByPageId('${s.page_id}')"` : '';
       return `<div class="spk-card" ${clickAttr} title="Klik untuk edit">
           <div class="spk-card-no">${s.no_spk || '-'}</div>
           <div class="spk-card-proj">${s.project || ''}</div>
+          ${perp}
           <div class="spk-card-meta">${statusBadge(s.status)} ${sisa}</div>
           <div class="spk-card-meta">${vendor} ${value}</div>
           <div class="spk-card-meta">${pics}</div>
