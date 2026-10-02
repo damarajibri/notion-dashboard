@@ -1707,13 +1707,19 @@ function fileManager(pageId, files, fieldOptions, onChanged) {
   const rows = (files && files.length)
     ? files.map(f => {
         const name = esc(f.name || 'file');
+        const field = esc(f.field || '');
         const href = fileHref(f);
         const canDel = !!(f.page_id && f.field != null && f.idx != null);
         const delBtn = canDel
           ? `<button class="btn btn-sm btn-danger" title="Hapus file"
                onclick="deleteFile('${esc(f.page_id)}','${esc(f.field)}',${Number(f.idx)},'${esc(onChanged)}')">🗑️</button>`
           : '';
-        return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+        // Label nama field (properti Notion) di sebelah kiri setiap file.
+        const fieldLabel = field
+          ? `<span title="${field}" style="flex:0 0 140px;max-width:140px;color:var(--text2);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${field}</span>`
+          : `<span style="flex:0 0 140px"></span>`;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">
+            ${fieldLabel}
             <a href="${href}" target="_blank" rel="noopener" style="flex:1;color:var(--blue,#3b82f6);font-size:13px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">📎 ${name}</a>
             ${delBtn}
           </div>`;
