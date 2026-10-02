@@ -246,6 +246,54 @@ body {
 .tab-content { display: none; animation: fadeIn 0.25s ease; }
 .tab-content.active { display: block; }
 
+/* ===== SPK SUB-TABS ===== */
+.subtab-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.subtab {
+  padding: 7px 14px; font-size: 13px; font-weight: 600;
+  border-radius: var(--radius-md, 10px); border: 1px solid var(--border);
+  background: var(--surface); color: var(--text2); cursor: pointer;
+  font-family: inherit; transition: all .15s;
+}
+.subtab:hover { border-color: var(--border-hover, #3d3d6b); color: var(--text); }
+.subtab.active { background: var(--accent, #7c6af7); border-color: var(--accent, #7c6af7); color: #fff; }
+.spk-sub { display: none; }
+.spk-sub.active { display: block; animation: fadeIn 0.2s ease; }
+
+/* ===== SPK BOARD (grouping by jatuh tempo) ===== */
+.spk-board {
+  display: flex; gap: 16px; overflow-x: auto; padding: 4px 2px 12px;
+  align-items: flex-start;
+}
+.spk-col {
+  flex: 0 0 300px; max-width: 300px; min-width: 300px;
+  background: var(--bg2, #111122); border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 14px); padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.spk-col-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 2px 4px 8px; border-bottom: 1px solid var(--border);
+}
+.spk-col-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.spk-col-count {
+  font-size: 11px; font-weight: 700; color: var(--text2);
+  background: var(--surface2, #1c1c35); border-radius: 999px; padding: 2px 9px;
+}
+.spk-card {
+  background: var(--surface, #161628); border: 1px solid var(--border);
+  border-radius: var(--radius-md, 10px); padding: 12px; cursor: pointer;
+  transition: border-color .15s, transform .15s; display: flex; flex-direction: column; gap: 8px;
+}
+.spk-card:hover { border-color: var(--accent, #7c6af7); transform: translateY(-1px); }
+.spk-card-no { font-size: 13px; font-weight: 700; color: var(--text); word-break: break-word; }
+.spk-card-proj { font-size: 12px; color: var(--text2); line-height: 1.4; }
+.spk-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.spk-card-vendor { color: var(--text2); display: inline-flex; align-items: center; gap: 4px; }
+.spk-card-value { font-weight: 700; color: var(--green, #22d4a0); font-size: 12px; }
+.spk-card-pics { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.spk-card-nopic { color: var(--red, #f05673); font-size: 11px; font-weight: 600; }
+.spk-board-empty { color: var(--text2); font-size: 13px; padding: 20px; }
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -1236,6 +1284,14 @@ span.file-chip { cursor: default; opacity: .7; }
 
   <!-- ===== SPK TAB ===== -->
   <div id="tab-spk" class="tab-content">
+    <!-- Sub-tab switch -->
+    <div class="subtab-bar">
+      <button class="subtab active" id="subtab-spk-all" onclick="switchSpkSub('all', this)">📄 All SPK</button>
+      <button class="subtab" id="subtab-spk-group" onclick="switchSpkSub('group', this)">🗂️ SPK Grouping</button>
+    </div>
+
+    <!-- Sub-panel: All SPK (tabel) -->
+    <div id="spk-sub-all" class="spk-sub active">
     <div class="filter-bar">
       <div class="filter-group">
         <input type="text" id="searchSpk" class="form-input" placeholder="🔍 Search SPK..." oninput="applySpkFilters()">
@@ -1278,6 +1334,25 @@ span.file-chip { cursor: default; opacity: .7; }
         </div>
       </div>
     </div>
+    </div><!-- /spk-sub-all -->
+
+    <!-- Sub-panel: SPK Grouping (board by jatuh tempo) -->
+    <div id="spk-sub-group" class="spk-sub">
+      <div class="filter-bar">
+        <div class="filter-group">
+          <input type="text" id="searchSpkGroup" class="form-input" placeholder="🔍 Search SPK..." oninput="renderSpkGrouping()">
+          <select id="filterSpkGroupStatus" class="form-select" onchange="renderSpkGrouping()">
+            <option value="all">All Status</option>
+          </select>
+          <select id="filterSpkGroupPic" class="form-select" onchange="renderSpkGrouping()">
+            <option value="all">All PIC</option>
+            <option value="empty">⚠️ Belum Ada PIC</option>
+          </select>
+        </div>
+        <span class="section-count" id="spkGroupCount">0 SPK</span>
+      </div>
+      <div id="spkBoard" class="spk-board"></div>
+    </div><!-- /spk-sub-group -->
   </div>
 
   <!-- ===== MONTHLY PERFORMANCE TAB (manual load) ===== -->
@@ -2392,6 +2467,10 @@ function renderSpk(d) {
 
   // KPI dan tabel dirender sepenuhnya oleh applySpkFilters
   applySpkFilters();
+
+  // Jika sub-tab grouping sedang aktif, render ulang board-nya juga.
+  const groupPanel = document.getElementById('spk-sub-group');
+  if (groupPanel && groupPanel.classList.contains('active')) renderSpkGrouping();
 }
 
 function applySpkFilters() {
@@ -2489,6 +2568,103 @@ function applySpkFilters() {
   }).join('') || emptyState(17);
   window._filteredSpk = spk;
   makeSortable(table);
+}
+
+// ===== SPK GROUPING (board by jatuh tempo) =====
+// Ganti sub-tab di dalam tab SPK: 'all' (tabel) / 'group' (board).
+function switchSpkSub(which, btn) {
+  document.querySelectorAll('#tab-spk .subtab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  document.getElementById('spk-sub-all').classList.toggle('active', which === 'all');
+  document.getElementById('spk-sub-group').classList.toggle('active', which === 'group');
+  if (which === 'group') renderSpkGrouping();
+}
+
+// Tentukan kunci + label grup berdasarkan tanggal jatuh tempo (spk_selesai)
+// dan sisa hari. Urutan grup: Lewat → Next 7 days → Next 30 days → per-bulan.
+function spkGroupOf(s) {
+  const sh = s.sisa_hari;
+  if (sh === null || sh === undefined || !s.spk_selesai) {
+    return { key: 'zz_none', label: 'Tanpa Jatuh Tempo', order: 9e9 };
+  }
+  if (sh < 0)  return { key: 'a_overdue', label: 'Sudah Lewat', order: -1 };
+  if (sh <= 7) return { key: 'b_7',  label: 'Next 7 days',  order: 0 };
+  if (sh <= 30) return { key: 'c_30', label: 'Next 30 days', order: 1 };
+  // Selebihnya: kelompokkan per bulan jatuh tempo.
+  const d = new Date(s.spk_selesai);
+  if (isNaN(d)) return { key: 'zz_none', label: 'Tanpa Jatuh Tempo', order: 9e9 };
+  const ym = d.getFullYear() * 12 + d.getMonth();
+  const label = d.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
+  return { key: 'm_' + ym, label: label, order: 100 + ym };
+}
+
+function renderSpkGrouping() {
+  if (!DATA || !DATA.spk) return;
+  const board = document.getElementById('spkBoard');
+
+  // Isi dropdown filter sekali (status & PIC) dari data.
+  const ssel = document.getElementById('filterSpkGroupStatus');
+  if (ssel && ssel.options.length <= 1) {
+    [...new Set(DATA.spk.map(s => s.status).filter(Boolean))].sort()
+      .forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; ssel.appendChild(o); });
+  }
+  const psel = document.getElementById('filterSpkGroupPic');
+  if (psel && psel.options.length <= 2) {
+    [...new Set(DATA.spk.flatMap(s => s.pic))].filter(Boolean).sort()
+      .forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; psel.appendChild(o); });
+  }
+
+  const q      = (document.getElementById('searchSpkGroup').value || '').toLowerCase();
+  const status = document.getElementById('filterSpkGroupStatus').value;
+  const pic    = document.getElementById('filterSpkGroupPic').value;
+
+  let spk = [...DATA.spk];
+  if (status !== 'all') spk = spk.filter(s => s.status === status);
+  if (pic === 'empty')  spk = spk.filter(s => !s.pic || s.pic.length === 0);
+  else if (pic !== 'all') spk = spk.filter(s => s.pic.includes(pic));
+  if (q) spk = spk.filter(s => ((s.no_spk || '') + (s.project || '') + (s.vendor || '')).toLowerCase().includes(q));
+
+  document.getElementById('spkGroupCount').textContent = spk.length + ' SPK';
+
+  // Kelompokkan.
+  const groups = {};
+  spk.forEach(s => {
+    const g = spkGroupOf(s);
+    if (!groups[g.key]) groups[g.key] = { label: g.label, order: g.order, items: [] };
+    groups[g.key].items.push(s);
+  });
+
+  const cols = Object.values(groups).sort((a, b) => a.order - b.order);
+  if (!cols.length) { board.innerHTML = '<div class="spk-board-empty">Tidak ada SPK yang cocok.</div>'; return; }
+
+  board.innerHTML = cols.map(col => {
+    // urutkan kartu dalam kolom berdasarkan sisa hari (menaik)
+    col.items.sort((a, b) => (a.sisa_hari ?? 99999) - (b.sisa_hari ?? 99999));
+    const cards = col.items.map(s => {
+      const sisa = sisaBadge(s.sisa_hari);
+      const pics = (s.pic && s.pic.length)
+        ? `<div class="spk-card-pics">${s.pic.map(p => renderAvatar(p) + '<span style="font-size:11px;color:var(--text2)">' + p + '</span>').join('')}</div>`
+        : '<span class="spk-card-nopic">⚠️ Belum ada PIC</span>';
+      const vendor = (s.vendor && s.vendor !== '-' && s.vendor !== '?')
+        ? `<span class="spk-card-vendor">📄 ${s.vendor}</span>` : '';
+      const value = s.total_anggaran ? `<span class="spk-card-value">${fmtRp(s.total_anggaran)}</span>` : '';
+      const clickAttr = s.page_id ? `onclick="showSpkByPageId('${s.page_id}')"` : '';
+      return `<div class="spk-card" ${clickAttr} title="Klik untuk edit">
+          <div class="spk-card-no">${s.no_spk || '-'}</div>
+          <div class="spk-card-proj">${s.project || ''}</div>
+          <div class="spk-card-meta">${statusBadge(s.status)} ${sisa}</div>
+          <div class="spk-card-meta">${vendor} ${value}</div>
+          <div class="spk-card-meta">${pics}</div>
+        </div>`;
+    }).join('');
+    return `<div class="spk-col">
+        <div class="spk-col-head">
+          <span class="spk-col-title">${col.label}</span>
+          <span class="spk-col-count">${col.items.length}</span>
+        </div>
+        ${cards}
+      </div>`;
+  }).join('');
 }
 
 // ===== MONTHLY PERFORMANCE (manual load, server-side filter) =====
@@ -3012,6 +3188,16 @@ function saveProjDetail() {
 function closeProjModal() { document.getElementById('projModal').classList.remove('active'); }
 
 // ===== SPK EDIT MODAL =====
+// Buka modal edit SPK berdasarkan page_id (dipakai kartu board grouping),
+// agar tidak bergantung pada indeks tabel yang mungkin terfilter berbeda.
+function showSpkByPageId(pid) {
+  const list = (DATA && DATA.spk) || [];
+  const i = list.findIndex(s => s.page_id === pid);
+  if (i < 0) return;
+  window._filteredSpk = list;  // agar refresh modal konsisten
+  showSpkDetail(i);
+}
+
 function showSpkDetail(idx) {
   const list = window._filteredSpk || [];
   const s = list[idx];
