@@ -1353,6 +1353,24 @@ span.file-chip { cursor: default; opacity: .7; }
           <select id="filterSpkGroupStatus" class="form-select" onchange="renderSpkGrouping()">
             <option value="all">All Status</option>
           </select>
+          <select id="filterSpkGroupVendor" class="form-select" onchange="renderSpkGrouping()">
+            <option value="all">All Vendor</option>
+          </select>
+          <select id="filterSpkGroupTipe" class="form-select" onchange="renderSpkGrouping()">
+            <option value="all">All Tipe</option>
+            <option value="Baru">Baru</option>
+            <option value="Perpanjangan">Perpanjangan</option>
+            <option value="Sisa Bayar">Sisa Bayar</option>
+          </select>
+          <select id="filterSpkGroupDue" class="form-select" onchange="renderSpkGrouping()">
+            <option value="all">All Jatuh Tempo</option>
+            <option value="7">≤ 1 Minggu</option>
+            <option value="14">≤ 2 Minggu</option>
+            <option value="30">≤ 1 Bulan</option>
+            <option value="90">≤ 3 Bulan</option>
+            <option value="180">≤ 6 Bulan</option>
+            <option value="overdue">Sudah Lewat</option>
+          </select>
           <select id="filterSpkGroupPic" class="form-select" onchange="renderSpkGrouping()">
             <option value="all">All PIC</option>
             <option value="empty">⚠️ Belum Ada PIC</option>
@@ -2650,13 +2668,30 @@ function renderSpkGrouping() {
     [...new Set(DATA.spk.flatMap(s => s.pic))].filter(Boolean).sort()
       .forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; psel.appendChild(o); });
   }
+  const vsel = document.getElementById('filterSpkGroupVendor');
+  if (vsel && vsel.options.length <= 1) {
+    [...new Set(DATA.spk.map(s => s.vendor).filter(v => v && v !== '-' && v !== '?'))].sort()
+      .forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = v; vsel.appendChild(o); });
+  }
 
   const q      = (document.getElementById('searchSpkGroup').value || '').toLowerCase();
   const status = document.getElementById('filterSpkGroupStatus').value;
   const pic    = document.getElementById('filterSpkGroupPic').value;
+  const vendor = document.getElementById('filterSpkGroupVendor').value;
+  const tipe   = document.getElementById('filterSpkGroupTipe').value;
+  const due    = document.getElementById('filterSpkGroupDue').value;
+  const today  = new Date().toISOString().slice(0, 10);
 
   let spk = [...DATA.spk];
   if (status !== 'all') spk = spk.filter(s => s.status === status);
+  if (vendor !== 'all') spk = spk.filter(s => s.vendor === vendor);
+  if (tipe !== 'all')   spk = spk.filter(s => s.tipe === tipe);
+  if (due === 'overdue') spk = spk.filter(s => s.spk_selesai && s.spk_selesai < today);
+  else if (due !== 'all') {
+    const dt = new Date(); dt.setDate(dt.getDate() + parseInt(due));
+    const max = dt.toISOString().slice(0, 10);
+    spk = spk.filter(s => s.spk_selesai && s.spk_selesai <= max && s.spk_selesai >= today);
+  }
   if (pic === 'empty')  spk = spk.filter(s => !s.pic || s.pic.length === 0);
   else if (pic !== 'all') spk = spk.filter(s => s.pic.includes(pic));
   if (q) spk = spk.filter(s => ((s.no_spk || '') + (s.project || '') + (s.vendor || '')).toLowerCase().includes(q));
