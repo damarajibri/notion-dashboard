@@ -1154,6 +1154,9 @@ def api_data():
             }
             for i, pid in enumerate(s['perp_ids'])
         ]
+        # Simpan page_id project perpanjangan agar form edit bisa pre-select
+        # relasi saat ini (hanya yang pertama dipakai oleh dropdown single-select).
+        s['perp_project_ids'] = list(s['perp_ids'])
         del s['perp_ids'], s['status_perpanjangan'], s['_id']
 
     # ── Resolve due date proyek dari SPK sebelumnya jika kosong ──
@@ -1520,6 +1523,12 @@ def _build_props_from_map(editable_map, payload, only_present=True):
             # Status tidak boleh null; hanya set bila ada nilai.
             if val:
                 props[notion_name] = {'status': {'name': val}}
+        elif ftype == 'relation':
+            # Nilai = satu page_id (atau kosong untuk mengosongkan relasi).
+            if val:
+                props[notion_name] = {'relation': [{'id': val}]}
+            elif only_present:
+                props[notion_name] = {'relation': []}
         elif ftype == 'number':
             if val == '':
                 if only_present:
@@ -1667,6 +1676,7 @@ _SPK_EDITABLE = {
     'spk_mulai':       ('SPK Mulai', 'date'),
     'spk_selesai':     ('SPK Selesai', 'date'),
     'notes':           ('Notes', 'rich_text'),
+    'perp_project':    ('Projects Perpanjangan', 'relation'),
 }
 
 
@@ -1686,42 +1696,7 @@ def api_spk_update():
     if not page_id:
         return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
 
-    props = {}
-    errors = []
-    for fkey, (notion_name, ftype) in _SPK_EDITABLE.items():
-        if fkey not in payload:
-            continue  # hanya ubah field yang dikirim
-        raw = payload.get(fkey)
-        val = ('' if raw is None else str(raw)).strip()
-
-        if ftype == 'title':
-            props[notion_name] = {'title': [{'text': {'content': val}}] if val else []}
-        elif ftype == 'rich_text':
-            props[notion_name] = {'rich_text': [{'text': {'content': val}}] if val else []}
-        elif ftype == 'select':
-            props[notion_name] = {'select': {'name': val} if val else None}
-        elif ftype == 'status':
-            # Status tidak boleh null; kalau kosong, lewati (jangan ubah).
-            if val:
-                props[notion_name] = {'status': {'name': val}}
-        elif ftype == 'number':
-            if val == '':
-                props[notion_name] = {'number': None}
-            else:
-                digits = val.replace(',', '').replace(' ', '')
-                try:
-                    props[notion_name] = {'number': float(digits)}
-                except ValueError:
-                    errors.append(f"'{notion_name}' bukan angka valid: {raw!r}")
-        elif ftype == 'date':
-            if val == '':
-                props[notion_name] = {'date': None}
-            else:
-                iso, derr = normalize_date(val)
-                if iso:
-                    props[notion_name] = {'date': {'start': iso}}
-                else:
-                    errors.append(f"'{notion_name}': {derr}")
+    props, errors = _build_props_from_map(_SPK_EDITABLE, payload, only_present=True)
 
     if errors:
         return jsonify({'ok': False, 'error': 'Validasi gagal.', 'errors': errors}), 400

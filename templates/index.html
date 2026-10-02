@@ -3290,12 +3290,31 @@ function showSpkDetail(idx) {
   const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
 
   const STATUS_OPTS = ['Active', 'In progress', 'Extended', 'Cancel', 'Terminated'];
+  const JENIS_OPTS = ['Satelit', 'Eksploitasi TI', 'Investasi TI'];
+  const KLAS_OPTS = ['Change', 'Run', 'Transform'];
+  const TIPE_OPTS = ['Baru', 'Perpanjangan', 'Sisa Bayar'];
   const sel = (id, options, current) => {
     const extra = (current && !options.includes(current))
       ? `<option value="${esc(current)}" selected>${esc(current)}</option>` : '';
     const opts = options.map(o => `<option value="${esc(o)}"${o === current ? ' selected' : ''}>${o}</option>`).join('');
     return `<select id="${id}" class="form-input" style="width:100%;padding:8px"><option value="">—</option>${extra}${opts}</select>`;
   };
+
+  // Project Perpanjangan — editable: dropdown berisi daftar Project Submission.
+  // Nilai = page_id project; pre-select relasi saat ini (yang pertama).
+  const curPerpId = (s.perp_project_ids && s.perp_project_ids.length) ? s.perp_project_ids[0] : '';
+  const projList = (DATA && DATA.projects) ? [...DATA.projects] : [];
+  projList.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  const perpOptions = projList
+    .filter(p => p.page_id)
+    .map(p => `<option value="${esc(p.page_id)}"${p.page_id === curPerpId ? ' selected' : ''}>${esc(p.title || '(tanpa nama)')}</option>`)
+    .join('');
+  const perpSelect = `<select id="se_perp" class="form-input" style="width:100%;padding:8px"><option value="">— Tidak ada —</option>${perpOptions}</select>`;
+  // Info status perpanjangan saat ini (read-only, dari rollup).
+  const perpStatusInfo = (s.perpanjangan && s.perpanjangan.length)
+    ? `<div style="margin-top:8px;font-size:12px;color:var(--text2)">Saat ini: ${s.perpanjangan.map(pp => `🎯 ${esc(pp.title || '-')}${pp.status ? ' ' + statusBadge(pp.status) : ''}`).join('<br>')}</div>`
+    : '';
+  const perpHtml = perpSelect + perpStatusInfo;
 
   document.getElementById('spkModalBody').innerHTML = `
     <input type="hidden" id="se_page_id" value="${esc(s.page_id || '')}">
@@ -3323,18 +3342,23 @@ function showSpkDetail(idx) {
       <div class="modal-section-title">Klasifikasi</div>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
         <div style="flex:1;min-width:160px">
-          <label class="filter-label" for="se_jenis" style="display:block;margin-bottom:6px">Jenis Anggaran</label>
-          <input type="text" id="se_jenis" class="form-input" style="width:100%;padding:8px" value="${esc(s.jenis_anggaran === '-' ? '' : s.jenis_anggaran)}">
+          <label class="filter-label" style="display:block;margin-bottom:6px">Jenis Anggaran</label>
+          ${sel('se_jenis', JENIS_OPTS, s.jenis_anggaran === '-' ? '' : s.jenis_anggaran)}
         </div>
         <div style="flex:1;min-width:160px">
-          <label class="filter-label" for="se_klasifikasi" style="display:block;margin-bottom:6px">Klasifikasi Pengadaan</label>
-          <input type="text" id="se_klasifikasi" class="form-input" style="width:100%;padding:8px" value="${esc(s.klasifikasi === '-' ? '' : s.klasifikasi)}">
+          <label class="filter-label" style="display:block;margin-bottom:6px">Klasifikasi Pengadaan</label>
+          ${sel('se_klasifikasi', KLAS_OPTS, s.klasifikasi === '-' ? '' : s.klasifikasi)}
         </div>
         <div style="flex:1;min-width:160px">
-          <label class="filter-label" for="se_tipe" style="display:block;margin-bottom:6px">Baru / Perpanjangan / Sisa Bayar</label>
-          <input type="text" id="se_tipe" class="form-input" style="width:100%;padding:8px" value="${esc(s.tipe === '-' ? '' : s.tipe)}">
+          <label class="filter-label" style="display:block;margin-bottom:6px">Baru / Perpanjangan / Sisa Bayar</label>
+          ${sel('se_tipe', TIPE_OPTS, s.tipe === '-' ? '' : s.tipe)}
         </div>
       </div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Project Perpanjangan</div>
+      ${perpHtml}
     </div>
 
     <div class="modal-section">
@@ -3387,6 +3411,7 @@ function saveSpkDetail() {
     spk_mulai:       $('se_mulai').value,
     spk_selesai:     $('se_selesai').value,
     notes:           $('se_notes').value,
+    perp_project:    (document.getElementById('se_perp') ? document.getElementById('se_perp').value : ''),
   };
 
   if (!payload.page_id) { showToast('page_id kosong', '⚠️'); return; }
@@ -3427,6 +3452,9 @@ function _createSelect(id, options, extraStyle) {
 
 function openSpkCreate() {
   const STATUS_OPTS = ['Active', 'In progress', 'Extended', 'Cancel', 'Terminated'];
+  const JENIS_OPTS = ['Satelit', 'Eksploitasi TI', 'Investasi TI'];
+  const KLAS_OPTS = ['Change', 'Run', 'Transform'];
+  const TIPE_OPTS = ['Baru', 'Perpanjangan', 'Sisa Bayar'];
   document.getElementById('spkCreateBody').innerHTML = `
     <div class="modal-section">
       <div class="modal-section-title">Informasi Umum</div>
@@ -3448,9 +3476,9 @@ function openSpkCreate() {
     <div class="modal-section">
       <div class="modal-section-title">Klasifikasi</div>
       <div style="display:flex;gap:12px;flex-wrap:wrap">
-        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Jenis Anggaran</label><input type="text" id="sc_jenis" class="form-input" style="width:100%;padding:8px"></div>
-        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Klasifikasi</label><input type="text" id="sc_klasifikasi" class="form-input" style="width:100%;padding:8px"></div>
-        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Baru/Perpanjangan/Sisa Bayar</label><input type="text" id="sc_tipe" class="form-input" style="width:100%;padding:8px"></div>
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Jenis Anggaran</label>${_createSelect('sc_jenis', JENIS_OPTS)}</div>
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Klasifikasi Pengadaan</label>${_createSelect('sc_klasifikasi', KLAS_OPTS)}</div>
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Baru/Perpanjangan/Sisa Bayar</label>${_createSelect('sc_tipe', TIPE_OPTS)}</div>
       </div>
     </div>
     <div class="modal-section">
