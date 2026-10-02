@@ -3300,21 +3300,32 @@ function showSpkDetail(idx) {
     return `<select id="${id}" class="form-input" style="width:100%;padding:8px"><option value="">—</option>${extra}${opts}</select>`;
   };
 
-  // Project Perpanjangan — editable: dropdown berisi daftar Project Submission.
-  // Nilai = page_id project; pre-select relasi saat ini (yang pertama).
+  // Project Perpanjangan — editable via AUTOCOMPLETE (ketik untuk mencari).
+  // Pakai <input list> + <datalist> native. Input menampilkan JUDUL project;
+  // page_id dipetakan dari judul saat menyimpan (via window._perpTitleToId).
   const curPerpId = (s.perp_project_ids && s.perp_project_ids.length) ? s.perp_project_ids[0] : '';
   const projList = (DATA && DATA.projects) ? [...DATA.projects] : [];
   projList.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  // Peta judul -> page_id (global, dipakai saat save). Judul duplikat memakai id terakhir.
+  window._perpTitleToId = {};
+  projList.forEach(p => { if (p.page_id && p.title) window._perpTitleToId[p.title] = p.page_id; });
+  const curPerpTitle = curPerpId
+    ? ((projList.find(p => p.page_id === curPerpId) || {}).title || '')
+    : '';
+  const perpDatalistId = 'se_perp_list';
   const perpOptions = projList
-    .filter(p => p.page_id)
-    .map(p => `<option value="${esc(p.page_id)}"${p.page_id === curPerpId ? ' selected' : ''}>${esc(p.title || '(tanpa nama)')}</option>`)
+    .filter(p => p.page_id && p.title)
+    .map(p => `<option value="${esc(p.title)}"></option>`)
     .join('');
-  const perpSelect = `<select id="se_perp" class="form-input" style="width:100%;padding:8px"><option value="">— Tidak ada —</option>${perpOptions}</select>`;
-  // Info status perpanjangan saat ini (read-only, dari rollup).
+  const perpInput =
+    `<input type="text" id="se_perp" class="form-input" list="${perpDatalistId}" autocomplete="off"` +
+    ` placeholder="Ketik untuk mencari project..." value="${esc(curPerpTitle)}" style="width:100%;padding:8px">` +
+    `<datalist id="${perpDatalistId}">${perpOptions}</datalist>` +
+    `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Ketik lalu pilih dari daftar. Kosongkan untuk menghapus relasi.</div>`;
   const perpStatusInfo = (s.perpanjangan && s.perpanjangan.length)
     ? `<div style="margin-top:8px;font-size:12px;color:var(--text2)">Saat ini: ${s.perpanjangan.map(pp => `🎯 ${esc(pp.title || '-')}${pp.status ? ' ' + statusBadge(pp.status) : ''}`).join('<br>')}</div>`
     : '';
-  const perpHtml = perpSelect + perpStatusInfo;
+  const perpHtml = perpInput + perpStatusInfo;
 
   document.getElementById('spkModalBody').innerHTML = `
     <input type="hidden" id="se_page_id" value="${esc(s.page_id || '')}">
@@ -3399,6 +3410,20 @@ function saveSpkDetail() {
   const $ = id => document.getElementById(id);
   const btn = $('se_saveBtn'), icon = $('se_saveIcon'), res = $('se_result');
 
+  // Resolve autocomplete Project Perpanjangan: judul -> page_id.
+  const perpEl = document.getElementById('se_perp');
+  const perpTitle = perpEl ? perpEl.value.trim() : '';
+  const titleToId = window._perpTitleToId || {};
+  let perpId = '';
+  if (perpTitle) {
+    perpId = titleToId[perpTitle] || '';
+    if (!perpId) {
+      res.style.color = 'var(--red,#ef4444)';
+      res.textContent = 'Project Perpanjangan "' + perpTitle + '" tidak ditemukan. Pilih dari daftar atau kosongkan.';
+      return;
+    }
+  }
+
   const payload = {
     page_id:         $('se_page_id').value,
     no_spk:          $('se_no_spk').value,
@@ -3411,7 +3436,7 @@ function saveSpkDetail() {
     spk_mulai:       $('se_mulai').value,
     spk_selesai:     $('se_selesai').value,
     notes:           $('se_notes').value,
-    perp_project:    (document.getElementById('se_perp') ? document.getElementById('se_perp').value : ''),
+    perp_project:    perpId,
   };
 
   if (!payload.page_id) { showToast('page_id kosong', '⚠️'); return; }
