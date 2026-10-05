@@ -71,6 +71,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast-ok { background: var(--green-bg); border: 1px solid var(--green); color: var(--green); }
 .toast-err { background: var(--red-bg); border: 1px solid var(--red); color: var(--red); }
+@keyframes uspin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -157,6 +158,24 @@ function toast(msg, ok=true) {
   t.textContent = msg;
   t.className = 'toast show ' + (ok ? 'toast-ok' : 'toast-err');
   setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+
+// Overlay loading saat simpan/hapus user.
+function showProcessing(msg = 'Memproses...') {
+  let ov = document.getElementById('processingOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'processingOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;display:flex;align-items:center;justify-content:center';
+    ov.innerHTML = '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 30px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow-lg)"><div style="width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:uspin .7s linear infinite"></div><div id="processingMsg" style="font-size:14px;font-weight:600;color:var(--text)"></div></div>';
+    document.body.appendChild(ov);
+  }
+  document.getElementById('processingMsg').textContent = msg;
+  ov.style.display = 'flex';
+}
+function hideProcessing() {
+  const ov = document.getElementById('processingOverlay');
+  if (ov) ov.style.display = 'none';
 }
 
 function badge(role) {
@@ -266,6 +285,7 @@ async function saveUser() {
 
   const btn = document.getElementById('saveBtn');
   btn.disabled = true;
+  showProcessing(id ? 'Menyimpan user...' : 'Membuat user...');
   try {
     const res = await fetch(url, {
       method,
@@ -283,16 +303,24 @@ async function saveUser() {
   } catch (e) {
     toast('Kesalahan jaringan', false);
   } finally {
+    hideProcessing();
     btn.disabled = false;
   }
 }
 
 async function delUser(id, username) {
   if (!confirm(`Hapus user "${username}"? Tindakan ini tidak dapat dibatalkan.`)) return;
-  const res = await fetch('/api/users/' + id, { method: 'DELETE' });
-  const data = await res.json();
-  if (data.ok) { toast('User dihapus ✓'); loadUsers(); }
-  else { toast(data.error || 'Gagal menghapus', false); }
+  showProcessing('Menghapus user...');
+  try {
+    const res = await fetch('/api/users/' + id, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.ok) { toast('User dihapus ✓'); loadUsers(); }
+    else { toast(data.error || 'Gagal menghapus', false); }
+  } catch (e) {
+    toast('Kesalahan jaringan', false);
+  } finally {
+    hideProcessing();
+  }
 }
 
 // Close modal on overlay click

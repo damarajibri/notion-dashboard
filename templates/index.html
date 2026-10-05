@@ -828,6 +828,13 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+.proc-spinner {
+  width: 22px; height: 22px; flex: 0 0 22px;
+  border: 3px solid var(--border, #2a2a4a);
+  border-top-color: var(--accent, #7c6af7);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
 
 .loading-text { color: var(--text2); font-size: 14px; }
 
@@ -1957,6 +1964,7 @@ function uploadFile(pageId, uid, onChanged) {
 
   msg.style.color = 'var(--text2)';
   msg.textContent = '⏳ Mengunggah...';
+  showProcessing('Mengunggah file...');
   fetch('/api/file/upload', { method: 'POST', body: fd })
     .then(r => r.json())
     .then(d => {
@@ -1968,11 +1976,13 @@ function uploadFile(pageId, uid, onChanged) {
         msg.textContent = 'Gagal: ' + (d.error || 'unknown');
       }
     })
-    .catch(e => { msg.style.color = 'var(--red)'; msg.textContent = 'Gagal menghubungi server: ' + e; });
+    .catch(e => { msg.style.color = 'var(--red)'; msg.textContent = 'Gagal menghubungi server: ' + e; })
+    .finally(() => hideProcessing());
 }
 
 function deleteFile(pageId, field, idx, onChanged) {
   if (!confirm('Hapus file ini dari Notion? Tindakan ini mengubah data di Notion.')) return;
+  showProcessing('Menghapus file...');
   fetch('/api/file/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1987,7 +1997,8 @@ function deleteFile(pageId, field, idx, onChanged) {
         showToast('Gagal hapus: ' + (d.error || 'unknown'), '❌');
       }
     })
-    .catch(e => showToast('Gagal menghubungi server: ' + e, '❌'));
+    .catch(e => showToast('Gagal menghubungi server: ' + e, '❌'))
+    .finally(() => hideProcessing());
 }
 
 // Daftar properti file di database Projects (untuk dropdown tujuan upload).
@@ -3217,6 +3228,7 @@ function saveMonthlyEdit() {
   icon.textContent = '⏳';
   res.style.display = 'none';
 
+  showProcessing('Menyimpan data...');
   fetch('/api/monthly/update', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3241,6 +3253,7 @@ function saveMonthlyEdit() {
       res.innerHTML = 'Gagal menghubungi server: ' + e;
     })
     .finally(() => {
+      hideProcessing();
       btn.disabled = false;
       icon.textContent = '💾';
     });
@@ -3371,6 +3384,7 @@ function saveProjDetail() {
   btn.disabled = true; icon.textContent = '⏳';
   res.textContent = '';
 
+  showProcessing('Menyimpan project...');
   fetch('/api/project/update', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3392,7 +3406,7 @@ function saveProjDetail() {
       res.style.color = 'var(--red,#ef4444)';
       res.textContent = 'Gagal menghubungi server: ' + e;
     })
-    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+    .finally(() => { hideProcessing(); btn.disabled = false; icon.textContent = '💾'; });
 }
 
 function closeProjModal() { document.getElementById('projModal').classList.remove('active'); }
@@ -3576,6 +3590,7 @@ function saveSpkDetail() {
   btn.disabled = true; icon.textContent = '⏳';
   res.textContent = '';
 
+  showProcessing('Menyimpan SPK...');
   fetch('/api/spk/update', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -3597,7 +3612,7 @@ function saveSpkDetail() {
       res.style.color = 'var(--red,#ef4444)';
       res.textContent = 'Gagal menghubungi server: ' + e;
     })
-    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+    .finally(() => { hideProcessing(); btn.disabled = false; icon.textContent = '💾'; });
 }
 
 // ===== CREATE SPK / PROJECT =====
@@ -3674,6 +3689,7 @@ function saveSpkCreate() {
   };
   if (!payload.no_spk.trim()) { res.style.color = 'var(--red)'; res.textContent = 'No SPK wajib diisi.'; return; }
   btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
+  showProcessing('Membuat SPK...');
   fetch('/api/spk/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     .then(r => r.json())
     .then(d => {
@@ -3681,7 +3697,7 @@ function saveSpkCreate() {
       else { const e = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : ''; res.style.color = 'var(--red)'; res.textContent = 'Gagal: ' + (d.error || 'unknown') + e; }
     })
     .catch(e => { res.style.color = 'var(--red)'; res.textContent = 'Gagal menghubungi server: ' + e; })
-    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+    .finally(() => { hideProcessing(); btn.disabled = false; icon.textContent = '💾'; });
 }
 
 function openProjCreate() {
@@ -3722,6 +3738,7 @@ function saveProjCreate() {
   };
   if (!payload.title.trim()) { res.style.color = 'var(--red)'; res.textContent = 'Nama Project wajib diisi.'; return; }
   btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
+  showProcessing('Membuat project...');
   fetch('/api/project/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     .then(r => r.json())
     .then(d => {
@@ -3729,7 +3746,7 @@ function saveProjCreate() {
       else { const e = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : ''; res.style.color = 'var(--red)'; res.textContent = 'Gagal: ' + (d.error || 'unknown') + e; }
     })
     .catch(e => { res.style.color = 'var(--red)'; res.textContent = 'Gagal menghubungi server: ' + e; })
-    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+    .finally(() => { hideProcessing(); btn.disabled = false; icon.textContent = '💾'; });
 }
 
 // ===== TASK CRUD =====
@@ -3831,6 +3848,7 @@ function saveTaskDetail() {
   const payload = Object.assign({ page_id: $('te_page_id').value }, p);
   delete payload._assigneeName;
   btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
+  showProcessing('Menyimpan task...');
   fetch('/api/task/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     .then(r => r.json())
     .then(d => {
@@ -3838,20 +3856,22 @@ function saveTaskDetail() {
       else { const e = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : ''; res.style.color = 'var(--red)'; res.textContent = 'Gagal: ' + (d.error || 'unknown') + e; }
     })
     .catch(e => { res.style.color = 'var(--red)'; res.textContent = 'Gagal menghubungi server: ' + e; })
-    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+    .finally(() => { hideProcessing(); btn.disabled = false; icon.textContent = '💾'; });
 }
 
 function deleteTask() {
   const t = window._editingTask;
   if (!t || !t.page_id) return;
   if (!confirm(`Hapus task "${t.name}"? Task akan di-archive di Notion.`)) return;
+  showProcessing('Menghapus task...');
   fetch('/api/task/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page_id: t.page_id }) })
     .then(r => r.json())
     .then(d => {
-      if (d.ok) { showToast('Task dihapus', '✅'); closeTaskModal(); loadData(); }
+      if (d.ok) { closeTaskModal(); showSuccessPopup('Task berhasil dihapus.'); loadData(); }
       else { showToast('Gagal hapus: ' + (d.error || 'unknown'), '❌'); }
     })
-    .catch(e => showToast('Gagal menghubungi server: ' + e, '❌'));
+    .catch(e => showToast('Gagal menghubungi server: ' + e, '❌'))
+    .finally(() => hideProcessing());
 }
 
 function openTaskCreate() {
@@ -3874,6 +3894,7 @@ function saveTaskCreate() {
   if (p._assigneeName && !p.assignee) { res.style.color = 'var(--red)'; res.textContent = 'Assignee tidak dikenal. Pilih dari daftar.'; return; }
   delete p._assigneeName;
   btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
+  showProcessing('Membuat task...');
   fetch('/api/task/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
     .then(r => r.json())
     .then(d => {
@@ -3881,7 +3902,7 @@ function saveTaskCreate() {
       else { const e = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : ''; res.style.color = 'var(--red)'; res.textContent = 'Gagal: ' + (d.error || 'unknown') + e; }
     })
     .catch(e => { res.style.color = 'var(--red)'; res.textContent = 'Gagal menghubungi server: ' + e; })
-    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+    .finally(() => { hideProcessing(); btn.disabled = false; icon.textContent = '💾'; });
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeSpkModal(); closeSpkCreate(); closeProjCreate(); closeTaskModal(); closeTaskCreate(); closeImportModal(); closeMonthlyEdit(); } });
@@ -3895,6 +3916,48 @@ function showToast(msg, icon = '✅') {
   toast.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
   document.body.appendChild(toast);
   setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(10px)'; toast.style.transition = '0.3s'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
+
+// ===== POP-UP SUKSES (modal tengah layar, menonjol) =====
+function showSuccessPopup(msg, title = 'Berhasil') {
+  const existing = document.getElementById('successPopup');
+  if (existing) existing.remove();
+  const ov = document.createElement('div');
+  ov.id = 'successPopup';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:flex;align-items:center;justify-content:center;animation:overlayIn .18s ease';
+  ov.innerHTML = `
+    <div style="background:var(--surface,#161628);border:1px solid var(--green,#22d4a0);border-radius:16px;padding:28px 34px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.5);animation:modalIn .22s ease;max-width:360px">
+      <div style="font-size:46px;line-height:1;margin-bottom:12px">✅</div>
+      <div style="font-size:17px;font-weight:700;color:var(--text,#e8e8f0);margin-bottom:6px">${title}</div>
+      <div style="font-size:14px;color:var(--text2,#8888aa)">${msg}</div>
+    </div>`;
+  ov.addEventListener('click', () => ov.remove());
+  document.body.appendChild(ov);
+  // Hilang otomatis setelah 1.8 detik.
+  setTimeout(() => { if (ov.parentNode) { ov.style.opacity = '0'; ov.style.transition = '0.3s'; setTimeout(() => ov.remove(), 300); } }, 1800);
+}
+
+// ===== OVERLAY PEMROSESAN (loading saat simpan/update/hapus/upload) =====
+// Menampilkan spinner di tengah layar yang memblokir interaksi selama request.
+function showProcessing(msg = 'Memproses...') {
+  let ov = document.getElementById('processingOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'processingOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;display:flex;align-items:center;justify-content:center';
+    ov.innerHTML = `
+      <div style="background:var(--surface,#161628);border:1px solid var(--border,#2a2a4a);border-radius:14px;padding:22px 30px;display:flex;align-items:center;gap:14px;box-shadow:0 8px 40px rgba(0,0,0,.5)">
+        <div class="proc-spinner"></div>
+        <div id="processingMsg" style="font-size:14px;font-weight:600;color:var(--text,#e8e8f0)"></div>
+      </div>`;
+    document.body.appendChild(ov);
+  }
+  document.getElementById('processingMsg').textContent = msg;
+  ov.style.display = 'flex';
+}
+function hideProcessing() {
+  const ov = document.getElementById('processingOverlay');
+  if (ov) ov.style.display = 'none';
 }
 
 // ===== LOAD DATA =====
