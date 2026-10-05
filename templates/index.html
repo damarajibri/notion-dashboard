@@ -3294,11 +3294,15 @@ function showProjDetail(idx) {
   const spkPrevOptions = spkList.filter(s => s.page_id && s.no_spk)
     .map(s => `<option value="${esc(s.no_spk)}"></option>`).join('');
 
-  // Autocomplete PIC (Assignee): datalist nama personel; peta nama -> page_id.
+  // PIC (Assignee) sebagai DROPDOWN select: value = page_id personel.
   const persNames = (DATA && DATA.personel) ? [...DATA.personel].sort() : [];
-  window._projPicNameToId = (DATA && DATA.personel_map) ? DATA.personel_map : {};
-  const curPicName = (p.assignees && p.assignees.length) ? p.assignees[0] : '';
-  const picOptions = persNames.map(n => `<option value="${esc(n)}"></option>`).join('');
+  const nameToId = (DATA && DATA.personel_map) ? DATA.personel_map : {};
+  const curPicId = (p.assignee_ids && p.assignee_ids.length) ? p.assignee_ids[0] : '';
+  const picSelectOptions = persNames
+    .filter(n => nameToId[n])
+    .map(n => `<option value="${esc(nameToId[n])}"${nameToId[n] === curPicId ? ' selected' : ''}>${esc(n)}</option>`)
+    .join('');
+  const picSelect = `<select id="pe_pic" class="form-input" style="width:100%;padding:8px"><option value="">— Tidak ada —</option>${picSelectOptions}</select>`;
 
   // Dokumen: tiap baris = select status (nilai mentah dari doc_status).
   const docStatus = p.doc_status || {};
@@ -3354,8 +3358,7 @@ function showProjDetail(idx) {
         </div>
         <div style="flex:1;min-width:200px">
           <label class="filter-label" for="pe_pic" style="display:block;margin-bottom:6px">PIC (Assignee)</label>
-          <input type="text" id="pe_pic" class="form-input" list="pe_pic_list" autocomplete="off" placeholder="Ketik nama personel..." value="${esc(curPicName)}" style="width:100%;padding:8px">
-          <datalist id="pe_pic_list">${picOptions}</datalist>
+          ${picSelect}
         </div>
       </div>
 
@@ -3395,19 +3398,15 @@ function saveProjDetail() {
   const $ = id => document.getElementById(id);
   const btn = $('pe_saveBtn'), icon = $('pe_saveIcon'), res = $('pe_result');
 
-  // Resolve autocomplete: SPK Sebelumnya (No SPK -> id) & PIC (nama -> id).
+  // Resolve autocomplete SPK Sebelumnya (No SPK -> id). PIC kini dropdown
+  // yang value-nya sudah page_id, jadi tidak perlu resolusi.
   const spkNo = ($('pe_spk_prev') ? $('pe_spk_prev').value.trim() : '');
   let spkPrevId = '';
   if (spkNo) {
     spkPrevId = (window._projSpkNoToId || {})[spkNo] || '';
     if (!spkPrevId) { res.style.color = 'var(--red,#ef4444)'; res.textContent = 'SPK "' + spkNo + '" tidak ditemukan. Pilih dari daftar atau kosongkan.'; return; }
   }
-  const picName = ($('pe_pic') ? $('pe_pic').value.trim() : '');
-  let picId = '';
-  if (picName) {
-    picId = (window._projPicNameToId || {})[picName] || '';
-    if (!picId) { res.style.color = 'var(--red,#ef4444)'; res.textContent = 'PIC "' + picName + '" tidak ditemukan. Pilih dari daftar atau kosongkan.'; return; }
-  }
+  const picId = ($('pe_pic') ? $('pe_pic').value : '');
 
   const payload = {
     page_id:  $('pe_page_id').value,
