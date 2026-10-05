@@ -1146,6 +1146,18 @@ def api_data():
     spk_selesai_map = {s['_id']: s['spk_selesai'] for s in spk if s.get('_id')}
 
     # ── Selesaikan field perpanjangan per SPK ──
+    # Reverse map: project page_id → daftar SPK perpanjangan yang menunjuk ke
+    # project tsb (dibangun dari sisi SPK.Projects Perpanjangan).
+    proj_to_spk = {}
+    for s in spk:
+        for pid in s['perp_ids']:
+            proj_to_spk.setdefault(pid, []).append({
+                'no_spk':      s['no_spk'],
+                'status':      s['status'],
+                'spk_selesai': s['spk_selesai'],
+                'page_id':     s['_id'],
+            })
+
     for s in spk:
         s['perpanjangan'] = [
             {
@@ -1158,6 +1170,10 @@ def api_data():
         # relasi saat ini (hanya yang pertama dipakai oleh dropdown single-select).
         s['perp_project_ids'] = list(s['perp_ids'])
         del s['perp_ids'], s['status_perpanjangan'], s['_id']
+
+    # Attach daftar SPK perpanjangan ke tiap project (relasi balik).
+    for p in projects:
+        p['spk_perpanjangan'] = proj_to_spk.get(p.get('page_id'), [])
 
     # ── Resolve due date proyek dari SPK sebelumnya jika kosong ──
     for p in projects:
@@ -1439,7 +1455,8 @@ def api_monthly_update():
             if val == '':
                 props[notion_name] = {'number': None}
             else:
-                digits = val.replace(',', '').replace(' ', '')
+                # Terima format ribuan Indonesia (titik/koma/spasi sbg pemisah).
+                digits = val.replace('.', '').replace(',', '').replace(' ', '')
                 try:
                     props[notion_name] = {'number': float(digits)}
                 except ValueError:
@@ -1534,7 +1551,10 @@ def _build_props_from_map(editable_map, payload, only_present=True):
                 if only_present:
                     props[notion_name] = {'number': None}
             else:
-                digits = val.replace(',', '').replace(' ', '')
+                # Terima format ribuan Indonesia (mis. "1.000.000" / "1 000 000").
+                # Titik, koma, dan spasi diperlakukan sebagai pemisah ribuan dan
+                # dibuang; nilai Rupiah di sini berupa bilangan bulat.
+                digits = val.replace('.', '').replace(',', '').replace(' ', '')
                 try:
                     props[notion_name] = {'number': float(digits)}
                 except ValueError:

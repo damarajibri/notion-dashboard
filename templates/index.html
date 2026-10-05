@@ -263,7 +263,14 @@ body {
 .spk-board {
   display: flex; gap: 16px; overflow-x: auto; padding: 4px 2px 12px;
   align-items: flex-start;
+  cursor: grab;
 }
+.spk-board.dragging {
+  cursor: grabbing;
+  user-select: none;
+  scroll-behavior: auto;
+}
+.spk-board.dragging .spk-card { cursor: grabbing; }
 .spk-col {
   flex: 0 0 300px; max-width: 300px; min-width: 300px;
   background: var(--bg2, #111122); border: 1px solid var(--border);
@@ -1574,12 +1581,12 @@ span.file-chip { cursor: default; opacity: .7; }
 
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
           <div style="flex:1;min-width:180px">
-            <label class="filter-label" for="me_nilai_tagihan" style="display:block;margin-bottom:6px">Nilai Tagihan</label>
-            <input type="number" step="any" id="me_nilai_tagihan" class="form-input" style="width:100%;padding:8px">
+            <label class="filter-label" for="me_nilai_tagihan" style="display:block;margin-bottom:6px">Nilai Tagihan (Rp)</label>
+            <input type="text" inputmode="numeric" id="me_nilai_tagihan" class="form-input" style="width:100%;padding:8px" placeholder="0">
           </div>
           <div style="flex:1;min-width:180px">
-            <label class="filter-label" for="me_prognosa" style="display:block;margin-bottom:6px">Prognosa</label>
-            <input type="number" step="any" id="me_prognosa" class="form-input" style="width:100%;padding:8px">
+            <label class="filter-label" for="me_prognosa" style="display:block;margin-bottom:6px">Prognosa (Rp)</label>
+            <input type="text" inputmode="numeric" id="me_prognosa" class="form-input" style="width:100%;padding:8px" placeholder="0">
           </div>
         </div>
       </div>
@@ -1801,6 +1808,31 @@ function sisaBadge(n) {
 function fmtRp(n) {
   if (n === null || n === undefined) return '-';
   return 'Rp ' + n.toLocaleString('id-ID');
+}
+
+// ===== FORMAT RIBUAN UNTUK INPUT (000.000.000) =====
+// Buang semua non-digit, lalu sisipkan titik tiap 3 digit dari belakang.
+function fmtThousands(v) {
+  const digits = String(v == null ? '' : v).replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+// Ambil angka murni (string digit) dari input berformat ribuan.
+function parseThousands(v) {
+  return String(v == null ? '' : v).replace(/\D/g, '');
+}
+// Pasang auto-format ribuan pada sebuah <input type=text> saat user mengetik.
+// Mempertahankan posisi kursor relatif terhadap akhir string.
+function attachThousandFormat(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => {
+    const before = el.value;
+    const caretFromEnd = before.length - el.selectionStart;
+    el.value = fmtThousands(before);
+    const pos = Math.max(0, el.value.length - caretFromEnd);
+    try { el.setSelectionRange(pos, pos); } catch (e) {}
+  });
 }
 
 // ===== FILE LINKS (fetch-on-click) =====
@@ -2744,6 +2776,47 @@ function renderSpkGrouping() {
         ${cards}
       </div>`;
   }).join('');
+
+  attachBoardDragScroll(board);
+}
+
+// Geser board kiri-kanan dengan drag kursor (click-and-drag to scroll).
+// Agar tidak bentrok dengan klik kartu: klik baru diblokir jika kursor
+// bergerak melewati ambang kecil (dianggap drag, bukan klik).
+function attachBoardDragScroll(board) {
+  if (!board || board._dragScrollAttached) return;
+  board._dragScrollAttached = true;
+  let down = false, startX = 0, startScroll = 0, moved = false;
+  const THRESHOLD = 6; // px
+
+  board.addEventListener('mousedown', (e) => {
+    // Hanya tombol kiri; abaikan klik pada link/tombol/input di dalam kartu.
+    if (e.button !== 0) return;
+    down = true; moved = false;
+    startX = e.pageX;
+    startScroll = board.scrollLeft;
+    board.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!down) return;
+    const dx = e.pageX - startX;
+    if (Math.abs(dx) > THRESHOLD) moved = true;
+    board.scrollLeft = startScroll - dx;
+  });
+  window.addEventListener('mouseup', () => {
+    if (!down) return;
+    down = false;
+    board.classList.remove('dragging');
+    // Jika sempat drag, blokir event 'click' kartu yang menyusul.
+    if (moved) {
+      board._suppressClick = true;
+      setTimeout(() => { board._suppressClick = false; }, 0);
+    }
+  });
+  // Tangkap fase capture: batalkan klik kartu bila barusan drag.
+  board.addEventListener('click', (e) => {
+    if (board._suppressClick) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
 }
 
 // ===== MONTHLY PERFORMANCE (manual load, server-side filter) =====
@@ -3043,8 +3116,10 @@ function openMonthlyEdit(idx) {
   $('me_page_id').value       = x.page_id;
   $('me_name').value          = x.name || '';
   $('me_periode').value       = x.periode ? x.periode.slice(0, 7) : '';  // input type=month → YYYY-MM
-  $('me_nilai_tagihan').value = (x.nilai_tagihan ?? '') === '' ? '' : x.nilai_tagihan;
-  $('me_prognosa').value      = (x.prognosa ?? '') === '' ? '' : x.prognosa;
+  $('me_nilai_tagihan').value = (x.nilai_tagihan == null) ? '' : fmtThousands(x.nilai_tagihan);
+  $('me_prognosa').value      = (x.prognosa == null) ? '' : fmtThousands(x.prognosa);
+  attachThousandFormat('me_nilai_tagihan');
+  attachThousandFormat('me_prognosa');
   $('me_status_invoice').value= x.status_invoice || '';
   $('me_status_bayar').value  = x.status_bayar || '';
   $('me_status_ba').value     = x.status_ba || '';
@@ -3086,8 +3161,8 @@ function saveMonthlyEdit() {
     page_id:        $('me_page_id').value,
     name:           $('me_name').value,
     periode:        periodeVal,
-    nilai_tagihan:  $('me_nilai_tagihan').value,
-    prognosa:       $('me_prognosa').value,
+    nilai_tagihan:  parseThousands($('me_nilai_tagihan').value),
+    prognosa:       parseThousands($('me_prognosa').value),
     status_invoice: $('me_status_invoice').value,
     status_bayar:   $('me_status_bayar').value,
     status_ba:      $('me_status_ba').value,
@@ -3169,6 +3244,17 @@ function showProjDetail(idx) {
       <div class="value">${sel('pe_doc_' + btoa(unescape(encodeURIComponent(k))), DOC_OPTS, docStatus[k])}</div>
     </div>`).join('');
 
+  // SPK Perpanjangan (relasi balik): daftar SPK yang menjadikan project ini
+  // sebagai perpanjangan. Read-only; klik untuk membuka edit SPK terkait.
+  const spkPerp = p.spk_perpanjangan || [];
+  const spkPerpHtml = spkPerp.length
+    ? spkPerp.map(sp => {
+        const click = sp.page_id ? `onclick="showSpkByPageId('${sp.page_id}')" style="cursor:pointer"` : '';
+        const sel2 = sp.spk_selesai ? ` · selesai ${esc(sp.spk_selesai)}` : '';
+        return `<div class="spk-card-perp-item" ${click} title="Klik untuk buka SPK">📄 <span class="spk-card-perp-title">${esc(sp.no_spk || '-')}</span>${sp.status ? ' ' + statusBadge(sp.status) : ''}<span style="color:var(--text2);font-size:11px">${sel2}</span></div>`;
+      }).join('')
+    : '<span style="color:var(--text2);font-size:13px">Tidak ada SPK perpanjangan terkait</span>';
+
   // File (tautan fetch-on-click; ikon + tooltip nama file).
   document.getElementById('projModalBody').innerHTML = `
     <input type="hidden" id="pe_page_id" value="${esc(p.page_id || '')}">
@@ -3197,6 +3283,11 @@ function showProjDetail(idx) {
     <div class="modal-section">
       <div class="modal-section-title">File</div>
       <div style="font-size:13px">${fileManager(p.page_id, p.files, PROJECT_FILE_FIELDS_JS, '_refreshProjModal')}</div>
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">SPK Perpanjangan</div>
+      ${spkPerpHtml}
     </div>
 
     <div class="modal-section">
@@ -3343,8 +3434,8 @@ function showSpkDetail(idx) {
           ${sel('se_status', STATUS_OPTS, s.status === '-' ? '' : s.status)}
         </div>
         <div style="flex:1;min-width:160px">
-          <label class="filter-label" for="se_total_anggaran" style="display:block;margin-bottom:6px">Total Anggaran</label>
-          <input type="number" step="any" id="se_total_anggaran" class="form-input" style="width:100%;padding:8px" value="${s.total_anggaran ?? ''}">
+          <label class="filter-label" for="se_total_anggaran" style="display:block;margin-bottom:6px">Total Anggaran (Rp)</label>
+          <input type="text" inputmode="numeric" id="se_total_anggaran" class="form-input" style="width:100%;padding:8px" placeholder="0" value="${s.total_anggaran == null ? '' : fmtThousands(s.total_anggaran)}">
         </div>
       </div>
     </div>
@@ -3402,6 +3493,7 @@ function showSpkDetail(idx) {
     </div>`;
 
   document.getElementById('spkModal').classList.add('active');
+  attachThousandFormat('se_total_anggaran');
 }
 
 function closeSpkModal() { document.getElementById('spkModal').classList.remove('active'); }
@@ -3429,7 +3521,7 @@ function saveSpkDetail() {
     no_spk:          $('se_no_spk').value,
     project:         $('se_project').value,
     status:          $('se_status').value,
-    total_anggaran:  $('se_total_anggaran').value,
+    total_anggaran:  parseThousands($('se_total_anggaran').value),
     jenis_anggaran:  $('se_jenis').value,
     klasifikasi:     $('se_klasifikasi').value,
     tipe:            $('se_tipe').value,
@@ -3493,8 +3585,8 @@ function openSpkCreate() {
           ${_createSelect('sc_status', STATUS_OPTS)}
         </div>
         <div style="flex:1;min-width:160px">
-          <label class="filter-label" style="display:block;margin-bottom:6px">Total Anggaran</label>
-          <input type="number" step="any" id="sc_total_anggaran" class="form-input" style="width:100%;padding:8px">
+          <label class="filter-label" style="display:block;margin-bottom:6px">Total Anggaran (Rp)</label>
+          <input type="text" inputmode="numeric" id="sc_total_anggaran" class="form-input" style="width:100%;padding:8px" placeholder="0">
         </div>
       </div>
     </div>
@@ -3521,6 +3613,7 @@ function openSpkCreate() {
       <button class="btn btn-primary" id="sc_saveBtn" onclick="saveSpkCreate()"><span id="sc_saveIcon">💾</span> Simpan ke Notion</button>
     </div>`;
   document.getElementById('spkCreateModal').classList.add('active');
+  attachThousandFormat('sc_total_anggaran');
 }
 function closeSpkCreate() { document.getElementById('spkCreateModal').classList.remove('active'); }
 
@@ -3531,7 +3624,7 @@ function saveSpkCreate() {
     no_spk:         $('sc_no_spk').value,
     project:        $('sc_project').value,
     status:         $('sc_status').value,
-    total_anggaran: $('sc_total_anggaran').value,
+    total_anggaran: parseThousands($('sc_total_anggaran').value),
     jenis_anggaran: $('sc_jenis').value,
     klasifikasi:    $('sc_klasifikasi').value,
     tipe:           $('sc_tipe').value,
