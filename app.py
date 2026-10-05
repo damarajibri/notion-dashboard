@@ -321,6 +321,7 @@ def extract_task(r, personel):
     # Assignee — dari relasi ke Personel DB
     rel       = props.get('Assignee relation', {}).get('relation', [])
     assignees = [personel.get(a['id'], '?') for a in rel]
+    assignee_ids = [a['id'] for a in rel]
 
     # Progress (0.0–1.0 → kita simpan 0–100)
     progress_raw = props.get('Progress', {}).get('number')
@@ -346,6 +347,9 @@ def extract_task(r, personel):
         'done_date': done_date,
         'progress':  progress,
         'tags':      tags,
+        'priority_raw': priority_obj.get('name', '') or '',
+        'assignee_ids': assignee_ids,
+        'page_id':   r['id'],
     }
 
 # ─── extract_project ─────────────────────────────────────────────────────────
@@ -484,6 +488,7 @@ def extract_project(r, personel):
         'status':     status_name,
         'priority':   priority_name,
         'priority_raw': priority_obj.get('name', '') or '',
+        'nominal_ip': props.get('Nominal IP', {}).get('number'),
         'assignees':  assignees,
         'completion': comp_val,
         'docs':       f'{doc_done}/{total_docs}',
@@ -1288,6 +1293,8 @@ def api_data():
         'projects': projects,
         'spk':      spk,
         'personel': list(personel.values()),
+        # Peta nama → page_id personel (untuk autocomplete assignee di form Task).
+        'personel_map': {name: pid for pid, name in personel.items()},
 
         # Task stats
         'task_status':  dict(task_status),
@@ -1546,6 +1553,31 @@ def _build_props_from_map(editable_map, payload, only_present=True):
                 props[notion_name] = {'relation': [{'id': val}]}
             elif only_present:
                 props[notion_name] = {'relation': []}
+        elif ftype == 'relation_multi':
+            # Nilai = page_id dipisah koma (atau kosong untuk mengosongkan).
+            ids = [x.strip() for x in val.split(',') if x.strip()]
+            if ids:
+                props[notion_name] = {'relation': [{'id': x} for x in ids]}
+            elif only_present:
+                props[notion_name] = {'relation': []}
+        elif ftype == 'multi_select':
+            # Nilai = nama opsi dipisah koma.
+            names = [x.strip() for x in val.split(',') if x.strip()]
+            if names:
+                props[notion_name] = {'multi_select': [{'name': n} for n in names]}
+            elif only_present:
+                props[notion_name] = {'multi_select': []}
+        elif ftype == 'progress':
+            # Frontend mengirim 0–100; Notion menyimpan 0.0–1.0.
+            if val == '':
+                if only_present:
+                    props[notion_name] = {'number': None}
+            else:
+                try:
+                    pct = float(val.replace(',', '.'))
+                    props[notion_name] = {'number': max(0.0, min(1.0, pct / 100.0))}
+                except ValueError:
+                    errors.append(f"'{notion_name}' bukan angka valid: {raw!r}")
         elif ftype == 'number':
             if val == '':
                 if only_present:
@@ -1599,6 +1631,7 @@ _PROJECT_EDITABLE = {
     'status':   ('Status', 'status'),
     'priority': ('Priority', 'select'),
     'due':      ('Dates', 'date'),
+    'nilai_project': ('Nominal IP', 'number'),
     # Dokumen (status). Key frontend memakai nama properti apa adanya.
     'TOR':                                 ('TOR', 'status'),
     'FS (Feasibility Study)':              ('FS (Feasibility Study)', 'status'),
@@ -1629,31 +1662,7 @@ def api_project_update():
     if not page_id:
         return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
 
-    props = {}
-    errors = []
-    for fkey, (notion_name, ftype) in _PROJECT_EDITABLE.items():
-        if fkey not in payload:
-            continue  # hanya ubah field yang dikirim
-        raw = payload.get(fkey)
-        val = ('' if raw is None else str(raw)).strip()
-
-        if ftype == 'title':
-            props[notion_name] = {'title': [{'text': {'content': val}}] if val else []}
-        elif ftype == 'select':
-            props[notion_name] = {'select': {'name': val} if val else None}
-        elif ftype == 'status':
-            # Status tidak boleh null; kalau kosong, lewati (jangan ubah).
-            if val:
-                props[notion_name] = {'status': {'name': val}}
-        elif ftype == 'date':
-            if val == '':
-                props[notion_name] = {'date': None}
-            else:
-                iso, derr = normalize_date(val)
-                if iso:
-                    props[notion_name] = {'date': {'start': iso}}
-                else:
-                    errors.append(f"'{notion_name}': {derr}")
+    props, errors = _build_props_from_map(_PROJECT_EDITABLE, payload, only_present=True)
 
     if errors:
         return jsonify({'ok': False, 'error': 'Validasi gagal.', 'errors': errors}), 400
@@ -1804,6 +1813,122 @@ def api_project_create():
 
 
 
+
+
+# ─── Tasks: create / update / delete → Notion ──────────────────────────────────
+# Peta field frontend → (nama properti Notion, tipe).
+#   progress: frontend kirim 0–100, disimpan Notion 0.0–1.0.
+#   assignee: relation ke Personel DB (bisa banyak, page_id dipisah koma).
+#   tags: multi_select.
+_TASK_EDITABLE = {
+    'name':      ('Task name', 'title'),
+    'status':    ('Status', 'status'),
+    'due':       ('Due Date', 'date'),
+    'priority':  ('Priority', 'select'),
+    'progress':  ('Progress', 'progress'),
+    'assignee':  ('Assignee relation', 'relation_multi'),
+    'tags':      ('Tags', 'multi_select'),
+}
+
+
+@app.route('/api/task/create', methods=['POST'])
+@login_required
+def api_task_create():
+    """Buat Task baru di Notion. Wajib: name (Task name)."""
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    if not (payload.get('name') or '').strip():
+        return jsonify({'ok': False, 'error': 'Nama Task wajib diisi.'}), 400
+
+    props, errors = _build_props_from_map(_TASK_EDITABLE, payload, only_present=False)
+    if errors:
+        return jsonify({'ok': False, 'error': 'Validasi gagal.', 'errors': errors}), 400
+    if 'Task name' not in props:
+        return jsonify({'ok': False, 'error': 'Nama Task wajib diisi.'}), 400
+
+    ok, res, code = _create_notion_page(TASKS_DB, props)
+    if not ok:
+        return jsonify({'ok': False, 'error': res}), code
+
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-create sync failed: %s', e)
+
+    return jsonify({'ok': True, 'page_id': res.get('id'), 'created': list(props.keys())})
+
+
+@app.route('/api/task/update', methods=['POST'])
+@login_required
+def api_task_update():
+    """Update satu Task ke Notion (PATCH). Hanya field yang dikirim diubah."""
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    page_id = (payload.get('page_id') or '').strip()
+    if not page_id:
+        return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
+
+    props, errors = _build_props_from_map(_TASK_EDITABLE, payload, only_present=True)
+    if errors:
+        return jsonify({'ok': False, 'error': 'Validasi gagal.', 'errors': errors}), 400
+    if not props:
+        return jsonify({'ok': False, 'error': 'Tidak ada field yang diubah.'}), 400
+
+    try:
+        notion_patch(f'https://api.notion.com/v1/pages/{page_id}', {'properties': props})
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': f'Notion HTTP {e.code}: {detail}'}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal update: {e}'}), 502
+
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-update sync failed: %s', e)
+
+    return jsonify({'ok': True, 'updated': list(props.keys())})
+
+
+@app.route('/api/task/delete', methods=['POST'])
+@login_required
+def api_task_delete():
+    """Hapus (archive) sebuah Task di Notion. Notion API tidak punya hard delete,
+    jadi halaman di-archive (archived=true) sehingga hilang dari tampilan."""
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+
+    payload = request.get_json(silent=True) or {}
+    page_id = (payload.get('page_id') or '').strip()
+    if not page_id:
+        return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
+
+    try:
+        notion_patch(f'https://api.notion.com/v1/pages/{page_id}', {'archived': True})
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': f'Notion HTTP {e.code}: {detail}'}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal hapus: {e}'}), 502
+
+    try:
+        sync.full_sync()  # full sync agar baris terhapus hilang dari cache
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-delete sync failed: %s', e)
+
+    return jsonify({'ok': True})
 
 # ─── CSV IMPORT → Monthly Performance ──────────────────────────────────────────
 # Kolom yang didukung di CSV (header harus sama persis):

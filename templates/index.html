@@ -274,12 +274,17 @@ body {
 .spk-col {
   flex: 0 0 300px; max-width: 300px; min-width: 300px;
   background: var(--bg2, #111122); border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 14px); padding: 12px;
+  border-radius: var(--radius-lg, 14px); padding: 0 12px 12px;
   display: flex; flex-direction: column; gap: 10px;
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
 }
 .spk-col-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 2px 4px 8px; border-bottom: 1px solid var(--border);
+  padding: 10px 4px 8px; border-bottom: 1px solid var(--border);
+  /* Freeze header saat kolom di-scroll vertikal. */
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg2, #111122);
 }
 .spk-col-title { font-size: 13px; font-weight: 700; color: var(--text); }
 .spk-col-count {
@@ -1169,7 +1174,10 @@ span.file-chip { cursor: default; opacity: .7; }
         <div class="section-title">
           <span>📋</span> Active Tasks
         </div>
-        <span class="section-count" id="taskCount">0 tasks</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-sm btn-primary" onclick="openTaskCreate()">➕ Tambah Task</button>
+          <span class="section-count" id="taskCount">0 tasks</span>
+        </div>
       </div>
       <div class="table-wrapper">
         <div class="scroll-table">
@@ -1489,6 +1497,34 @@ span.file-chip { cursor: default; opacity: .7; }
       <button class="modal-close" onclick="closeProjCreate()">✕</button>
     </div>
     <div class="modal-body" id="projCreateBody"></div>
+  </div>
+</div>
+
+<!-- Modal: Edit Task -->
+<div class="modal-overlay" id="taskModal" onclick="if(event.target===this)closeTaskModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">✏️ Edit Task</div>
+        <div class="modal-subtitle" id="taskModalSubtitle">Ubah data task, lalu simpan ke Notion</div>
+      </div>
+      <button class="modal-close" onclick="closeTaskModal()">✕</button>
+    </div>
+    <div class="modal-body" id="taskModalBody"></div>
+  </div>
+</div>
+
+<!-- Modal: Tambah Task -->
+<div class="modal-overlay" id="taskCreateModal" onclick="if(event.target===this)closeTaskCreate()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">➕ Tambah Task</div>
+        <div class="modal-subtitle">Buat Task baru di Notion</div>
+      </div>
+      <button class="modal-close" onclick="closeTaskCreate()">✕</button>
+    </div>
+    <div class="modal-body" id="taskCreateBody"></div>
   </div>
 </div>
 
@@ -2318,6 +2354,7 @@ function applyAllTaskFilters() {
   });
 
   document.getElementById('taskCount').textContent = activeTasks.length + ' tasks';
+  window._filteredTasks = activeTasks;
 
   const table = document.getElementById('tasksTable');
   table.querySelector('thead tr').innerHTML = ['#', 'Task', 'Status', 'Priority', 'Assignee', 'Tags', 'Due', 'Progress', 'Last Edit'].map(h => `<th>${h}</th>`).join('');
@@ -2326,7 +2363,7 @@ function applyAllTaskFilters() {
     const due = t.due ? (t.due < new Date().toISOString().slice(0, 10) ? `<span style="color:var(--red);font-weight:600">⚠️ ${t.due}</span>` : `<span style="color:var(--text2)">${t.due}</span>`) : '<span style="color:var(--text2)">-</span>';
     return `<tr>
       <td class="col-num">${i + 1}</td>
-      <td class="col-name"><div class="col-name-text">${t.name}</div></td>
+      <td class="col-name"><a href="javascript:void(0)" onclick="showTaskDetail(${i})" class="col-name-text" style="color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${t.name}</a></td>
       <td>${statusBadge(t.status)}</td>
       <td>${priorityBadge(t.priority)}</td>
       <td>${renderAssignees(t.assignees)}</td>
@@ -2388,14 +2425,14 @@ function applyProjFilters() {
   document.getElementById('projCount').textContent = projects.length + ' projects';
 
   const table = document.getElementById('projTable');
-  table.querySelector('thead tr').innerHTML = ['#', 'Project', 'Status', 'Assignee', 'Due', 'Sisa', 'Completion', 'Docs', 'Priority', 'SPK Baru', 'Last Edit', 'File', ''].map(h => `<th>${h}</th>`).join('');
+  table.querySelector('thead tr').innerHTML = ['#', 'Project', 'Status', 'Assignee', 'Due', 'Sisa', 'Completion', 'Docs', 'Priority', 'SPK Baru', 'Last Edit', 'File'].map(h => `<th>${h}</th>`).join('');
   table.querySelector('tbody').innerHTML = projects.map((p, i) => {
     const spkb = p.spk_baru && p.spk_baru.length > 0 ? p.spk_baru.map(s => `<span class="tag">${s}</span>`).join('') : '-';
     const rd = p.remaining_days !== null && p.remaining_days !== undefined ? sisaBadge(p.remaining_days) : '-';
     const due = p.due ? `<span style="color:var(--text2);font-size:12px">${p.due}</span>` : '-';
     return `<tr>
       <td class="col-num">${i + 1}</td>
-      <td class="col-name"><div class="col-name-text" style="font-weight:600">${p.title}</div></td>
+      <td class="col-name"><a href="javascript:void(0)" onclick="showProjDetail(${i})" class="col-name-text" style="font-weight:600;color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk detail/edit">${p.title}</a></td>
       <td>${statusBadge(p.status)}</td>
       <td>${renderAssignees(p.assignees)}</td>
       <td>${due}</td>
@@ -2406,9 +2443,8 @@ function applyProjFilters() {
       <td>${spkb}</td>
       <td style="color:var(--text2);font-size:12px">${p.edited}</td>
       <td style="font-size:12px">${fileLinks(p.files)}</td>
-      <td><button class="action-btn" onclick="showProjDetail(${i})" title="Lihat detail">🔍</button></td>
     </tr>`;
-  }).join('') || emptyState(13);
+  }).join('') || emptyState(12);
   window._filteredProjects = projects;
   makeSortable(table);
 }
@@ -3276,6 +3312,8 @@ function showProjDetail(idx) {
           <input type="date" id="pe_due" class="form-input" style="width:100%;padding:8px" value="${esc(p.due || '')}">
         </div>
       </div>
+      <label class="filter-label" for="pe_nilai" style="display:block;margin:12px 0 6px">Nilai Project (Rp)</label>
+      <input type="text" inputmode="numeric" id="pe_nilai" class="form-input" style="width:100%;padding:8px" placeholder="0" value="${p.nominal_ip == null ? '' : fmtThousands(p.nominal_ip)}">
       <div class="modal-row" style="margin-top:12px"><div class="label">Completion</div><div class="value">${progBar(p.completion)}</div></div>
       <div class="modal-row"><div class="label">Assignee</div><div class="value">${p.assignees.length ? `<div class="avatar-stack">${p.assignees.map(a => renderAvatar(a) + ' ' + a).join(', ')}</div>` : '-'}</div></div>
     </div>
@@ -3304,6 +3342,7 @@ function showProjDetail(idx) {
     </div>`;
 
   document.getElementById('projModal').classList.add('active');
+  attachThousandFormat('pe_nilai');
 }
 
 function saveProjDetail() {
@@ -3318,6 +3357,7 @@ function saveProjDetail() {
     status:   $('pe_status').value,
     priority: $('pe_priority').value,
     due:      $('pe_due').value,
+    nilai_project: parseThousands($('pe_nilai').value),
   };
   // Dokumen: kirim hanya yang punya elemen select.
   const docStatus = p.doc_status || {};
@@ -3657,6 +3697,8 @@ function openProjCreate() {
         <div style="flex:1;min-width:160px"><label class="filter-label" style="display:block;margin-bottom:6px">Priority</label>${_createSelect('pc_priority', PRIO_OPTS)}</div>
         <div style="flex:1;min-width:160px"><label class="filter-label" style="display:block;margin-bottom:6px">Due Date</label><input type="date" id="pc_due" class="form-input" style="width:100%;padding:8px"></div>
       </div>
+      <label class="filter-label" style="display:block;margin:12px 0 6px">Nilai Project (Rp)</label>
+      <input type="text" inputmode="numeric" id="pc_nilai" class="form-input" style="width:100%;padding:8px" placeholder="0">
     </div>
     <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
       <span id="pc_result" style="font-size:13px;margin-right:auto"></span>
@@ -3664,6 +3706,7 @@ function openProjCreate() {
       <button class="btn btn-primary" id="pc_saveBtn" onclick="saveProjCreate()"><span id="pc_saveIcon">💾</span> Simpan ke Notion</button>
     </div>`;
   document.getElementById('projCreateModal').classList.add('active');
+  attachThousandFormat('pc_nilai');
 }
 function closeProjCreate() { document.getElementById('projCreateModal').classList.remove('active'); }
 
@@ -3675,6 +3718,7 @@ function saveProjCreate() {
     status:   $('pc_status').value,
     priority: $('pc_priority').value,
     due:      $('pc_due').value,
+    nilai_project: parseThousands($('pc_nilai').value),
   };
   if (!payload.title.trim()) { res.style.color = 'var(--red)'; res.textContent = 'Nama Project wajib diisi.'; return; }
   btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
@@ -3688,7 +3732,159 @@ function saveProjCreate() {
     .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeSpkModal(); closeSpkCreate(); closeProjCreate(); closeImportModal(); closeMonthlyEdit(); } });
+// ===== TASK CRUD =====
+const TASK_STATUS_OPTS = ['Not Started', 'In Progress', 'Pending', 'Done', 'Archived'];
+const TASK_PRIO_OPTS = ['Low', 'Medium', 'High'];
+const TASK_TAG_OPTS = ['NCM', 'Meeting', 'Improvement', 'Document'];
+
+// Bangun opsi <option> untuk select sederhana (dengan nilai terpilih).
+function _taskSel(id, opts, cur) {
+  const extra = (cur && !opts.includes(cur)) ? `<option value="${cur}" selected>${cur}</option>` : '';
+  const o = opts.map(x => `<option value="${x}"${x === cur ? ' selected' : ''}>${x}</option>`).join('');
+  return `<select id="${id}" class="form-input" style="width:100%;padding:8px"><option value="">—</option>${extra}${o}</select>`;
+}
+// Autocomplete assignee: datalist nama personel; peta nama→page_id (global).
+function _taskAssigneeField(id, curName) {
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const names = (DATA && DATA.personel) ? [...DATA.personel].sort() : [];
+  window._taskNameToId = (DATA && DATA.personel_map) ? DATA.personel_map : {};
+  const opts = names.map(n => `<option value="${esc(n)}"></option>`).join('');
+  return `<input type="text" id="${id}" class="form-input" list="${id}_list" autocomplete="off" placeholder="Ketik nama personel..." value="${esc(curName || '')}" style="width:100%;padding:8px">
+    <datalist id="${id}_list">${opts}</datalist>`;
+}
+// Field tags: input teks + datalist (pisahkan dengan koma utk banyak tag).
+function _taskTagsField(id, curTags) {
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const opts = TASK_TAG_OPTS.map(t => `<option value="${esc(t)}"></option>`).join('');
+  const val = (curTags && curTags.length) ? curTags.join(', ') : '';
+  return `<input type="text" id="${id}" class="form-input" list="${id}_list" autocomplete="off" placeholder="Pisahkan dengan koma" value="${esc(val)}" style="width:100%;padding:8px">
+    <datalist id="${id}_list">${opts}</datalist>`;
+}
+
+function _taskFormBody(prefix, t) {
+  // t = objek task (edit) atau {} (create). prefix: 'te' edit / 'tc' create.
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const curAssignee = (t.assignees && t.assignees.length) ? t.assignees[0] : '';
+  const isEdit = prefix === 'te';
+  return `
+    ${isEdit ? `<input type="hidden" id="te_page_id" value="${esc(t.page_id || '')}">` : ''}
+    <div class="modal-section">
+      <div class="modal-section-title">Informasi Task</div>
+      <label class="filter-label" style="display:block;margin:8px 0 6px">Nama Task <span style="color:var(--red)">*</span></label>
+      <input type="text" id="${prefix}_name" class="form-input" style="width:100%;padding:8px" value="${esc(t.name || '')}" placeholder="Nama task">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Status</label>${_taskSel(prefix + '_status', TASK_STATUS_OPTS, t.status || '')}</div>
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Priority</label>${_taskSel(prefix + '_priority', TASK_PRIO_OPTS, t.priority_raw || t.priority || '')}</div>
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Due Date</label><input type="date" id="${prefix}_due" class="form-input" style="width:100%;padding:8px" value="${esc(t.due || '')}"></div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Progress (0–100)</label><input type="number" min="0" max="100" id="${prefix}_progress" class="form-input" style="width:100%;padding:8px" value="${t.progress == null ? '' : t.progress}" placeholder="0"></div>
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Assignee</label>${_taskAssigneeField(prefix + '_assignee', curAssignee)}</div>
+      </div>
+      <label class="filter-label" style="display:block;margin:12px 0 6px">Tags</label>
+      ${_taskTagsField(prefix + '_tags', t.tags)}
+    </div>`;
+}
+
+function showTaskDetail(idx) {
+  const t = (window._filteredTasks || [])[idx];
+  if (!t) return;
+  window._editingTask = t;
+  document.getElementById('taskModalSubtitle').textContent = t.name || '';
+  document.getElementById('taskModalBody').innerHTML =
+    _taskFormBody('te', t) + `
+    <div class="modal-section" style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+      <button class="btn btn-sm btn-danger" onclick="deleteTask()">🗑️ Hapus</button>
+      <div style="display:flex;gap:10px;align-items:center">
+        <span id="te_result" style="font-size:13px"></span>
+        <button class="btn btn-ghost" onclick="closeTaskModal()">Tutup</button>
+        <button class="btn btn-primary" id="te_saveBtn" onclick="saveTaskDetail()" ${t.page_id ? '' : 'disabled'}><span id="te_saveIcon">💾</span> Simpan ke Notion</button>
+      </div>
+    </div>`;
+  document.getElementById('taskModal').classList.add('active');
+}
+function closeTaskModal() { document.getElementById('taskModal').classList.remove('active'); }
+
+function _taskPayloadFrom(prefix) {
+  const $ = id => document.getElementById(id);
+  const nameToId = window._taskNameToId || {};
+  const assigneeName = ($(prefix + '_assignee').value || '').trim();
+  const assigneeId = assigneeName ? (nameToId[assigneeName] || '') : '';
+  return {
+    name:     $(prefix + '_name').value,
+    status:   $(prefix + '_status').value,
+    due:      $(prefix + '_due').value,
+    priority: $(prefix + '_priority').value,
+    progress: $(prefix + '_progress').value,
+    assignee: assigneeId,
+    tags:     ($(prefix + '_tags').value || '').trim(),
+    _assigneeName: assigneeName,
+  };
+}
+
+function saveTaskDetail() {
+  const $ = id => document.getElementById(id);
+  const btn = $('te_saveBtn'), icon = $('te_saveIcon'), res = $('te_result');
+  const p = _taskPayloadFrom('te');
+  if (!p.name.trim()) { res.style.color = 'var(--red)'; res.textContent = 'Nama task wajib diisi.'; return; }
+  if (p._assigneeName && !p.assignee) { res.style.color = 'var(--red)'; res.textContent = 'Assignee tidak dikenal. Pilih dari daftar.'; return; }
+  const payload = Object.assign({ page_id: $('te_page_id').value }, p);
+  delete payload._assigneeName;
+  btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
+  fetch('/api/task/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) { showToast('Task tersimpan ke Notion', '✅'); closeTaskModal(); loadData(); }
+      else { const e = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : ''; res.style.color = 'var(--red)'; res.textContent = 'Gagal: ' + (d.error || 'unknown') + e; }
+    })
+    .catch(e => { res.style.color = 'var(--red)'; res.textContent = 'Gagal menghubungi server: ' + e; })
+    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+}
+
+function deleteTask() {
+  const t = window._editingTask;
+  if (!t || !t.page_id) return;
+  if (!confirm(`Hapus task "${t.name}"? Task akan di-archive di Notion.`)) return;
+  fetch('/api/task/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page_id: t.page_id }) })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) { showToast('Task dihapus', '✅'); closeTaskModal(); loadData(); }
+      else { showToast('Gagal hapus: ' + (d.error || 'unknown'), '❌'); }
+    })
+    .catch(e => showToast('Gagal menghubungi server: ' + e, '❌'));
+}
+
+function openTaskCreate() {
+  document.getElementById('taskCreateBody').innerHTML =
+    _taskFormBody('tc', {}) + `
+    <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+      <span id="tc_result" style="font-size:13px;margin-right:auto"></span>
+      <button class="btn btn-ghost" onclick="closeTaskCreate()">Batal</button>
+      <button class="btn btn-primary" id="tc_saveBtn" onclick="saveTaskCreate()"><span id="tc_saveIcon">💾</span> Simpan ke Notion</button>
+    </div>`;
+  document.getElementById('taskCreateModal').classList.add('active');
+}
+function closeTaskCreate() { document.getElementById('taskCreateModal').classList.remove('active'); }
+
+function saveTaskCreate() {
+  const $ = id => document.getElementById(id);
+  const btn = $('tc_saveBtn'), icon = $('tc_saveIcon'), res = $('tc_result');
+  const p = _taskPayloadFrom('tc');
+  if (!p.name.trim()) { res.style.color = 'var(--red)'; res.textContent = 'Nama task wajib diisi.'; return; }
+  if (p._assigneeName && !p.assignee) { res.style.color = 'var(--red)'; res.textContent = 'Assignee tidak dikenal. Pilih dari daftar.'; return; }
+  delete p._assigneeName;
+  btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
+  fetch('/api/task/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) { showToast('Task baru dibuat di Notion', '✅'); closeTaskCreate(); loadData(); }
+      else { const e = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : ''; res.style.color = 'var(--red)'; res.textContent = 'Gagal: ' + (d.error || 'unknown') + e; }
+    })
+    .catch(e => { res.style.color = 'var(--red)'; res.textContent = 'Gagal menghubungi server: ' + e; })
+    .finally(() => { btn.disabled = false; icon.textContent = '💾'; });
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeProjModal(); closeSpkModal(); closeSpkCreate(); closeProjCreate(); closeTaskModal(); closeTaskCreate(); closeImportModal(); closeMonthlyEdit(); } });
 
 // ===== TOAST =====
 function showToast(msg, icon = '✅') {
