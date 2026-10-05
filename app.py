@@ -440,6 +440,12 @@ def extract_project(r, personel):
     # Assignee (relation ke Personel DB)
     rel       = props.get('Assignee', {}).get('relation', [])
     assignees = [personel.get(a['id'], '?') for a in rel]
+    assignee_ids = [a['id'] for a in rel]
+
+    # No. Izin Prinsip (rich_text) & SPK sebelumnya (relation page_ids)
+    nip_raw = props.get('No. Izin Prinsip', {}).get('rich_text', [])
+    no_izin_prinsip = nip_raw[0]['plain_text'] if nip_raw else ''
+    spk_sebelumnya_ids = [x['id'] for x in props.get('SPK sebelumnya', {}).get('relation', [])]
 
     # Progress dari formula (0.0–1.0)
     prog_formula = props.get('Progress', {}).get('formula') or {}
@@ -489,6 +495,9 @@ def extract_project(r, personel):
         'priority':   priority_name,
         'priority_raw': priority_obj.get('name', '') or '',
         'nominal_ip': props.get('Nominal IP', {}).get('number'),
+        'no_izin_prinsip': no_izin_prinsip,
+        'spk_sebelumnya_ids': spk_sebelumnya_ids,
+        'assignee_ids': assignee_ids,
         'assignees':  assignees,
         'completion': comp_val,
         'docs':       f'{doc_done}/{total_docs}',
@@ -1632,6 +1641,9 @@ _PROJECT_EDITABLE = {
     'priority': ('Priority', 'select'),
     'due':      ('Dates', 'date'),
     'nilai_project': ('Nominal IP', 'number'),
+    'no_izin_prinsip': ('No. Izin Prinsip', 'rich_text'),
+    'spk_sebelumnya':  ('SPK sebelumnya', 'relation'),
+    'pic':             ('Assignee', 'relation_multi'),
     # Dokumen (status). Key frontend memakai nama properti apa adanya.
     'TOR':                                 ('TOR', 'status'),
     'FS (Feasibility Study)':              ('FS (Feasibility Study)', 'status'),

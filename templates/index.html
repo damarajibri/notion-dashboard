@@ -3285,6 +3285,21 @@ function showProjDetail(idx) {
     return `<select id="${id}" class="form-input" style="width:100%;padding:8px;${extraStyle}"><option value="">—</option>${extra}${opts}</select>`;
   };
 
+  // Autocomplete SPK Sebelumnya: datalist No SPK; peta No SPK -> page_id.
+  const spkList = (DATA && DATA.spk) ? [...DATA.spk] : [];
+  window._projSpkNoToId = {};
+  spkList.forEach(s => { if (s.page_id && s.no_spk) window._projSpkNoToId[s.no_spk] = s.page_id; });
+  const curSpkPrevId = (p.spk_sebelumnya_ids && p.spk_sebelumnya_ids.length) ? p.spk_sebelumnya_ids[0] : '';
+  const curSpkPrevNo = curSpkPrevId ? ((spkList.find(s => s.page_id === curSpkPrevId) || {}).no_spk || '') : '';
+  const spkPrevOptions = spkList.filter(s => s.page_id && s.no_spk)
+    .map(s => `<option value="${esc(s.no_spk)}"></option>`).join('');
+
+  // Autocomplete PIC (Assignee): datalist nama personel; peta nama -> page_id.
+  const persNames = (DATA && DATA.personel) ? [...DATA.personel].sort() : [];
+  window._projPicNameToId = (DATA && DATA.personel_map) ? DATA.personel_map : {};
+  const curPicName = (p.assignees && p.assignees.length) ? p.assignees[0] : '';
+  const picOptions = persNames.map(n => `<option value="${esc(n)}"></option>`).join('');
+
   // Dokumen: tiap baris = select status (nilai mentah dari doc_status).
   const docStatus = p.doc_status || {};
   const docRows = Object.keys(docStatus).map(k => `
@@ -3325,10 +3340,26 @@ function showProjDetail(idx) {
           <input type="date" id="pe_due" class="form-input" style="width:100%;padding:8px" value="${esc(p.due || '')}">
         </div>
       </div>
-      <label class="filter-label" for="pe_nilai" style="display:block;margin:12px 0 6px">Nilai Project (Rp)</label>
+      <label class="filter-label" for="pe_nilai" style="display:block;margin:12px 0 6px">Nominal IP (Rp)</label>
       <input type="text" inputmode="numeric" id="pe_nilai" class="form-input" style="width:100%;padding:8px" placeholder="0" value="${p.nominal_ip == null ? '' : fmtThousands(p.nominal_ip)}">
+
+      <label class="filter-label" for="pe_no_ip" style="display:block;margin:12px 0 6px">No. Izin Prinsip</label>
+      <input type="text" id="pe_no_ip" class="form-input" style="width:100%;padding:8px" value="${esc(p.no_izin_prinsip || '')}">
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:200px">
+          <label class="filter-label" for="pe_spk_prev" style="display:block;margin-bottom:6px">SPK Sebelumnya</label>
+          <input type="text" id="pe_spk_prev" class="form-input" list="pe_spk_prev_list" autocomplete="off" placeholder="Ketik No SPK..." value="${esc(curSpkPrevNo)}" style="width:100%;padding:8px">
+          <datalist id="pe_spk_prev_list">${spkPrevOptions}</datalist>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <label class="filter-label" for="pe_pic" style="display:block;margin-bottom:6px">PIC (Assignee)</label>
+          <input type="text" id="pe_pic" class="form-input" list="pe_pic_list" autocomplete="off" placeholder="Ketik nama personel..." value="${esc(curPicName)}" style="width:100%;padding:8px">
+          <datalist id="pe_pic_list">${picOptions}</datalist>
+        </div>
+      </div>
+
       <div class="modal-row" style="margin-top:12px"><div class="label">Completion</div><div class="value">${progBar(p.completion)}</div></div>
-      <div class="modal-row"><div class="label">Assignee</div><div class="value">${p.assignees.length ? `<div class="avatar-stack">${p.assignees.map(a => renderAvatar(a) + ' ' + a).join(', ')}</div>` : '-'}</div></div>
     </div>
 
     <div class="modal-section">
@@ -3364,6 +3395,20 @@ function saveProjDetail() {
   const $ = id => document.getElementById(id);
   const btn = $('pe_saveBtn'), icon = $('pe_saveIcon'), res = $('pe_result');
 
+  // Resolve autocomplete: SPK Sebelumnya (No SPK -> id) & PIC (nama -> id).
+  const spkNo = ($('pe_spk_prev') ? $('pe_spk_prev').value.trim() : '');
+  let spkPrevId = '';
+  if (spkNo) {
+    spkPrevId = (window._projSpkNoToId || {})[spkNo] || '';
+    if (!spkPrevId) { res.style.color = 'var(--red,#ef4444)'; res.textContent = 'SPK "' + spkNo + '" tidak ditemukan. Pilih dari daftar atau kosongkan.'; return; }
+  }
+  const picName = ($('pe_pic') ? $('pe_pic').value.trim() : '');
+  let picId = '';
+  if (picName) {
+    picId = (window._projPicNameToId || {})[picName] || '';
+    if (!picId) { res.style.color = 'var(--red,#ef4444)'; res.textContent = 'PIC "' + picName + '" tidak ditemukan. Pilih dari daftar atau kosongkan.'; return; }
+  }
+
   const payload = {
     page_id:  $('pe_page_id').value,
     title:    $('pe_title').value,
@@ -3371,6 +3416,9 @@ function saveProjDetail() {
     priority: $('pe_priority').value,
     due:      $('pe_due').value,
     nilai_project: parseThousands($('pe_nilai').value),
+    no_izin_prinsip: ($('pe_no_ip') ? $('pe_no_ip').value : ''),
+    spk_sebelumnya: spkPrevId,
+    pic: picId,
   };
   // Dokumen: kirim hanya yang punya elemen select.
   const docStatus = p.doc_status || {};
@@ -3713,7 +3761,7 @@ function openProjCreate() {
         <div style="flex:1;min-width:160px"><label class="filter-label" style="display:block;margin-bottom:6px">Priority</label>${_createSelect('pc_priority', PRIO_OPTS)}</div>
         <div style="flex:1;min-width:160px"><label class="filter-label" style="display:block;margin-bottom:6px">Due Date</label><input type="date" id="pc_due" class="form-input" style="width:100%;padding:8px"></div>
       </div>
-      <label class="filter-label" style="display:block;margin:12px 0 6px">Nilai Project (Rp)</label>
+      <label class="filter-label" style="display:block;margin:12px 0 6px">Nominal IP (Rp)</label>
       <input type="text" inputmode="numeric" id="pc_nilai" class="form-input" style="width:100%;padding:8px" placeholder="0">
     </div>
     <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
