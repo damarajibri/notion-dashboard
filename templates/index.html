@@ -3294,15 +3294,17 @@ function showProjDetail(idx) {
   const spkPrevOptions = spkList.filter(s => s.page_id && s.no_spk)
     .map(s => `<option value="${esc(s.no_spk)}"></option>`).join('');
 
-  // PIC (Assignee) sebagai DROPDOWN select: value = page_id personel.
+  // PIC (Assignee) sebagai MULTI-SELECT: value tiap opsi = page_id personel.
+  // Bisa memilih lebih dari satu (Ctrl/Cmd-klik). Semua PIC saat ini ter-pilih.
   const persNames = (DATA && DATA.personel) ? [...DATA.personel].sort() : [];
   const nameToId = (DATA && DATA.personel_map) ? DATA.personel_map : {};
-  const curPicId = (p.assignee_ids && p.assignee_ids.length) ? p.assignee_ids[0] : '';
+  const curPicIds = new Set(p.assignee_ids || []);
   const picSelectOptions = persNames
     .filter(n => nameToId[n])
-    .map(n => `<option value="${esc(nameToId[n])}"${nameToId[n] === curPicId ? ' selected' : ''}>${esc(n)}</option>`)
+    .map(n => `<option value="${esc(nameToId[n])}"${curPicIds.has(nameToId[n]) ? ' selected' : ''}>${esc(n)}</option>`)
     .join('');
-  const picSelect = `<select id="pe_pic" class="form-input" style="width:100%;padding:8px"><option value="">— Tidak ada —</option>${picSelectOptions}</select>`;
+  const picSelect = `<select id="pe_pic" class="form-input" multiple size="5" style="width:100%;padding:8px;min-height:120px">${picSelectOptions}</select>
+    <div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Tahan Ctrl (Windows) / Cmd (Mac) untuk memilih lebih dari satu.</div>`;
 
   // Dokumen: tiap baris = select status (nilai mentah dari doc_status).
   const docStatus = p.doc_status || {};
@@ -3406,7 +3408,10 @@ function saveProjDetail() {
     spkPrevId = (window._projSpkNoToId || {})[spkNo] || '';
     if (!spkPrevId) { res.style.color = 'var(--red,#ef4444)'; res.textContent = 'SPK "' + spkNo + '" tidak ditemukan. Pilih dari daftar atau kosongkan.'; return; }
   }
-  const picId = ($('pe_pic') ? $('pe_pic').value : '');
+  // PIC multi-select: kumpulkan semua page_id yang dipilih (CSV untuk backend).
+  const picEl = $('pe_pic');
+  const picIds = picEl ? Array.from(picEl.selectedOptions).map(o => o.value).filter(Boolean) : [];
+  const picCsv = picIds.join(',');
 
   const payload = {
     page_id:  $('pe_page_id').value,
@@ -3417,7 +3422,7 @@ function saveProjDetail() {
     nilai_project: parseThousands($('pe_nilai').value),
     no_izin_prinsip: ($('pe_no_ip') ? $('pe_no_ip').value : ''),
     spk_sebelumnya: spkPrevId,
-    pic: picId,
+    pic: picCsv,
   };
   // Dokumen: kirim hanya yang punya elemen select.
   const docStatus = p.doc_status || {};
