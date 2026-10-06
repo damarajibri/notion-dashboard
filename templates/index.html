@@ -274,17 +274,12 @@ body {
 .spk-col {
   flex: 0 0 300px; max-width: 300px; min-width: 300px;
   background: var(--bg2, #111122); border: 1px solid var(--border);
-  border-radius: var(--radius-lg, 14px); padding: 0 12px 12px;
+  border-radius: var(--radius-lg, 14px); padding: 12px;
   display: flex; flex-direction: column; gap: 10px;
-  max-height: calc(100vh - 220px);
-  overflow-y: auto;
 }
 .spk-col-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 4px 8px; border-bottom: 1px solid var(--border);
-  /* Freeze header saat kolom di-scroll vertikal. */
-  position: sticky; top: 0; z-index: 2;
-  background: var(--bg2, #111122);
+  padding: 2px 4px 8px; border-bottom: 1px solid var(--border);
 }
 .spk-col-title { font-size: 13px; font-weight: 700; color: var(--text); }
 .spk-col-count {
