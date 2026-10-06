@@ -3812,14 +3812,17 @@ function _taskSel(id, opts, cur) {
   const o = opts.map(x => `<option value="${x}"${x === cur ? ' selected' : ''}>${x}</option>`).join('');
   return `<select id="${id}" class="form-input" style="width:100%;padding:8px"><option value="">—</option>${extra}${o}</select>`;
 }
-// Autocomplete assignee: datalist nama personel; peta nama→page_id (global).
-function _taskAssigneeField(id, curName) {
+// Assignee multi-select: value tiap opsi = page_id personel; pre-select
+// semua assignee saat ini (dari t.assignee_ids).
+function _taskAssigneeField(id, curIds) {
   const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
   const names = (DATA && DATA.personel) ? [...DATA.personel].sort() : [];
-  window._taskNameToId = (DATA && DATA.personel_map) ? DATA.personel_map : {};
-  const opts = names.map(n => `<option value="${esc(n)}"></option>`).join('');
-  return `<input type="text" id="${id}" class="form-input" list="${id}_list" autocomplete="off" placeholder="Ketik nama personel..." value="${esc(curName || '')}" style="width:100%;padding:8px">
-    <datalist id="${id}_list">${opts}</datalist>`;
+  const nameToId = (DATA && DATA.personel_map) ? DATA.personel_map : {};
+  const sel = new Set(curIds || []);
+  const opts = names.filter(n => nameToId[n])
+    .map(n => `<option value="${esc(nameToId[n])}"${sel.has(nameToId[n]) ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  return `<select id="${id}" class="form-input" multiple size="4" style="width:100%;padding:8px;min-height:100px">${opts}</select>
+    <div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Ctrl/Cmd-klik untuk pilih lebih dari satu.</div>`;
 }
 // Field tags: input teks + datalist (pisahkan dengan koma utk banyak tag).
 function _taskTagsField(id, curTags) {
@@ -3833,7 +3836,7 @@ function _taskTagsField(id, curTags) {
 function _taskFormBody(prefix, t) {
   // t = objek task (edit) atau {} (create). prefix: 'te' edit / 'tc' create.
   const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
-  const curAssignee = (t.assignees && t.assignees.length) ? t.assignees[0] : '';
+  const curAssigneeIds = t.assignee_ids || [];
   const isEdit = prefix === 'te';
   return `
     ${isEdit ? `<input type="hidden" id="te_page_id" value="${esc(t.page_id || '')}">` : ''}
@@ -3848,7 +3851,7 @@ function _taskFormBody(prefix, t) {
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
         <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Progress (0–100)</label><input type="number" min="0" max="100" id="${prefix}_progress" class="form-input" style="width:100%;padding:8px" value="${t.progress == null ? '' : t.progress}" placeholder="0"></div>
-        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Assignee</label>${_taskAssigneeField(prefix + '_assignee', curAssignee)}</div>
+        <div style="flex:1;min-width:150px"><label class="filter-label" style="display:block;margin-bottom:6px">Assignee</label>${_taskAssigneeField(prefix + '_assignee', curAssigneeIds)}</div>
       </div>
       <label class="filter-label" style="display:block;margin:12px 0 6px">Tags</label>
       ${_taskTagsField(prefix + '_tags', t.tags)}
@@ -3876,18 +3879,16 @@ function closeTaskModal() { document.getElementById('taskModal').classList.remov
 
 function _taskPayloadFrom(prefix) {
   const $ = id => document.getElementById(id);
-  const nameToId = window._taskNameToId || {};
-  const assigneeName = ($(prefix + '_assignee').value || '').trim();
-  const assigneeId = assigneeName ? (nameToId[assigneeName] || '') : '';
+  const asEl = $(prefix + '_assignee');
+  const assigneeCsv = asEl ? Array.from(asEl.selectedOptions).map(o => o.value).filter(Boolean).join(',') : '';
   return {
     name:     $(prefix + '_name').value,
     status:   $(prefix + '_status').value,
     due:      $(prefix + '_due').value,
     priority: $(prefix + '_priority').value,
     progress: $(prefix + '_progress').value,
-    assignee: assigneeId,
+    assignee: assigneeCsv,
     tags:     ($(prefix + '_tags').value || '').trim(),
-    _assigneeName: assigneeName,
   };
 }
 
@@ -3896,9 +3897,7 @@ function saveTaskDetail() {
   const btn = $('te_saveBtn'), icon = $('te_saveIcon'), res = $('te_result');
   const p = _taskPayloadFrom('te');
   if (!p.name.trim()) { res.style.color = 'var(--red)'; res.textContent = 'Nama task wajib diisi.'; return; }
-  if (p._assigneeName && !p.assignee) { res.style.color = 'var(--red)'; res.textContent = 'Assignee tidak dikenal. Pilih dari daftar.'; return; }
   const payload = Object.assign({ page_id: $('te_page_id').value }, p);
-  delete payload._assigneeName;
   btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
   showProcessing('Menyimpan task...');
   fetch('/api/task/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -3943,8 +3942,6 @@ function saveTaskCreate() {
   const btn = $('tc_saveBtn'), icon = $('tc_saveIcon'), res = $('tc_result');
   const p = _taskPayloadFrom('tc');
   if (!p.name.trim()) { res.style.color = 'var(--red)'; res.textContent = 'Nama task wajib diisi.'; return; }
-  if (p._assigneeName && !p.assignee) { res.style.color = 'var(--red)'; res.textContent = 'Assignee tidak dikenal. Pilih dari daftar.'; return; }
-  delete p._assigneeName;
   btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
   showProcessing('Membuat task...');
   fetch('/api/task/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) })
