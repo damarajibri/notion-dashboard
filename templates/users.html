@@ -72,6 +72,30 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 .toast-ok { background: var(--green-bg); border: 1px solid var(--green); color: var(--green); }
 .toast-err { background: var(--red-bg); border: 1px solid var(--red); color: var(--red); }
 @keyframes uspin { to { transform: rotate(360deg); } }
+/* Tabs */
+.tabs { display: flex; gap: 6px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+.tab { padding: 10px 18px; font-size: 14px; font-weight: 600; color: var(--text2); cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent; font-family: inherit; }
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+/* Activity filters */
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 16px; }
+.filters .field { margin-bottom: 0; }
+.filters .field.small { min-width: 150px; }
+.filters label { margin-bottom: 4px; }
+.filters input, .filters select { padding: 8px 10px; font-size: 13px; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--border); }
+.pager .info { font-size: 12px; color: var(--text2); }
+.pager .controls { display: flex; gap: 8px; align-items: center; }
+.mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; }
+.act-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: var(--surface2); color: var(--text2); }
+.act-view { background: var(--blue-bg); color: var(--blue); }
+.act-login { background: var(--green-bg); color: var(--green); }
+.act-failed { background: var(--red-bg); color: var(--red); }
+.act-mut { background: var(--yellow-bg); color: var(--yellow); }
+.detail-cell { max-width: 280px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { text-align: center; padding: 30px; color: var(--text2); }
 </style>
 </head>
 <body>
@@ -93,21 +117,77 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 </header>
 
 <div class="main">
-  <div class="page-head">
-    <div class="page-title">👥 Master User</div>
-    <button class="btn btn-primary" onclick="openAdd()">➕ Tambah User</button>
+  <div class="tabs">
+    <button class="tab active" id="tabUsersBtn" onclick="switchTab('users')">👥 Users</button>
+    <button class="tab" id="tabActivityBtn" onclick="switchTab('activity')">📜 Log Aktivitas</button>
   </div>
 
-  <div class="card">
-    <table>
-      <thead>
-        <tr>
-          <th>#</th><th>Username</th><th>Nama Lengkap</th>
-          <th>Role</th><th>Status</th><th>Dibuat</th><th>Last Login</th><th style="text-align:right">Aksi</th>
-        </tr>
-      </thead>
-      <tbody id="userTbody"></tbody>
-    </table>
+  <!-- Panel: Users -->
+  <div class="tab-panel active" id="panel-users">
+    <div class="page-head">
+      <div class="page-title">👥 Master User</div>
+      <button class="btn btn-primary" onclick="openAdd()">➕ Tambah User</button>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Username</th><th>Nama Lengkap</th>
+            <th>Role</th><th>Status</th><th>Dibuat</th><th>Last Login</th><th style="text-align:right">Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="userTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Panel: Activity Log -->
+  <div class="tab-panel" id="panel-activity">
+    <div class="page-head">
+      <div class="page-title">📜 Log Aktivitas</div>
+      <button class="btn" onclick="loadActivity(1)">🔄 Muat Ulang</button>
+    </div>
+
+    <div class="filters">
+      <div class="field small">
+        <label for="af_user">User</label>
+        <select id="af_user"><option value="">— Semua —</option></select>
+      </div>
+      <div class="field small">
+        <label for="af_action">Aksi</label>
+        <select id="af_action"><option value="">— Semua —</option></select>
+      </div>
+      <div class="field small">
+        <label for="af_from">Dari tanggal</label>
+        <input type="date" id="af_from">
+      </div>
+      <div class="field small">
+        <label for="af_to">Sampai tanggal</label>
+        <input type="date" id="af_to">
+      </div>
+      <button class="btn btn-primary" onclick="loadActivity(1)">Terapkan</button>
+      <button class="btn btn-ghost" onclick="resetActivityFilters()">Reset</button>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Waktu</th><th>User</th><th>Aksi</th><th>Target</th><th>Detail</th><th>IP</th>
+          </tr>
+        </thead>
+        <tbody id="activityTbody"></tbody>
+      </table>
+      <div class="pager">
+        <div class="info" id="actInfo">—</div>
+        <div class="controls">
+          <button class="btn btn-sm" id="actPrev" onclick="actPage(-1)">← Sebelumnya</button>
+          <span class="info" id="actPageLabel">1</span>
+          <button class="btn btn-sm" id="actNext" onclick="actPage(1)">Berikutnya →</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -327,6 +407,144 @@ async function delUser(id, username) {
 document.getElementById('modal').addEventListener('click', (e) => {
   if (e.target.id === 'modal') closeModal();
 });
+
+// ─── Tabs ──────────────────────────────────────────────────────────────────
+let activityLoaded = false;
+function switchTab(name) {
+  const isUsers = name === 'users';
+  document.getElementById('panel-users').classList.toggle('active', isUsers);
+  document.getElementById('panel-activity').classList.toggle('active', !isUsers);
+  document.getElementById('tabUsersBtn').classList.toggle('active', isUsers);
+  document.getElementById('tabActivityBtn').classList.toggle('active', !isUsers);
+  if (!isUsers && !activityLoaded) { activityLoaded = true; loadActivity(1); }
+}
+
+// ─── Activity log ────────────────────────────────────────────────────────────
+let actState = { page: 1, pages: 1, pageSize: 50 };
+
+function actBadgeClass(action) {
+  if (action === 'view') return 'act-view';
+  if (action === 'auth.login') return 'act-login';
+  if (action.endsWith('login_failed')) return 'act-failed';
+  if (action.startsWith('user.') || action.startsWith('api.')) return 'act-mut';
+  return '';
+}
+
+function fmtTs(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return esc(iso);
+  return d.toLocaleString('id-ID', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+}
+
+function fmtDetail(detail) {
+  if (!detail) return '';
+  // detail is a JSON string from the server; show it compactly.
+  try {
+    const obj = JSON.parse(detail);
+    return Object.entries(obj)
+      .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+      .join(', ');
+  } catch (e) {
+    return String(detail);
+  }
+}
+
+function buildActivityQuery(page) {
+  const p = new URLSearchParams();
+  p.set('page', page);
+  p.set('page_size', actState.pageSize);
+  const u = document.getElementById('af_user').value;
+  const a = document.getElementById('af_action').value;
+  const from = document.getElementById('af_from').value;
+  const to = document.getElementById('af_to').value;
+  if (u) p.set('user_id', u);
+  if (a) p.set('action', a);
+  // Dates are local calendar days; server compares against UTC ISO strings.
+  if (from) p.set('from', from + 'T00:00:00Z');
+  if (to) p.set('to', to + 'T23:59:59Z');
+  return p.toString();
+}
+
+async function loadActivity(page) {
+  page = page || 1;
+  const tb = document.getElementById('activityTbody');
+  tb.innerHTML = '<tr><td colspan="6" class="empty">Memuat…</td></tr>';
+  let data;
+  try {
+    const res = await fetch('/api/activity?' + buildActivityQuery(page));
+    data = await res.json();
+  } catch (e) {
+    tb.innerHTML = '<tr><td colspan="6" class="empty">Kesalahan jaringan</td></tr>';
+    return;
+  }
+  if (!data.ok) {
+    tb.innerHTML = `<tr><td colspan="6" class="empty">${esc(data.error || 'Gagal memuat log')}</td></tr>`;
+    return;
+  }
+
+  // Populate filter dropdowns once (users + actions) on first load.
+  const userSel = document.getElementById('af_user');
+  if (userSel.options.length <= 1 && Array.isArray(data.users)) {
+    for (const u of data.users) {
+      const o = document.createElement('option');
+      o.value = u.id; o.textContent = u.username;
+      userSel.appendChild(o);
+    }
+  }
+  const actionSel = document.getElementById('af_action');
+  if (actionSel.options.length <= 1 && Array.isArray(data.actions)) {
+    for (const a of data.actions) {
+      const o = document.createElement('option');
+      o.value = a; o.textContent = a;
+      actionSel.appendChild(o);
+    }
+  }
+
+  actState.page = data.page;
+  actState.pages = data.pages || 1;
+
+  tb.innerHTML = '';
+  if (!data.items.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="empty">Tidak ada aktivitas.</td></tr>';
+  } else {
+    for (const r of data.items) {
+      const tr = document.createElement('tr');
+      const detailStr = fmtDetail(r.detail);
+      tr.innerHTML = `
+        <td class="mono">${fmtTs(r.ts)}</td>
+        <td>${r.username ? '<b>' + esc(r.username) + '</b>' : '<span style="color:var(--text2)">anonim</span>'}</td>
+        <td><span class="act-badge ${actBadgeClass(r.action)}">${esc(r.action)}</span></td>
+        <td class="mono">${esc(r.target) || '—'}</td>
+        <td class="detail-cell" title="${esc(detailStr)}">${esc(detailStr) || '—'}</td>
+        <td class="mono" style="color:var(--text2)">${esc(r.ip) || '—'}</td>`;
+      tb.appendChild(tr);
+    }
+  }
+
+  document.getElementById('actInfo').textContent =
+    `Total ${data.total} aktivitas · halaman ${data.page} dari ${actState.pages}`;
+  document.getElementById('actPageLabel').textContent = data.page;
+  document.getElementById('actPrev').disabled = data.page <= 1;
+  document.getElementById('actNext').disabled = data.page >= actState.pages;
+}
+
+function actPage(delta) {
+  const next = actState.page + delta;
+  if (next < 1 || next > actState.pages) return;
+  loadActivity(next);
+}
+
+function resetActivityFilters() {
+  document.getElementById('af_user').value = '';
+  document.getElementById('af_action').value = '';
+  document.getElementById('af_from').value = '';
+  document.getElementById('af_to').value = '';
+  loadActivity(1);
+}
 
 loadUsers();
 </script>

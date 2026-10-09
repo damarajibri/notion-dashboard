@@ -1,4 +1,4 @@
-import json, os, io, csv, urllib.request, urllib.error, random, secrets, uuid, mimetypes
+import json, os, io, csv, time, urllib.request, urllib.error, random, secrets, uuid, mimetypes
 from functools import wraps
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -834,6 +834,129 @@ def inject_user():
     return {'user': current_user()}
 
 
+# ─── ACTIVITY LOG ─────────────────────────────────────────────────────────────
+# One helper to record any user action, pulling identity from the session and
+# network metadata from the request. Logging is best-effort and must never
+# break a request, so db.log_activity() swallows its own errors.
+
+def _client_ip():
+    """Best-effort client IP, honouring a single proxy hop (X-Forwarded-For)."""
+    xff = request.headers.get('X-Forwarded-For', '')
+    if xff:
+        return xff.split(',')[0].strip()
+    return request.remote_addr or ''
+
+
+def record_activity(action, target=None, detail=None, user=None):
+    """Record one activity row for the current request/session.
+
+    `user` may be passed explicitly (e.g. on login, before the session is set);
+    otherwise identity is read from the session.
+    """
+    if user is not None:
+        uid = user.get('id')
+        uname = user.get('username')
+    else:
+        uid = session.get('uid')
+        uname = session.get('username')
+    db.log_activity(
+        action=action,
+        user_id=uid,
+        username=uname,
+        target=target,
+        detail=detail,
+        ip=_client_ip(),
+        user_agent=(request.headers.get('User-Agent') or '')[:400],
+    )
+
+
+# Page paths we DON'T want to log as "views" (static assets, the log viewer's
+# own polling endpoint, captcha refresh, and the activity API itself).
+_VIEW_LOG_SKIP_PREFIXES = ('/static/', '/favicon')
+_VIEW_LOG_SKIP_EXACT = {'/captcha/refresh'}
+
+# Mutating API paths that already record their own domain-specific activity
+# (user CRUD), so the generic mutation logger skips them to avoid duplicates.
+_MUTATION_LOG_SKIP = ('/api/users',)
+
+# Auto-purge of old 'view' activity (retention handled in db.purge_old_views).
+# Runs opportunistically from the request path, throttled to at most once per
+# interval so it adds negligible overhead and needs no external scheduler.
+_PURGE_INTERVAL_SECONDS = int(os.environ.get('ACTIVITY_PURGE_INTERVAL', '21600'))  # 6h
+_last_view_purge = 0.0
+
+
+def _maybe_purge_views():
+    """Prune old 'view' rows at most once per _PURGE_INTERVAL_SECONDS."""
+    global _last_view_purge
+    now = time.time()
+    if now - _last_view_purge < _PURGE_INTERVAL_SECONDS:
+        return
+    _last_view_purge = now  # set first so concurrent requests don't pile up
+    try:
+        deleted = db.purge_old_views()
+        if deleted:
+            app.logger.info('Activity auto-purge: removed %d old view rows.', deleted)
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Activity auto-purge failed: %s', e)
+
+
+@app.after_request
+def _log_page_view(response):
+    """Log user activity automatically from the request/response.
+
+    Two kinds are captured here so individual handlers stay untouched:
+      1. Page views: GET requests to real HTML pages (not static/polling).
+      2. Data mutations: POST/PUT/PATCH/DELETE to /api/* endpoints, logged
+         generically as 'api.<method> <path>' with the response status.
+
+    Endpoints that log richer, domain-specific activity themselves (auth,
+    user CRUD) are listed in _MUTATION_LOG_SKIP so they are not double-logged.
+    Logging is best-effort and must never break the response.
+    """
+    try:
+        method = request.method
+        path = request.path or ''
+
+        # ── Data mutations on the API ────────────────────────────────────────
+        if method in ('POST', 'PUT', 'PATCH', 'DELETE') and path.startswith('/api/'):
+            if session.get('uid') is None:
+                return response
+            if any(path == p or path.startswith(p) for p in _MUTATION_LOG_SKIP):
+                return response  # already logged with domain detail
+            ok = response.status_code < 400
+            record_activity(
+                f'api.{method.lower()}',
+                target=path,
+                detail={'status': response.status_code, 'ok': ok},
+            )
+            return response
+
+        # ── Page views ───────────────────────────────────────────────────────
+        if method != 'GET':
+            return response
+        if session.get('uid') is None:
+            return response
+        if path in _VIEW_LOG_SKIP_EXACT:
+            return response
+        if any(path.startswith(p) for p in _VIEW_LOG_SKIP_PREFIXES):
+            return response
+        if path.startswith('/api/'):
+            return response
+        if response.status_code >= 400:
+            return response
+        ctype = response.headers.get('Content-Type', '')
+        if 'text/html' not in ctype:
+            return response
+        qs = request.query_string.decode('utf-8', 'ignore')
+        detail = {'query': qs} if qs else None
+        record_activity('view', target=path, detail=detail)
+        _maybe_purge_views()
+    except Exception:  # noqa: BLE001 — logging must never break the response.
+        pass
+    return response
+
+
 # ─── AUTH ROUTES ──────────────────────────────────────────────────────────────
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -850,6 +973,8 @@ def login():
 
         if not check_captcha(captcha_answer):
             error = 'Captcha salah. Coba lagi.'
+            record_activity('auth.login_failed', target=username,
+                            detail={'reason': 'captcha'})
         else:
             user = db.authenticate(username, password)
             if user:
@@ -859,12 +984,15 @@ def login():
                 session['uid'] = user['id']
                 session['username'] = user['username']
                 session['role'] = user['role']
+                record_activity('auth.login', user=user)
                 nxt = request.args.get('next') or url_for('index')
                 # Only allow local redirects.
                 if not nxt.startswith('/'):
                     nxt = url_for('index')
                 return redirect(nxt)
             error = 'Username atau password salah, atau akun nonaktif.'
+            record_activity('auth.login_failed', target=username,
+                            detail={'reason': 'bad_credentials'})
 
     # (Re)generate a fresh captcha for every rendered login form.
     captcha = generate_captcha()
@@ -879,6 +1007,7 @@ def captcha_refresh():
 
 @app.route('/logout')
 def logout():
+    record_activity('auth.logout')
     session.clear()
     return redirect(url_for('login'))
 
@@ -910,6 +1039,8 @@ def api_users_create():
             role=payload.get('role', 'user'),
             is_active=str(payload.get('is_active', 'true')).lower() in ('1', 'true', 'yes', 'on'),
         )
+        record_activity('user.create', target=str(u['id']),
+                        detail={'username': u['username'], 'role': u['role']})
         return jsonify({'ok': True, 'user': u}), 201
     except db.UserError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
@@ -931,6 +1062,11 @@ def api_users_update(user_id):
         kwargs['is_active'] = str(payload.get('is_active')).lower() in ('1', 'true', 'yes', 'on')
     try:
         u = db.update_user(user_id, **kwargs)
+        changed = sorted(kwargs.keys())
+        if 'password' in changed:
+            changed = [c if c != 'password' else 'password(reset)' for c in changed]
+        record_activity('user.update', target=str(user_id),
+                        detail={'username': u['username'], 'changed': changed})
         return jsonify({'ok': True, 'user': u})
     except db.UserError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
@@ -943,10 +1079,67 @@ def api_users_delete(user_id):
     if session.get('uid') == user_id:
         return jsonify({'ok': False, 'error': 'Tidak dapat menghapus akun yang sedang login.'}), 400
     try:
+        victim = db.get_user(user_id)
         db.delete_user(user_id)
+        record_activity('user.delete', target=str(user_id),
+                        detail={'username': victim['username'] if victim else None})
         return jsonify({'ok': True})
     except db.UserError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+# ─── ACTIVITY LOG API ─────────────────────────────────────────────────────────
+# Read-only view of the activity log for the Master User page. Root & admin only.
+
+@app.route('/api/activity', methods=['GET'])
+@roles_required('root', 'admin')
+def api_activity_list():
+    args = request.args
+
+    def _int(name):
+        v = args.get(name)
+        if v is None or v == '':
+            return None
+        try:
+            return int(v)
+        except ValueError:
+            return None
+
+    user_id = _int('user_id')
+    username = (args.get('username') or '').strip() or None
+    action = (args.get('action') or '').strip() or None
+    date_from = (args.get('from') or '').strip() or None
+    date_to = (args.get('to') or '').strip() or None
+
+    page = _int('page') or 1
+    if page < 1:
+        page = 1
+    page_size = _int('page_size') or 50
+    page_size = max(1, min(page_size, 200))
+    offset = (page - 1) * page_size
+
+    rows = db.list_activity(
+        user_id=user_id, username=username, action=action,
+        date_from=date_from, date_to=date_to,
+        limit=page_size, offset=offset,
+    )
+    total = db.count_activity(
+        user_id=user_id, username=username, action=action,
+        date_from=date_from, date_to=date_to,
+    )
+    return jsonify({
+        'ok': True,
+        'items': rows,
+        'total': total,
+        'page': page,
+        'page_size': page_size,
+        'pages': (total + page_size - 1) // page_size if page_size else 1,
+        'actions': db.distinct_activity_actions(),
+        'users': [
+            {'id': u['id'], 'username': u['username']}
+            for u in db.list_users()
+        ],
+    })
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────

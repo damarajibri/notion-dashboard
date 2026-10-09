@@ -84,6 +84,33 @@ def init_db():
         cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
         if "last_login" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN last_login TEXT;")
+        # Activity log: every user action in the app (login, logout, page views,
+        # user CRUD, data edits, sync, ...). username is denormalised so the log
+        # stays readable even after the user is deleted.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS activity_log (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts         TEXT NOT NULL,
+                user_id    INTEGER,
+                username   TEXT,
+                action     TEXT NOT NULL,
+                target     TEXT,
+                detail     TEXT,
+                ip         TEXT,
+                user_agent TEXT
+            );
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id, ts);"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_activity_ts ON activity_log(ts);"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_activity_action ON activity_log(action);"
+        )
         conn.commit()
     finally:
         conn.close()
@@ -505,3 +532,170 @@ def delete_user(user_id):
         return True
     finally:
         conn.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ACTIVITY LOG LAYER
+# ─────────────────────────────────────────────────────────────────────────────
+# Records every user action in the app (login/logout, page views, user CRUD,
+# data edits, sync, ...). Rows are append-only and queried with filters +
+# pagination for the Master User activity view. The `username` column is
+# denormalised (copied in at write time) so the log remains meaningful even
+# after the referenced user is deleted.
+
+
+def log_activity(action, user_id=None, username=None, target=None,
+                 detail=None, ip=None, user_agent=None):
+    """Insert one activity record. Never raises on failure (logging must not
+    break the request); returns the new row id or None.
+
+    `detail` may be a dict/list (stored as JSON) or a plain string.
+    """
+    if not action:
+        return None
+    if detail is not None and not isinstance(detail, str):
+        try:
+            detail = json.dumps(detail, ensure_ascii=False)
+        except (TypeError, ValueError):
+            detail = str(detail)
+    try:
+        conn = get_conn()
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO activity_log
+                    (ts, user_id, username, action, target, detail, ip, user_agent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (_now_iso(), user_id, username, action, target, detail, ip, user_agent),
+            )
+            conn.commit()
+            return cur.lastrowid
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        # Logging is best-effort: swallow DB errors so the caller is unaffected.
+        return None
+
+
+def _activity_filters(user_id=None, username=None, action=None,
+                      date_from=None, date_to=None):
+    """Build a WHERE clause + params list from optional filters."""
+    clauses, params = [], []
+    if user_id is not None:
+        clauses.append("user_id = ?")
+        params.append(user_id)
+    if username:
+        clauses.append("username = ?")
+        params.append(username)
+    if action:
+        # Prefix match so 'user' matches user.create/user.update/user.delete.
+        clauses.append("action LIKE ?")
+        params.append(action + "%")
+    if date_from:
+        clauses.append("ts >= ?")
+        params.append(date_from)
+    if date_to:
+        clauses.append("ts <= ?")
+        params.append(date_to)
+    where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+    return where, params
+
+
+def list_activity(user_id=None, username=None, action=None,
+                  date_from=None, date_to=None, limit=50, offset=0):
+    """Return activity rows (newest first) matching the filters."""
+    try:
+        limit = max(1, min(int(limit), 500))
+    except (TypeError, ValueError):
+        limit = 50
+    try:
+        offset = max(0, int(offset))
+    except (TypeError, ValueError):
+        offset = 0
+    where, params = _activity_filters(user_id, username, action, date_from, date_to)
+    conn = get_conn()
+    try:
+        try:
+            rows = conn.execute(
+                f"""
+                SELECT id, ts, user_id, username, action, target, detail, ip, user_agent
+                FROM activity_log{where}
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?;
+                """,
+                params + [limit, offset],
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def count_activity(user_id=None, username=None, action=None,
+                   date_from=None, date_to=None):
+    """Return the total number of activity rows matching the filters."""
+    where, params = _activity_filters(user_id, username, action, date_from, date_to)
+    conn = get_conn()
+    try:
+        try:
+            row = conn.execute(
+                f"SELECT COUNT(*) AS n FROM activity_log{where};", params
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return 0
+        return row["n"] if row else 0
+    finally:
+        conn.close()
+
+
+def distinct_activity_actions():
+    """Return the sorted list of distinct action values (for filter dropdown)."""
+    conn = get_conn()
+    try:
+        try:
+            rows = conn.execute(
+                "SELECT DISTINCT action FROM activity_log ORDER BY action;"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [r["action"] for r in rows]
+    finally:
+        conn.close()
+
+
+# Default retention for 'view' activity. Views are high-volume and low-value
+# long-term, so they are pruned after this many days. Other actions
+# (auth.*, user.*, api.*) are kept indefinitely.
+VIEW_RETENTION_DAYS = int(os.environ.get("ACTIVITY_VIEW_RETENTION_DAYS", "90"))
+
+
+def purge_old_views(days=None):
+    """Delete 'view' activity older than `days` (default VIEW_RETENTION_DAYS).
+
+    Only rows with action = 'view' are removed; all other actions are retained.
+    Best-effort: returns the number of rows deleted, or 0 on any error.
+    """
+    try:
+        days = int(days) if days is not None else VIEW_RETENTION_DAYS
+    except (TypeError, ValueError):
+        days = VIEW_RETENTION_DAYS
+    if days <= 0:
+        return 0
+    cutoff = time.strftime(
+        "%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - days * 86400)
+    )
+    try:
+        conn = get_conn()
+        try:
+            cur = conn.execute(
+                "DELETE FROM activity_log WHERE action = 'view' AND ts < ?;",
+                (cutoff,),
+            )
+            conn.commit()
+            return cur.rowcount or 0
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return 0
