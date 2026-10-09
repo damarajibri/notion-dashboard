@@ -9,6 +9,7 @@ from flask import (
 
 import db
 import sync
+import audit_trail
 
 
 def _load_dotenv():
@@ -184,6 +185,51 @@ def notion_get(url):
     hdrs = {k: v for k, v in HEADERS.items() if k != 'Content-Type'}
     req = urllib.request.Request(url, headers=hdrs)
     return json.loads(urllib.request.urlopen(req).read())
+
+
+def notion_delete(url):
+    hdrs = {k: v for k, v in HEADERS.items() if k != 'Content-Type'}
+    req = urllib.request.Request(url, headers=hdrs, method='DELETE')
+    return json.loads(urllib.request.urlopen(req).read())
+
+
+# Instance helper audit trail (body halaman). notion_patch didefinisikan di
+# bawah; audit_blocks hanya memakainya saat request, jadi aman direferensikan.
+audit_blocks = audit_trail.NotionBlocks(
+    get=notion_get,
+    post=notion_post,
+    patch=lambda url, body: notion_patch(url, body),
+    delete=notion_delete,
+)
+
+
+def _audit_user_dict():
+    """Ringkas user yang sedang login untuk disimpan di audit trail."""
+    u = current_user()
+    if not u:
+        return {"id": None, "username": "(anonymous)", "full_name": ""}
+    return {"id": u.get("id"), "username": u.get("username"),
+            "full_name": u.get("full_name") or ""}
+
+
+def _audit_now():
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _record_audit(page_id, action='update'):
+    """Ambil halaman SEGAR dari Notion, snapshot semua properti, lalu simpan
+    satu versi baru ke audit trail di body halaman. Best-effort: kegagalan
+    audit tidak boleh menjatuhkan operasi utama. Return nomor versi atau None.
+    """
+    try:
+        raw = notion_get(f'https://api.notion.com/v1/pages/{page_id}')
+        snap = audit_trail.snapshot_properties(raw)
+        return audit_trail.append_version(
+            audit_blocks, page_id, snap, _audit_user_dict(), _audit_now(), action
+        )
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Audit record failed for %s: %s', page_id, e)
+        return None
 
 
 # ─── Notion Direct Upload (file upload) ───────────────────────────────────────
@@ -1693,13 +1739,118 @@ def api_project_update():
     except Exception as e:  # noqa: BLE001
         return jsonify({'ok': False, 'error': f'Gagal update: {e}'}), 502
 
+    # Catat snapshot SEMUA properti (setelah perubahan) + user + waktu ke
+    # audit trail di body halaman. Best-effort; tidak menjatuhkan request.
+    audit_version = _record_audit(page_id, action='update')
+
     # Refresh cache agar dashboard mencerminkan perubahan (best-effort).
     try:
         sync.incremental_sync()
     except Exception as e:  # noqa: BLE001
         app.logger.warning('Post-update sync failed: %s', e)
 
-    return jsonify({'ok': True, 'updated': list(props.keys())})
+    return jsonify({'ok': True, 'updated': list(props.keys()),
+                    'audit_version': audit_version})
+
+
+# ─── Project Audit Trail (body halaman) ───────────────────────────────────────
+
+@app.route('/api/project/audit', methods=['GET'])
+@login_required
+def api_project_audit():
+    """Baca riwayat versi audit trail untuk satu project.
+
+    Query param: page_id. Return list versi (terbaru di akhir).
+    """
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+    page_id = (request.args.get('page_id') or '').strip()
+    if not page_id:
+        return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
+    try:
+        versions = audit_trail.read_versions(audit_blocks, page_id)
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal baca audit: {e}'}), 502
+    return jsonify({'ok': True, 'page_id': page_id,
+                    'count': len(versions), 'versions': versions})
+
+
+@app.route('/api/project/audit/compare', methods=['GET'])
+@login_required
+def api_project_audit_compare():
+    """Bandingkan dua versi audit. Query: page_id, a (version), b (version)."""
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+    page_id = (request.args.get('page_id') or '').strip()
+    try:
+        va = int(request.args.get('a', ''))
+        vb = int(request.args.get('b', ''))
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'Parameter a & b (nomor versi) wajib angka.'}), 400
+    if not page_id:
+        return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
+    try:
+        diff = audit_trail.compare_versions(audit_blocks, page_id, va, vb)
+    except audit_trail.AuditError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 404
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal compare: {e}'}), 502
+    return jsonify({'ok': True, 'page_id': page_id, 'a': va, 'b': vb, 'diff': diff})
+
+
+@app.route('/api/project/audit/rollback', methods=['POST'])
+@login_required
+def api_project_audit_rollback():
+    """Terapkan kembali versi lama ke properti project di Notion.
+
+    Body JSON: {page_id, version}. Membangun payload Update Page dari snapshot
+    versi tersebut (hanya properti writable), PATCH ke Notion, lalu mencatat
+    satu versi audit BARU dengan action='rollback' (sejarah tidak dihapus).
+    """
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+    payload = request.get_json(silent=True) or {}
+    page_id = (payload.get('page_id') or '').strip()
+    version = payload.get('version')
+    if not page_id:
+        return jsonify({'ok': False, 'error': 'page_id wajib diisi.'}), 400
+    try:
+        version = int(version)
+    except (TypeError, ValueError):
+        return jsonify({'ok': False, 'error': 'version wajib angka.'}), 400
+
+    entry = audit_trail.get_version(audit_blocks, page_id, version)
+    if entry is None:
+        return jsonify({'ok': False, 'error': f'Versi {version} tidak ditemukan.'}), 404
+
+    props, skipped = audit_trail.build_rollback_payload(entry.get('properties', {}))
+    if not props:
+        return jsonify({'ok': False, 'error': 'Tidak ada properti writable untuk di-rollback.'}), 400
+
+    try:
+        notion_patch(f'https://api.notion.com/v1/pages/{page_id}', {'properties': props})
+    except urllib.error.HTTPError as e:
+        detail = ''
+        try:
+            detail = e.read().decode()
+        except Exception:
+            pass
+        return jsonify({'ok': False, 'error': f'Notion HTTP {e.code}: {detail}'}), 502
+    except Exception as e:  # noqa: BLE001
+        return jsonify({'ok': False, 'error': f'Gagal rollback: {e}'}), 502
+
+    # Catat versi baru hasil rollback (snapshot kondisi setelah apply).
+    new_version = _record_audit(page_id, action='rollback')
+
+    try:
+        sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Post-rollback sync failed: %s', e)
+
+    return jsonify({'ok': True, 'rolled_back_to': version,
+                    'applied': list(props.keys()), 'skipped': skipped,
+                    'new_audit_version': new_version})
+
 
 # ─── SPK: edit → Notion ────────────────────────────────────────────────────────
 # Peta field frontend → (nama properti Notion, tipe). Hanya field skalar yang

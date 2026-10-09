@@ -3383,6 +3383,17 @@ function showProjDetail(idx) {
       ${docRows || '<span style="color:var(--text2)">Tidak ada dokumen</span>'}
     </div>
 
+    <div class="modal-section">
+      <div class="modal-section-title">Audit Trail (Riwayat Perubahan)</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
+        Setiap penyimpanan ke Notion mencatat snapshot semua properti beserta user & waktu.
+        Pilih dua versi untuk membandingkan, atau rollback untuk menerapkan kembali versi lama.
+      </div>
+      <div id="pe_audit_box" data-pageid="${esc(p.page_id || '')}">
+        <div style="color:var(--text2);font-size:13px">Memuat riwayat…</div>
+      </div>
+    </div>
+
     <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
       <span id="pe_result" style="font-size:13px;margin-right:auto"></span>
       <button class="btn btn-ghost" onclick="closeProjModal()">Tutup</button>
@@ -3393,6 +3404,7 @@ function showProjDetail(idx) {
 
   document.getElementById('projModal').classList.add('active');
   attachThousandFormat('pe_nilai');
+  if (p.page_id) loadAuditTrail(p.page_id);
 }
 
 function saveProjDetail() {
@@ -3463,6 +3475,131 @@ function saveProjDetail() {
 }
 
 function closeProjModal() { document.getElementById('projModal').classList.remove('active'); }
+
+// ─── Audit Trail (riwayat perubahan project) ──────────────────────────────────
+function _auditEsc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// Ringkas nilai properti Notion mentah menjadi teks pendek untuk ditampilkan.
+function _auditPropToText(v){
+  if (v == null) return '—';
+  const t = v.type; const val = v[t];
+  if (val == null) return '—';
+  try {
+    switch(t){
+      case 'title': case 'rich_text': return (val||[]).map(x=>x.plain_text||'').join('') || '—';
+      case 'select': case 'status': return val.name || '—';
+      case 'multi_select': return (val||[]).map(o=>o.name).join(', ') || '—';
+      case 'number': return String(val);
+      case 'checkbox': return val ? '✓' : '✗';
+      case 'date': return val.start ? (val.start + (val.end? ' → '+val.end:'')) : '—';
+      case 'people': return (val||[]).map(p=>p.name||p.id).join(', ') || '—';
+      case 'relation': return (val||[]).length + ' tautan';
+      case 'files': return (val||[]).length + ' file';
+      case 'formula': return (val[val.type]!=null? String(val[val.type]) : '—');
+      case 'url': case 'email': case 'phone_number': return val || '—';
+      default: return JSON.stringify(val).slice(0,60);
+    }
+  } catch(e){ return '—'; }
+}
+
+function loadAuditTrail(pageId){
+  const box = document.getElementById('pe_audit_box');
+  if (!box) return;
+  fetch('/api/project/audit?page_id=' + encodeURIComponent(pageId))
+    .then(r=>r.json())
+    .then(d=>{
+      if (!d.ok){ box.innerHTML = '<div style="color:var(--red,#ef4444);font-size:13px">Gagal memuat: '+_auditEsc(d.error||'unknown')+'</div>'; return; }
+      window._auditVersions = d.versions || [];
+      renderAuditTrail(pageId, window._auditVersions);
+    })
+    .catch(e=>{ box.innerHTML = '<div style="color:var(--red,#ef4444);font-size:13px">Gagal menghubungi server: '+_auditEsc(e)+'</div>'; });
+}
+
+function renderAuditTrail(pageId, versions){
+  const box = document.getElementById('pe_audit_box');
+  if (!box) return;
+  if (!versions.length){
+    box.innerHTML = '<div style="color:var(--text2);font-size:13px">Belum ada riwayat. Simpan perubahan untuk membuat versi pertama.</div>';
+    return;
+  }
+  // Daftar versi (terbaru di atas) + opsi compare.
+  const optsA = versions.map(v=>`<option value="${v.version}">v${v.version}</option>`).join('');
+  const rows = [...versions].reverse().map(v=>{
+    const u = v.user || {}; const who = _auditEsc(u.full_name || u.username || '(anonim)');
+    const act = _auditEsc(v.action || 'update');
+    const badge = act==='rollback' ? '<span style="color:#f59e0b">⟲ rollback</span>' : '<span style="color:#10b981">✎ '+act+'</span>';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-bottom:1px solid var(--border,#2a2a2a);font-size:13px">
+      <div style="font-weight:600;min-width:42px">v${v.version}</div>
+      <div style="flex:1">${who} · ${badge}</div>
+      <div style="color:var(--text2);font-size:11px">${_auditEsc(v.timestamp||'')}</div>
+      <button class="btn btn-ghost" style="padding:3px 8px;font-size:12px" onclick="auditRollback('${pageId}', ${v.version})">Rollback</button>
+    </div>`;
+  }).join('');
+
+  box.innerHTML = `
+    <div style="border:1px solid var(--border,#2a2a2a);border-radius:8px;overflow:hidden;margin-bottom:10px">${rows}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:13px">Bandingkan</span>
+      <select id="pe_audit_a" class="form-input" style="padding:6px;width:auto">${optsA}</select>
+      <span style="font-size:13px">dengan</span>
+      <select id="pe_audit_b" class="form-input" style="padding:6px;width:auto">${optsA}</select>
+      <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="auditCompare('${pageId}')">Compare</button>
+    </div>
+    <div id="pe_audit_diff" style="margin-top:10px"></div>`;
+
+  // Default: bandingkan dua versi terakhir bila ada >=2.
+  const a = document.getElementById('pe_audit_a'), b = document.getElementById('pe_audit_b');
+  if (versions.length >= 2){ a.value = versions[versions.length-2].version; b.value = versions[versions.length-1].version; }
+}
+
+function auditCompare(pageId){
+  const a = document.getElementById('pe_audit_a').value;
+  const b = document.getElementById('pe_audit_b').value;
+  const out = document.getElementById('pe_audit_diff');
+  if (a === b){ out.innerHTML = '<div style="color:var(--text2);font-size:13px">Pilih dua versi berbeda.</div>'; return; }
+  out.innerHTML = '<div style="color:var(--text2);font-size:13px">Membandingkan…</div>';
+  fetch('/api/project/audit/compare?page_id='+encodeURIComponent(pageId)+'&a='+a+'&b='+b)
+    .then(r=>r.json())
+    .then(d=>{
+      if (!d.ok){ out.innerHTML = '<div style="color:var(--red,#ef4444);font-size:13px">'+_auditEsc(d.error||'gagal')+'</div>'; return; }
+      const keys = Object.keys(d.diff||{});
+      if (!keys.length){ out.innerHTML = '<div style="color:var(--text2);font-size:13px">Tidak ada perbedaan properti antara v'+a+' dan v'+b+'.</div>'; return; }
+      const rows = keys.sort().map(k=>{
+        const from = _auditPropToText(d.diff[k].from), to = _auditPropToText(d.diff[k].to);
+        return `<tr>
+          <td style="padding:4px 8px;font-weight:600;vertical-align:top">${_auditEsc(k)}</td>
+          <td style="padding:4px 8px;color:#ef4444">${_auditEsc(from)}</td>
+          <td style="padding:4px 8px;color:#10b981">${_auditEsc(to)}</td></tr>`;
+      }).join('');
+      out.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="text-align:left;color:var(--text2)">
+          <th style="padding:4px 8px">Properti</th><th style="padding:4px 8px">v${a} (dari)</th><th style="padding:4px 8px">v${b} (jadi)</th>
+        </tr></thead><tbody>${rows}</tbody></table>`;
+    })
+    .catch(e=>{ out.innerHTML = '<div style="color:var(--red,#ef4444);font-size:13px">Gagal: '+_auditEsc(e)+'</div>'; });
+}
+
+function auditRollback(pageId, version){
+  if (!confirm('Rollback project ke versi v'+version+'? Semua properti writable akan ditimpa dengan nilai pada versi tersebut, dan dicatat sebagai versi baru.')) return;
+  showProcessing('Rollback ke v'+version+'…');
+  fetch('/api/project/audit/rollback', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({page_id: pageId, version: version})
+  })
+    .then(r=>r.json())
+    .then(d=>{
+      if (d.ok){
+        showToast('Rollback ke v'+version+' berhasil (versi baru: v'+d.new_audit_version+')', '⟲');
+        closeProjModal();
+        loadData();
+      } else {
+        showToast('Rollback gagal: '+(d.error||'unknown'), '⚠️');
+      }
+    })
+    .catch(e=>{ showToast('Gagal menghubungi server: '+e, '⚠️'); })
+    .finally(()=> hideProcessing());
+}
+
 
 // ===== SPK EDIT MODAL =====
 // Buka modal edit SPK berdasarkan page_id (dipakai kartu board grouping),
