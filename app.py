@@ -847,11 +847,41 @@ def _client_ip():
     return request.remote_addr or ''
 
 
-def record_activity(action, target=None, detail=None, user=None):
+# Fields that are identifiers/metadata, not user-edited data — excluded from
+# the "what changed" list so the log shows only meaningful data fields.
+_CHANGE_IGNORE_KEYS = {'page_id', 'id', 'csrf_token', 'db_key', 'database'}
+
+
+def _extract_change_fields(method):
+    """Build a `changes` dict describing the data a user added/edited/removed.
+
+    Reads the request JSON body (the payload the client sent) and lists the
+    field names present, tagged with an operation derived from the HTTP method:
+      POST -> 'create'   PUT/PATCH -> 'update'   DELETE -> 'delete'
+    Returns None when there is no meaningful body (e.g. a plain DELETE).
+    Best-effort: never raises.
+    """
+    op = {'POST': 'create', 'PUT': 'update', 'PATCH': 'update',
+          'DELETE': 'delete'}.get(method, method.lower())
+    try:
+        payload = request.get_json(silent=True)
+    except Exception:  # noqa: BLE001
+        payload = None
+    if isinstance(payload, dict):
+        fields = [k for k in payload.keys() if k not in _CHANGE_IGNORE_KEYS]
+        if fields:
+            return {'op': op, 'fields': sorted(fields)}
+    if op == 'delete':
+        return {'op': 'delete'}
+    return None
+
+
+def record_activity(action, target=None, detail=None, changes=None, user=None):
     """Record one activity row for the current request/session.
 
     `user` may be passed explicitly (e.g. on login, before the session is set);
     otherwise identity is read from the session.
+    `changes` holds the data a user added/edited/removed (stored as JSON).
     """
     if user is not None:
         uid = user.get('id')
@@ -865,6 +895,7 @@ def record_activity(action, target=None, detail=None, user=None):
         username=uname,
         target=target,
         detail=detail,
+        changes=changes,
         ip=_client_ip(),
         user_agent=(request.headers.get('User-Agent') or '')[:400],
     )
@@ -929,6 +960,7 @@ def _log_page_view(response):
                 f'api.{method.lower()}',
                 target=path,
                 detail={'status': response.status_code, 'ok': ok},
+                changes=_extract_change_fields(method),
             )
             return response
 
@@ -1040,7 +1072,11 @@ def api_users_create():
             is_active=str(payload.get('is_active', 'true')).lower() in ('1', 'true', 'yes', 'on'),
         )
         record_activity('user.create', target=str(u['id']),
-                        detail={'username': u['username'], 'role': u['role']})
+                        detail={'username': u['username'], 'role': u['role']},
+                        changes={'op': 'create',
+                                 'fields': sorted(k for k in ('username', 'full_name',
+                                                              'role', 'is_active', 'password')
+                                                  if payload.get(k) not in (None, ''))})
         return jsonify({'ok': True, 'user': u}), 201
     except db.UserError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
@@ -1066,7 +1102,8 @@ def api_users_update(user_id):
         if 'password' in changed:
             changed = [c if c != 'password' else 'password(reset)' for c in changed]
         record_activity('user.update', target=str(user_id),
-                        detail={'username': u['username'], 'changed': changed})
+                        detail={'username': u['username'], 'changed': changed},
+                        changes={'op': 'update', 'fields': changed})
         return jsonify({'ok': True, 'user': u})
     except db.UserError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
@@ -1082,7 +1119,9 @@ def api_users_delete(user_id):
         victim = db.get_user(user_id)
         db.delete_user(user_id)
         record_activity('user.delete', target=str(user_id),
-                        detail={'username': victim['username'] if victim else None})
+                        detail={'username': victim['username'] if victim else None},
+                        changes={'op': 'delete',
+                                 'user': victim['username'] if victim else None})
         return jsonify({'ok': True})
     except db.UserError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400

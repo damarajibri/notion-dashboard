@@ -2502,7 +2502,7 @@ function applyProjFilters() {
   document.getElementById('projCount').textContent = projects.length + ' projects';
 
   const table = document.getElementById('projTable');
-  table.querySelector('thead tr').innerHTML = ['#', 'Project', 'Status', 'Assignee', 'Due', 'Sisa', 'Completion', 'Docs', 'Priority', 'SPK Baru', 'Last Edit', 'File'].map(h => `<th>${h}</th>`).join('');
+  table.querySelector('thead tr').innerHTML = ['#', 'Project', 'Status', 'Assignee', 'Due', 'Sisa', 'Completion', 'Docs', 'Priority', 'SPK Baru', 'Last Edit'].map(h => `<th>${h}</th>`).join('');
   table.querySelector('tbody').innerHTML = projects.map((p, i) => {
     const spkb = p.spk_baru && p.spk_baru.length > 0 ? p.spk_baru.map(s => `<span class="tag">${s}</span>`).join('') : '-';
     const rd = p.remaining_days !== null && p.remaining_days !== undefined ? sisaBadge(p.remaining_days) : '-';
@@ -2519,9 +2519,8 @@ function applyProjFilters() {
       <td>${priorityBadge(p.priority)}</td>
       <td>${spkb}</td>
       <td style="color:var(--text2);font-size:12px">${p.edited}</td>
-      <td style="font-size:12px">${fileLinks(p.files)}</td>
     </tr>`;
-  }).join('') || emptyState(12);
+  }).join('') || emptyState(11);
   window._filteredProjects = projects;
   makeSortable(table);
 }
@@ -2727,7 +2726,7 @@ function applySpkFilters() {
     '#', 'ID', 'No SPK', 'Project', 'Vendor', 'Status', 'Tipe',
     'Mulai', 'Selesai', 'Sisa Hari',
     'Total Anggaran', 'Terbayar', 'Sisa Anggaran',
-    'Perpanjangan', 'PIC', 'Notes', 'File'
+    'Perpanjangan', 'PIC', 'Notes'
   ].map(h => `<th>${h}</th>`).join('');
 
   table.querySelector('tbody').innerHTML = spk.map((s, i) => {
@@ -2763,9 +2762,8 @@ function applySpkFilters() {
       <td>${perp}</td>
       <td>${s.pic && s.pic.length ? s.pic.map(p => renderAvatar(p)).join('') : '<span style="color:var(--text2)">-</span>'}</td>
       <td style="color:var(--text2);font-size:12px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.notes}">${s.notes || '-'}</td>
-      <td style="font-size:12px">${fileLinks(s.files)}</td>
     </tr>`;
-  }).join('') || emptyState(17);
+  }).join('') || emptyState(16);
   window._filteredSpk = spk;
   makeSortable(table);
 }

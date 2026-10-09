@@ -174,7 +174,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
       <table>
         <thead>
           <tr>
-            <th>Waktu</th><th>User</th><th>Aksi</th><th>Target</th><th>Detail</th><th>IP</th>
+            <th>Waktu</th><th>User</th><th>Aksi</th><th>Target</th><th>Perubahan</th><th>Detail</th><th>IP</th>
           </tr>
         </thead>
         <tbody id="activityTbody"></tbody>
@@ -453,6 +453,25 @@ function fmtDetail(detail) {
   }
 }
 
+// Ringkas kolom "Perubahan": data apa yang diubah/ditambah/dihapus user.
+// `changes` JSON string, mis. {"op":"update","fields":["Status","Priority"]}.
+function fmtChanges(changes) {
+  if (!changes) return '';
+  let obj;
+  try { obj = JSON.parse(changes); } catch (e) { return String(changes); }
+  if (obj == null || typeof obj !== 'object') return String(changes);
+  const opLabel = { create: 'Tambah', update: 'Ubah', delete: 'Hapus' };
+  const op = obj.op ? (opLabel[obj.op] || obj.op) : '';
+  let body = '';
+  if (Array.isArray(obj.fields)) body = obj.fields.join(', ');
+  else if (obj.user) body = obj.user;
+  else {
+    body = Object.entries(obj).filter(([k]) => k !== 'op')
+      .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ');
+  }
+  return op ? (body ? `${op}: ${body}` : op) : body;
+}
+
 function buildActivityQuery(page) {
   const p = new URLSearchParams();
   p.set('page', page);
@@ -472,17 +491,17 @@ function buildActivityQuery(page) {
 async function loadActivity(page) {
   page = page || 1;
   const tb = document.getElementById('activityTbody');
-  tb.innerHTML = '<tr><td colspan="6" class="empty">Memuat…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="7" class="empty">Memuat…</td></tr>';
   let data;
   try {
     const res = await fetch('/api/activity?' + buildActivityQuery(page));
     data = await res.json();
   } catch (e) {
-    tb.innerHTML = '<tr><td colspan="6" class="empty">Kesalahan jaringan</td></tr>';
+    tb.innerHTML = '<tr><td colspan="7" class="empty">Kesalahan jaringan</td></tr>';
     return;
   }
   if (!data.ok) {
-    tb.innerHTML = `<tr><td colspan="6" class="empty">${esc(data.error || 'Gagal memuat log')}</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="7" class="empty">${esc(data.error || 'Gagal memuat log')}</td></tr>`;
     return;
   }
 
@@ -509,16 +528,18 @@ async function loadActivity(page) {
 
   tb.innerHTML = '';
   if (!data.items.length) {
-    tb.innerHTML = '<tr><td colspan="6" class="empty">Tidak ada aktivitas.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="7" class="empty">Tidak ada aktivitas.</td></tr>';
   } else {
     for (const r of data.items) {
       const tr = document.createElement('tr');
       const detailStr = fmtDetail(r.detail);
+      const changesStr = fmtChanges(r.changes);
       tr.innerHTML = `
         <td class="mono">${fmtTs(r.ts)}</td>
         <td>${r.username ? '<b>' + esc(r.username) + '</b>' : '<span style="color:var(--text2)">anonim</span>'}</td>
         <td><span class="act-badge ${actBadgeClass(r.action)}">${esc(r.action)}</span></td>
         <td class="mono">${esc(r.target) || '—'}</td>
+        <td class="detail-cell" title="${esc(changesStr)}">${esc(changesStr) || '—'}</td>
         <td class="detail-cell" title="${esc(detailStr)}">${esc(detailStr) || '—'}</td>
         <td class="mono" style="color:var(--text2)">${esc(r.ip) || '—'}</td>`;
       tb.appendChild(tr);

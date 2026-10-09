@@ -97,11 +97,16 @@ def init_db():
                 action     TEXT NOT NULL,
                 target     TEXT,
                 detail     TEXT,
+                changes    TEXT,
                 ip         TEXT,
                 user_agent TEXT
             );
             """
         )
+        # Migration: add `changes` to pre-existing activity_log tables.
+        acols = {row["name"] for row in conn.execute("PRAGMA table_info(activity_log)")}
+        if "changes" not in acols:
+            conn.execute("ALTER TABLE activity_log ADD COLUMN changes TEXT;")
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id, ts);"
         )
@@ -545,29 +550,38 @@ def delete_user(user_id):
 
 
 def log_activity(action, user_id=None, username=None, target=None,
-                 detail=None, ip=None, user_agent=None):
+                 detail=None, changes=None, ip=None, user_agent=None):
     """Insert one activity record. Never raises on failure (logging must not
     break the request); returns the new row id or None.
 
-    `detail` may be a dict/list (stored as JSON) or a plain string.
+    `detail` and `changes` may be a dict/list (stored as JSON) or a plain string.
+    `changes` is meant to hold the data a user added/edited/removed, e.g.
+    {"changed": ["Status", "Priority"]} or {"fields": [...], "op": "update"}.
     """
     if not action:
         return None
-    if detail is not None and not isinstance(detail, str):
+
+    def _as_json(v):
+        if v is None or isinstance(v, str):
+            return v
         try:
-            detail = json.dumps(detail, ensure_ascii=False)
+            return json.dumps(v, ensure_ascii=False)
         except (TypeError, ValueError):
-            detail = str(detail)
+            return str(v)
+
+    detail = _as_json(detail)
+    changes = _as_json(changes)
     try:
         conn = get_conn()
         try:
             cur = conn.execute(
                 """
                 INSERT INTO activity_log
-                    (ts, user_id, username, action, target, detail, ip, user_agent)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                    (ts, user_id, username, action, target, detail, changes, ip, user_agent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
-                (_now_iso(), user_id, username, action, target, detail, ip, user_agent),
+                (_now_iso(), user_id, username, action, target, detail, changes,
+                 ip, user_agent),
             )
             conn.commit()
             return cur.lastrowid
@@ -619,7 +633,7 @@ def list_activity(user_id=None, username=None, action=None,
         try:
             rows = conn.execute(
                 f"""
-                SELECT id, ts, user_id, username, action, target, detail, ip, user_agent
+                SELECT id, ts, user_id, username, action, target, detail, changes, ip, user_agent
                 FROM activity_log{where}
                 ORDER BY id DESC
                 LIMIT ? OFFSET ?;
