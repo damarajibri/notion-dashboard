@@ -1704,12 +1704,19 @@ span.file-chip { cursor: default; opacity: .7; }
       </div>
 
       <div class="modal-section">
-        <div class="modal-section-title">Audit Trail (Riwayat Perubahan)</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
-          Setiap penyimpanan ke Notion mencatat snapshot semua properti beserta user &amp; waktu.
-          Pilih dua versi untuk membandingkan, atau rollback untuk menerapkan kembali versi lama.
+        <button type="button" id="me_audit_toggle" class="btn btn-ghost"
+          style="display:flex;align-items:center;gap:8px;width:100%;justify-content:space-between;padding:10px 12px;border:1px solid var(--border,#2a2a2a);border-radius:8px;font-size:14px;font-weight:600"
+          onclick="toggleAuditTrail('me')">
+          <span>🕓 Audit Trail (Riwayat Perubahan)</span>
+          <span id="me_audit_caret" style="color:var(--text2);transition:transform .2s">▸</span>
+        </button>
+        <div id="me_audit_wrap" style="display:none;margin-top:10px">
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
+            Setiap penyimpanan ke Notion mencatat snapshot semua properti beserta user &amp; waktu.
+            Pilih dua versi untuk membandingkan, atau rollback untuk menerapkan kembali versi lama.
+          </div>
+          <div id="me_audit_box"></div>
         </div>
-        <div id="me_audit_box"><div style="color:var(--text2);font-size:13px">Memuat riwayat…</div></div>
       </div>
 
       <div class="modal-section" id="me_result" style="display:none"></div>
@@ -2078,17 +2085,10 @@ function _forceRefreshThen(cb) {
 }
 
 function openProjDetailFresh(idx) {
-  const cur = (window._filteredProjects || window._projectsRows || (DATA && DATA.projects) || [])[idx];
-  const pid = cur && cur.page_id;
-  if (!pid) { showProjDetail(idx); return; }  // tanpa page_id, buka apa adanya
-  showProcessing('Memuat data terbaru dari Notion…');
-  _forceRefreshThen(() => _reloadDataThen(() => {
-    hideProcessing();
-    const list = (DATA && DATA.projects) || [];
-    const i = list.findIndex(p => p.page_id === pid);
-    if (i >= 0) { window._filteredProjects = list; showProjDetail(i); }
-    else showToast('Item tidak ditemukan setelah refresh (mungkin dihapus di Notion).', '⚠️');
-  }));
+  // Detail project dibuka langsung dari cache lokal (data /api/data yang sudah
+  // dimuat) agar tanpa delay. Tidak lagi memaksa refresh ke Notion saat klik;
+  // kesegaran data mengikuti sync berkala (incremental/full on-demand).
+  showProjDetail(idx);
 }
 
 function showTaskDetailFresh(idx) {
@@ -2106,14 +2106,11 @@ function showTaskDetailFresh(idx) {
 }
 
 function showProjDetailByPageIdFresh(pid) {
-  showProcessing('Memuat data terbaru dari Notion…');
-  _forceRefreshThen(() => _reloadDataThen(() => {
-    hideProcessing();
-    const list = (DATA && DATA.projects) || [];
-    const i = list.findIndex(p => p.page_id === pid);
-    if (i >= 0) { window._filteredProjects = list; showProjDetail(i); }
-    else showToast('Item tidak ditemukan setelah refresh.', '⚠️');
-  }));
+  // Buka langsung dari cache lokal (tanpa refresh ke Notion).
+  const list = (window._filteredProjects || (DATA && DATA.projects) || []);
+  const i = list.findIndex(p => p.page_id === pid);
+  if (i >= 0) { window._filteredProjects = list; showProjDetail(i); }
+  else showToast('Item tidak ditemukan.', '⚠️');
 }
 
 function showSpkDetailFresh(idx) {
@@ -3277,7 +3274,17 @@ function openMonthlyEdit(idx) {
   $('me_files').innerHTML = fileManager(x.page_id, mfiles, ['Files BAST', 'Files BALP'], '_refreshMonthlyModal');
 
   $('monthlyEditModal').classList.add('active');
-  loadAuditTrail('me', x.page_id, closeMonthlyEdit);
+  // Lazy audit trail: simpan page_id & callback; dimuat saat tombol diklik.
+  window._auditPage = window._auditPage || {};
+  window._auditCb = window._auditCb || {};
+  window._auditPage['me'] = x.page_id || null;
+  window._auditCb['me'] = closeMonthlyEdit;
+  const _meWrap = document.getElementById('me_audit_wrap');
+  const _meBox = document.getElementById('me_audit_box');
+  const _meCaret = document.getElementById('me_audit_caret');
+  if (_meWrap) _meWrap.style.display = 'none';
+  if (_meCaret) _meCaret.style.transform = 'rotate(0deg)';
+  if (_meBox) { _meBox.dataset.loaded = ''; _meBox.innerHTML = ''; }
 }
 
 function closeMonthlyEdit() {
@@ -3485,7 +3492,19 @@ function showProjDetail(idx) {
 
   document.getElementById('projModal').classList.add('active');
   attachThousandFormat('pe_nilai');
-  if (p.page_id) loadAuditTrail('pe', p.page_id, closeProjModal);
+  // Audit trail TIDAK dimuat di sini. Simpan page_id & callback; data baru
+  // diambil dari Notion saat user menekan tombol "Audit Trail" (lihat
+  // toggleAuditTrail). Reset status loaded agar tombol memuat ulang per project.
+  window._auditPage = window._auditPage || {};
+  window._auditCb = window._auditCb || {};
+  window._auditPage['pe'] = p.page_id || null;
+  window._auditCb['pe'] = closeProjModal;
+  const _peWrap = document.getElementById('pe_audit_wrap');
+  const _peBox = document.getElementById('pe_audit_box');
+  const _peCaret = document.getElementById('pe_audit_caret');
+  if (_peWrap) _peWrap.style.display = 'none';
+  if (_peCaret) _peCaret.style.transform = 'rotate(0deg)';
+  if (_peBox) { _peBox.dataset.loaded = ''; _peBox.innerHTML = ''; }
 }
 
 function saveProjDetail() {
@@ -3585,16 +3604,49 @@ function _auditPropToText(v){
 
 // HTML section audit trail yang bisa ditempel ke modal mana pun.
 // `prefix` harus unik per modal (mis. 'pe','te','se','me') agar id elemen tidak bentrok.
+// Audit trail TIDAK dimuat otomatis (mengambil dari Notion = lambat). Section ini
+// hanya menampilkan tombol; data baru diambil saat tombol diklik (lazy load).
 function auditSectionHtml(prefix){
   return `
     <div class="modal-section">
-      <div class="modal-section-title">Audit Trail (Riwayat Perubahan)</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
-        Setiap penyimpanan ke Notion mencatat snapshot semua properti beserta user &amp; waktu.
-        Pilih dua versi untuk membandingkan, atau rollback untuk menerapkan kembali versi lama.
+      <button type="button" id="${prefix}_audit_toggle" class="btn btn-ghost"
+        style="display:flex;align-items:center;gap:8px;width:100%;justify-content:space-between;padding:10px 12px;border:1px solid var(--border,#2a2a2a);border-radius:8px;font-size:14px;font-weight:600"
+        onclick="toggleAuditTrail('${prefix}')">
+        <span>🕓 Audit Trail (Riwayat Perubahan)</span>
+        <span id="${prefix}_audit_caret" style="color:var(--text2);transition:transform .2s">▸</span>
+      </button>
+      <div id="${prefix}_audit_wrap" style="display:none;margin-top:10px">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
+          Setiap penyimpanan ke Notion mencatat snapshot semua properti beserta user &amp; waktu.
+          Pilih dua versi untuk membandingkan, atau rollback untuk menerapkan kembali versi lama.
+        </div>
+        <div id="${prefix}_audit_box"></div>
       </div>
-      <div id="${prefix}_audit_box"><div style="color:var(--text2);font-size:13px">Memuat riwayat…</div></div>
     </div>`;
+}
+
+// Buka/tutup section audit trail. Data diambil dari Notion HANYA saat pertama
+// kali dibuka (di-cache per modal lewat dataset.loaded), sehingga klik berikutnya
+// instan dan modal detail terbuka tanpa delay audit.
+function toggleAuditTrail(prefix){
+  const wrap = document.getElementById(prefix + '_audit_wrap');
+  const caret = document.getElementById(prefix + '_audit_caret');
+  const box = document.getElementById(prefix + '_audit_box');
+  if (!wrap) return;
+  const willOpen = wrap.style.display === 'none';
+  wrap.style.display = willOpen ? 'block' : 'none';
+  if (caret) caret.style.transform = willOpen ? 'rotate(90deg)' : 'rotate(0deg)';
+  if (willOpen && box && box.dataset.loaded !== '1') {
+    const pageId = (window._auditPage && window._auditPage[prefix]) || null;
+    const cb = (window._auditCb && window._auditCb[prefix]) || null;
+    if (!pageId) {
+      box.innerHTML = '<div style="color:var(--text2);font-size:13px">Tidak ada page_id (perlu sync ulang).</div>';
+      return;
+    }
+    box.innerHTML = '<div style="color:var(--text2);font-size:13px">Memuat riwayat dari Notion…</div>';
+    box.dataset.loaded = '1';
+    loadAuditTrail(prefix, pageId, cb);
+  }
 }
 
 // Muat & render riwayat audit untuk sebuah page_id ke container ber-prefix tsb.
