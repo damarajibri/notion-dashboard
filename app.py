@@ -1564,13 +1564,16 @@ def api_monthly_update():
     except Exception as e:  # noqa: BLE001
         return jsonify({'ok': False, 'error': f'Gagal update: {e}'}), 502
 
+    audit_version = _record_audit(page_id, action='update')
+
     # Refresh cache agar dashboard mencerminkan perubahan (best-effort).
     try:
         sync.incremental_sync()
     except Exception as e:  # noqa: BLE001
         app.logger.warning('Post-update sync failed: %s', e)
 
-    return jsonify({'ok': True, 'updated': list(props.keys())})
+    return jsonify({'ok': True, 'updated': list(props.keys()),
+                    'audit_version': audit_version})
 
 # ─── Shared: bangun properties Notion dari peta editable ───────────────────────
 def _build_props_from_map(editable_map, payload, only_present=True):
@@ -1756,6 +1759,7 @@ def api_project_update():
 # ─── Project Audit Trail (body halaman) ───────────────────────────────────────
 
 @app.route('/api/project/audit', methods=['GET'])
+@app.route('/api/audit', methods=['GET'])
 @login_required
 def api_project_audit():
     """Baca riwayat versi audit trail untuk satu project.
@@ -1776,6 +1780,7 @@ def api_project_audit():
 
 
 @app.route('/api/project/audit/compare', methods=['GET'])
+@app.route('/api/audit/compare', methods=['GET'])
 @login_required
 def api_project_audit_compare():
     """Bandingkan dua versi audit. Query: page_id, a (version), b (version)."""
@@ -1799,6 +1804,7 @@ def api_project_audit_compare():
 
 
 @app.route('/api/project/audit/rollback', methods=['POST'])
+@app.route('/api/audit/rollback', methods=['POST'])
 @login_required
 def api_project_audit_rollback():
     """Terapkan kembali versi lama ke properti project di Notion.
@@ -1850,6 +1856,31 @@ def api_project_audit_rollback():
     return jsonify({'ok': True, 'rolled_back_to': version,
                     'applied': list(props.keys()), 'skipped': skipped,
                     'new_audit_version': new_version})
+
+
+@app.route('/api/refresh', methods=['POST'])
+@login_required
+def api_refresh():
+    """Paksa tarik data terbaru dari Notion (incremental sync) ke cache lokal.
+
+    Dipakai saat membuka detail agar data yang ditampilkan 'segar dari sumber'
+    (Opsi 1), tanpa menunggu TTL cache. Query/body opsional: mode=full untuk
+    full sync. Best-effort: kegagalan dikembalikan sebagai ok=False tapi tidak
+    menjatuhkan server.
+    """
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+    payload = request.get_json(silent=True) or {}
+    mode = (payload.get('mode') or request.args.get('mode') or 'incremental').strip()
+    try:
+        if mode == 'full':
+            summary = sync.full_sync()
+        else:
+            summary = sync.incremental_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Manual refresh failed: %s', e)
+        return jsonify({'ok': False, 'error': f'Refresh gagal: {e}'}), 502
+    return jsonify({'ok': True, 'mode': mode, 'summary': summary})
 
 
 # ─── SPK: edit → Notion ────────────────────────────────────────────────────────
@@ -1907,13 +1938,16 @@ def api_spk_update():
     except Exception as e:  # noqa: BLE001
         return jsonify({'ok': False, 'error': f'Gagal update: {e}'}), 502
 
+    audit_version = _record_audit(page_id, action='update')
+
     # Refresh cache agar dashboard mencerminkan perubahan (best-effort).
     try:
         sync.incremental_sync()
     except Exception as e:  # noqa: BLE001
         app.logger.warning('Post-update sync failed: %s', e)
 
-    return jsonify({'ok': True, 'updated': list(props.keys())})
+    return jsonify({'ok': True, 'updated': list(props.keys()),
+                    'audit_version': audit_version})
 
 # ─── Create: SPK & Project baru → Notion ───────────────────────────────────────
 @app.route('/api/spk/create', methods=['POST'])
@@ -2053,12 +2087,15 @@ def api_task_update():
     except Exception as e:  # noqa: BLE001
         return jsonify({'ok': False, 'error': f'Gagal update: {e}'}), 502
 
+    audit_version = _record_audit(page_id, action='update')
+
     try:
         sync.incremental_sync()
     except Exception as e:  # noqa: BLE001
         app.logger.warning('Post-update sync failed: %s', e)
 
-    return jsonify({'ok': True, 'updated': list(props.keys())})
+    return jsonify({'ok': True, 'updated': list(props.keys()),
+                    'audit_version': audit_version})
 
 
 @app.route('/api/task/delete', methods=['POST'])

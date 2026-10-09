@@ -1703,6 +1703,15 @@ span.file-chip { cursor: default; opacity: .7; }
         <div id="me_files" style="font-size:13px"></div>
       </div>
 
+      <div class="modal-section">
+        <div class="modal-section-title">Audit Trail (Riwayat Perubahan)</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
+          Setiap penyimpanan ke Notion mencatat snapshot semua properti beserta user &amp; waktu.
+          Pilih dua versi untuk membandingkan, atau rollback untuk menerapkan kembali versi lama.
+        </div>
+        <div id="me_audit_box"><div style="color:var(--text2);font-size:13px">Memuat riwayat…</div></div>
+      </div>
+
       <div class="modal-section" id="me_result" style="display:none"></div>
 
       <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
@@ -2055,6 +2064,86 @@ function _reloadMonthlyThen(cb) {
   setTimeout(() => { if (cb) cb(); }, 600);
 }
 
+// ─── Refresh-on-detail (Opsi 1) ───────────────────────────────────────────────
+// Saat klik detail di menu mana pun: paksa tarik data terbaru dari Notion
+// (/api/refresh → incremental sync), reload /api/data, lalu buka modal detail
+// dengan data terbaru. Item dicocokkan ulang berdasarkan page_id karena indeks
+// pada array ter-filter bisa berubah setelah reload.
+
+function _forceRefreshThen(cb) {
+  // Panggil /api/refresh (best-effort) lalu reload data lokal.
+  fetch('/api/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(() => {}).catch(() => {})
+    .finally(() => { if (cb) cb(); });
+}
+
+function openProjDetailFresh(idx) {
+  const cur = (window._filteredProjects || window._projectsRows || (DATA && DATA.projects) || [])[idx];
+  const pid = cur && cur.page_id;
+  if (!pid) { showProjDetail(idx); return; }  // tanpa page_id, buka apa adanya
+  showProcessing('Memuat data terbaru dari Notion…');
+  _forceRefreshThen(() => _reloadDataThen(() => {
+    hideProcessing();
+    const list = (DATA && DATA.projects) || [];
+    const i = list.findIndex(p => p.page_id === pid);
+    if (i >= 0) { window._filteredProjects = list; showProjDetail(i); }
+    else showToast('Item tidak ditemukan setelah refresh (mungkin dihapus di Notion).', '⚠️');
+  }));
+}
+
+function showTaskDetailFresh(idx) {
+  const cur = (window._filteredTasks || (DATA && DATA.tasks) || [])[idx];
+  const pid = cur && cur.page_id;
+  if (!pid) { showTaskDetail(idx); return; }
+  showProcessing('Memuat data terbaru dari Notion…');
+  _forceRefreshThen(() => _reloadDataThen(() => {
+    hideProcessing();
+    const list = (DATA && DATA.tasks) || [];
+    const i = list.findIndex(t => t.page_id === pid);
+    if (i >= 0) { window._filteredTasks = list; showTaskDetail(i); }
+    else showToast('Item tidak ditemukan setelah refresh (mungkin dihapus di Notion).', '⚠️');
+  }));
+}
+
+function showProjDetailByPageIdFresh(pid) {
+  showProcessing('Memuat data terbaru dari Notion…');
+  _forceRefreshThen(() => _reloadDataThen(() => {
+    hideProcessing();
+    const list = (DATA && DATA.projects) || [];
+    const i = list.findIndex(p => p.page_id === pid);
+    if (i >= 0) { window._filteredProjects = list; showProjDetail(i); }
+    else showToast('Item tidak ditemukan setelah refresh.', '⚠️');
+  }));
+}
+
+function showSpkDetailFresh(idx) {
+  const cur = (window._filteredSpk || (DATA && DATA.spk) || [])[idx];
+  const pid = cur && cur.page_id;
+  if (!pid) { showSpkDetail(idx); return; }
+  showProcessing('Memuat data terbaru dari Notion…');
+  _forceRefreshThen(() => _reloadDataThen(() => {
+    hideProcessing();
+    const list = (DATA && DATA.spk) || [];
+    const i = list.findIndex(s => s.page_id === pid);
+    if (i >= 0) { window._filteredSpk = list; showSpkDetail(i); }
+    else showToast('Item tidak ditemukan setelah refresh.', '⚠️');
+  }));
+}
+
+function openMonthlyEditFresh(idx) {
+  const cur = (window._monthlyRows || [])[idx];
+  const pid = cur && cur.page_id;
+  if (!pid) { openMonthlyEdit(idx); return; }
+  showProcessing('Memuat data terbaru dari Notion…');
+  _forceRefreshThen(() => _reloadMonthlyThen(() => {
+    hideProcessing();
+    const list = window._monthlyRows || [];
+    const i = list.findIndex(x => x.page_id === pid);
+    if (i >= 0) openMonthlyEdit(i);
+    else showToast('Item tidak ditemukan setelah refresh.', '⚠️');
+  }));
+}
+
 // ===== KPI RENDER =====
 function renderKPI(d) {
   const total = d.tasks.length, done = d.task_status['Done'] || 0, open = total - done;
@@ -2375,7 +2464,7 @@ function applyAllTaskFilters() {
     const due = t.due ? (t.due < new Date().toISOString().slice(0, 10) ? `<span style="color:var(--red);font-weight:600">⚠️ ${t.due}</span>` : `<span style="color:var(--text2)">${t.due}</span>`) : '<span style="color:var(--text2)">-</span>';
     return `<tr>
       <td class="col-num">${i + 1}</td>
-      <td class="col-name"><a href="javascript:void(0)" onclick="showTaskDetail(${i})" class="col-name-text" style="color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${t.name}</a></td>
+      <td class="col-name"><a href="javascript:void(0)" onclick="showTaskDetailFresh(${i})" class="col-name-text" style="color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${t.name}</a></td>
       <td>${statusBadge(t.status)}</td>
       <td>${priorityBadge(t.priority)}</td>
       <td>${renderAssignees(t.assignees)}</td>
@@ -2444,7 +2533,7 @@ function applyProjFilters() {
     const due = p.due ? `<span style="color:var(--text2);font-size:12px">${p.due}</span>` : '-';
     return `<tr>
       <td class="col-num">${i + 1}</td>
-      <td class="col-name"><a href="javascript:void(0)" onclick="showProjDetail(${i})" class="col-name-text" style="font-weight:600;color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk detail/edit">${p.title}</a></td>
+      <td class="col-name"><a href="javascript:void(0)" onclick="openProjDetailFresh(${i})" class="col-name-text" style="font-weight:600;color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk detail/edit">${p.title}</a></td>
       <td>${statusBadge(p.status)}</td>
       <td>${renderAssignees(p.assignees)}</td>
       <td>${due}</td>
@@ -2684,7 +2773,7 @@ function applySpkFilters() {
     return `<tr>
       <td class="col-num">${i + 1}</td>
       <td><span class="tag">${s.spk_id}</span></td>
-      <td style="font-weight:600;white-space:nowrap;font-size:12px"><a href="javascript:void(0)" onclick="showSpkDetail(${i})" style="color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${s.no_spk || '-'}</a></td>
+      <td style="font-weight:600;white-space:nowrap;font-size:12px"><a href="javascript:void(0)" onclick="showSpkDetailFresh(${i})" style="color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${s.no_spk || '-'}</a></td>
       <td class="col-project-full"><div>${s.project}</div></td>
       <td style="color:var(--text2);font-size:12px">${s.vendor}</td>
       <td>${statusBadge(s.status)}</td>
@@ -3044,7 +3133,7 @@ function renderMonthly() {
   const MONTHLY_COLUMNS = [
     { key: 'num',          label: '#',                     cell: (x, i) => `<td class="col-num">${i + 1}</td>` },
     { key: 'id',           label: 'ID',                    cell: x => `<td style="font-size:12px;color:var(--text2)">${x.id || '-'}</td>` },
-    { key: 'name',         label: 'Name',                  cell: (x, i) => `<td><a href="javascript:void(0)" onclick="openMonthlyEdit(${i})" style="font-weight:600;color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${x.name || '-'}</a></td>` },
+    { key: 'name',         label: 'Name',                  cell: (x, i) => `<td><a href="javascript:void(0)" onclick="openMonthlyEditFresh(${i})" style="font-weight:600;color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${x.name || '-'}</a></td>` },
     { key: 'periode',      label: 'Periode',               cell: x => `<td>${dt(x.periode ? x.periode.slice(0,7) : '')}</td>` },
     { key: 'no_spk',       label: 'No SPK',                cell: x => `<td style="white-space:nowrap;font-size:12px">${x.no_spk || '-'}</td>` },
     { key: 'nilai_tagihan',label: 'Nilai Tagihan',         cell: x => `<td>${x.nilai_tagihan ? `<span style="font-weight:600;color:var(--green)">${fmtRp(x.nilai_tagihan)}</span>` : '-'}</td>` },
@@ -3188,6 +3277,7 @@ function openMonthlyEdit(idx) {
   $('me_files').innerHTML = fileManager(x.page_id, mfiles, ['Files BAST', 'Files BALP'], '_refreshMonthlyModal');
 
   $('monthlyEditModal').classList.add('active');
+  loadAuditTrail('me', x.page_id, closeMonthlyEdit);
 }
 
 function closeMonthlyEdit() {
@@ -3383,16 +3473,7 @@ function showProjDetail(idx) {
       ${docRows || '<span style="color:var(--text2)">Tidak ada dokumen</span>'}
     </div>
 
-    <div class="modal-section">
-      <div class="modal-section-title">Audit Trail (Riwayat Perubahan)</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
-        Setiap penyimpanan ke Notion mencatat snapshot semua properti beserta user & waktu.
-        Pilih dua versi untuk membandingkan, atau rollback untuk menerapkan kembali versi lama.
-      </div>
-      <div id="pe_audit_box" data-pageid="${esc(p.page_id || '')}">
-        <div style="color:var(--text2);font-size:13px">Memuat riwayat…</div>
-      </div>
-    </div>
+    ${auditSectionHtml('pe')}
 
     <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
       <span id="pe_result" style="font-size:13px;margin-right:auto"></span>
@@ -3404,7 +3485,7 @@ function showProjDetail(idx) {
 
   document.getElementById('projModal').classList.add('active');
   attachThousandFormat('pe_nilai');
-  if (p.page_id) loadAuditTrail(p.page_id);
+  if (p.page_id) loadAuditTrail('pe', p.page_id, closeProjModal);
 }
 
 function saveProjDetail() {
@@ -3502,27 +3583,44 @@ function _auditPropToText(v){
   } catch(e){ return '—'; }
 }
 
-function loadAuditTrail(pageId){
-  const box = document.getElementById('pe_audit_box');
-  if (!box) return;
-  fetch('/api/project/audit?page_id=' + encodeURIComponent(pageId))
+// HTML section audit trail yang bisa ditempel ke modal mana pun.
+// `prefix` harus unik per modal (mis. 'pe','te','se','me') agar id elemen tidak bentrok.
+function auditSectionHtml(prefix){
+  return `
+    <div class="modal-section">
+      <div class="modal-section-title">Audit Trail (Riwayat Perubahan)</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
+        Setiap penyimpanan ke Notion mencatat snapshot semua properti beserta user &amp; waktu.
+        Pilih dua versi untuk membandingkan, atau rollback untuk menerapkan kembali versi lama.
+      </div>
+      <div id="${prefix}_audit_box"><div style="color:var(--text2);font-size:13px">Memuat riwayat…</div></div>
+    </div>`;
+}
+
+// Muat & render riwayat audit untuk sebuah page_id ke container ber-prefix tsb.
+// `afterRollback` opsional: fungsi dipanggil setelah rollback sukses (mis. tutup modal).
+function loadAuditTrail(prefix, pageId, afterRollback){
+  const box = document.getElementById(prefix + '_audit_box');
+  if (!box || !pageId) return;
+  fetch('/api/audit?page_id=' + encodeURIComponent(pageId))
     .then(r=>r.json())
     .then(d=>{
       if (!d.ok){ box.innerHTML = '<div style="color:var(--red,#ef4444);font-size:13px">Gagal memuat: '+_auditEsc(d.error||'unknown')+'</div>'; return; }
-      window._auditVersions = d.versions || [];
-      renderAuditTrail(pageId, window._auditVersions);
+      renderAuditTrail(prefix, pageId, d.versions || [], afterRollback);
     })
     .catch(e=>{ box.innerHTML = '<div style="color:var(--red,#ef4444);font-size:13px">Gagal menghubungi server: '+_auditEsc(e)+'</div>'; });
 }
 
-function renderAuditTrail(pageId, versions){
-  const box = document.getElementById('pe_audit_box');
+function renderAuditTrail(prefix, pageId, versions, afterRollback){
+  const box = document.getElementById(prefix + '_audit_box');
   if (!box) return;
+  // Simpan callback rollback agar handler onclick bisa memakainya.
+  window._auditCb = window._auditCb || {};
+  window._auditCb[prefix] = afterRollback || null;
   if (!versions.length){
     box.innerHTML = '<div style="color:var(--text2);font-size:13px">Belum ada riwayat. Simpan perubahan untuk membuat versi pertama.</div>';
     return;
   }
-  // Daftar versi (terbaru di atas) + opsi compare.
   const optsA = versions.map(v=>`<option value="${v.version}">v${v.version}</option>`).join('');
   const rows = [...versions].reverse().map(v=>{
     const u = v.user || {}; const who = _auditEsc(u.full_name || u.username || '(anonim)');
@@ -3532,7 +3630,7 @@ function renderAuditTrail(pageId, versions){
       <div style="font-weight:600;min-width:42px">v${v.version}</div>
       <div style="flex:1">${who} · ${badge}</div>
       <div style="color:var(--text2);font-size:11px">${_auditEsc(v.timestamp||'')}</div>
-      <button class="btn btn-ghost" style="padding:3px 8px;font-size:12px" onclick="auditRollback('${pageId}', ${v.version})">Rollback</button>
+      <button class="btn btn-ghost" style="padding:3px 8px;font-size:12px" onclick="auditRollback('${prefix}','${pageId}', ${v.version})">Rollback</button>
     </div>`;
   }).join('');
 
@@ -3540,25 +3638,24 @@ function renderAuditTrail(pageId, versions){
     <div style="border:1px solid var(--border,#2a2a2a);border-radius:8px;overflow:hidden;margin-bottom:10px">${rows}</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <span style="font-size:13px">Bandingkan</span>
-      <select id="pe_audit_a" class="form-input" style="padding:6px;width:auto">${optsA}</select>
+      <select id="${prefix}_audit_a" class="form-input" style="padding:6px;width:auto">${optsA}</select>
       <span style="font-size:13px">dengan</span>
-      <select id="pe_audit_b" class="form-input" style="padding:6px;width:auto">${optsA}</select>
-      <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="auditCompare('${pageId}')">Compare</button>
+      <select id="${prefix}_audit_b" class="form-input" style="padding:6px;width:auto">${optsA}</select>
+      <button class="btn btn-ghost" style="padding:4px 10px;font-size:12px" onclick="auditCompare('${prefix}','${pageId}')">Compare</button>
     </div>
-    <div id="pe_audit_diff" style="margin-top:10px"></div>`;
+    <div id="${prefix}_audit_diff" style="margin-top:10px"></div>`;
 
-  // Default: bandingkan dua versi terakhir bila ada >=2.
-  const a = document.getElementById('pe_audit_a'), b = document.getElementById('pe_audit_b');
+  const a = document.getElementById(prefix + '_audit_a'), b = document.getElementById(prefix + '_audit_b');
   if (versions.length >= 2){ a.value = versions[versions.length-2].version; b.value = versions[versions.length-1].version; }
 }
 
-function auditCompare(pageId){
-  const a = document.getElementById('pe_audit_a').value;
-  const b = document.getElementById('pe_audit_b').value;
-  const out = document.getElementById('pe_audit_diff');
+function auditCompare(prefix, pageId){
+  const a = document.getElementById(prefix + '_audit_a').value;
+  const b = document.getElementById(prefix + '_audit_b').value;
+  const out = document.getElementById(prefix + '_audit_diff');
   if (a === b){ out.innerHTML = '<div style="color:var(--text2);font-size:13px">Pilih dua versi berbeda.</div>'; return; }
   out.innerHTML = '<div style="color:var(--text2);font-size:13px">Membandingkan…</div>';
-  fetch('/api/project/audit/compare?page_id='+encodeURIComponent(pageId)+'&a='+a+'&b='+b)
+  fetch('/api/audit/compare?page_id='+encodeURIComponent(pageId)+'&a='+a+'&b='+b)
     .then(r=>r.json())
     .then(d=>{
       if (!d.ok){ out.innerHTML = '<div style="color:var(--red,#ef4444);font-size:13px">'+_auditEsc(d.error||'gagal')+'</div>'; return; }
@@ -3579,10 +3676,10 @@ function auditCompare(pageId){
     .catch(e=>{ out.innerHTML = '<div style="color:var(--red,#ef4444);font-size:13px">Gagal: '+_auditEsc(e)+'</div>'; });
 }
 
-function auditRollback(pageId, version){
-  if (!confirm('Rollback project ke versi v'+version+'? Semua properti writable akan ditimpa dengan nilai pada versi tersebut, dan dicatat sebagai versi baru.')) return;
+function auditRollback(prefix, pageId, version){
+  if (!confirm('Rollback ke versi v'+version+'? Semua properti writable akan ditimpa dengan nilai pada versi tersebut, dan dicatat sebagai versi baru.')) return;
   showProcessing('Rollback ke v'+version+'…');
-  fetch('/api/project/audit/rollback', {
+  fetch('/api/audit/rollback', {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({page_id: pageId, version: version})
   })
@@ -3590,7 +3687,8 @@ function auditRollback(pageId, version){
     .then(d=>{
       if (d.ok){
         showToast('Rollback ke v'+version+' berhasil (versi baru: v'+d.new_audit_version+')', '⟲');
-        closeProjModal();
+        const cb = (window._auditCb||{})[prefix];
+        if (typeof cb === 'function') cb();
         loadData();
       } else {
         showToast('Rollback gagal: '+(d.error||'unknown'), '⚠️');
@@ -3728,6 +3826,8 @@ function showSpkDetail(idx) {
       <div style="font-size:13px">${fileManager(s.page_id, s.files, ['SPK File', 'File & media'], '_refreshSpkModal')}</div>
     </div>
 
+    ${auditSectionHtml('se')}
+
     <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
       <span id="se_result" style="font-size:13px;margin-right:auto"></span>
       <button class="btn btn-ghost" onclick="closeSpkModal()">Tutup</button>
@@ -3738,6 +3838,7 @@ function showSpkDetail(idx) {
 
   document.getElementById('spkModal').classList.add('active');
   attachThousandFormat('se_total_anggaran');
+  if (s.page_id) loadAuditTrail('se', s.page_id, closeSpkModal);
 }
 
 function closeSpkModal() { document.getElementById('spkModal').classList.remove('active'); }
@@ -4002,7 +4103,7 @@ function showTaskDetail(idx) {
   window._editingTask = t;
   document.getElementById('taskModalSubtitle').textContent = t.name || '';
   document.getElementById('taskModalBody').innerHTML =
-    _taskFormBody('te', t) + `
+    _taskFormBody('te', t) + auditSectionHtml('te') + `
     <div class="modal-section" style="display:flex;justify-content:space-between;gap:10px;align-items:center">
       <button class="btn btn-sm btn-danger" onclick="deleteTask()">🗑️ Hapus</button>
       <div style="display:flex;gap:10px;align-items:center">
@@ -4012,6 +4113,7 @@ function showTaskDetail(idx) {
       </div>
     </div>`;
   document.getElementById('taskModal').classList.add('active');
+  if (t.page_id) loadAuditTrail('te', t.page_id, closeTaskModal);
 }
 function closeTaskModal() { document.getElementById('taskModal').classList.remove('active'); }
 
