@@ -2095,14 +2095,8 @@ function showTaskDetailFresh(idx) {
   const cur = (window._filteredTasks || (DATA && DATA.tasks) || [])[idx];
   const pid = cur && cur.page_id;
   if (!pid) { showTaskDetail(idx); return; }
-  showProcessing('Memuat data terbaru dari Notion…');
-  _forceRefreshThen(() => _reloadDataThen(() => {
-    hideProcessing();
-    const list = (DATA && DATA.tasks) || [];
-    const i = list.findIndex(t => t.page_id === pid);
-    if (i >= 0) { window._filteredTasks = list; showTaskDetail(i); }
-    else showToast('Item tidak ditemukan setelah refresh (mungkin dihapus di Notion).', '⚠️');
-  }));
+  // Buka langsung dari cache lokal (tanpa refresh ke Notion) agar tanpa delay.
+  showTaskDetail(idx);
 }
 
 function showProjDetailByPageIdFresh(pid) {
@@ -2117,28 +2111,13 @@ function showSpkDetailFresh(idx) {
   const cur = (window._filteredSpk || (DATA && DATA.spk) || [])[idx];
   const pid = cur && cur.page_id;
   if (!pid) { showSpkDetail(idx); return; }
-  showProcessing('Memuat data terbaru dari Notion…');
-  _forceRefreshThen(() => _reloadDataThen(() => {
-    hideProcessing();
-    const list = (DATA && DATA.spk) || [];
-    const i = list.findIndex(s => s.page_id === pid);
-    if (i >= 0) { window._filteredSpk = list; showSpkDetail(i); }
-    else showToast('Item tidak ditemukan setelah refresh.', '⚠️');
-  }));
+  // Buka langsung dari cache lokal (tanpa refresh ke Notion) agar tanpa delay.
+  showSpkDetail(idx);
 }
 
 function openMonthlyEditFresh(idx) {
-  const cur = (window._monthlyRows || [])[idx];
-  const pid = cur && cur.page_id;
-  if (!pid) { openMonthlyEdit(idx); return; }
-  showProcessing('Memuat data terbaru dari Notion…');
-  _forceRefreshThen(() => _reloadMonthlyThen(() => {
-    hideProcessing();
-    const list = window._monthlyRows || [];
-    const i = list.findIndex(x => x.page_id === pid);
-    if (i >= 0) openMonthlyEdit(i);
-    else showToast('Item tidak ditemukan setelah refresh.', '⚠️');
-  }));
+  // Buka langsung dari cache lokal (tanpa refresh ke Notion) agar tanpa delay.
+  openMonthlyEdit(idx);
 }
 
 // ===== KPI RENDER =====
@@ -3890,7 +3869,17 @@ function showSpkDetail(idx) {
 
   document.getElementById('spkModal').classList.add('active');
   attachThousandFormat('se_total_anggaran');
-  if (s.page_id) loadAuditTrail('se', s.page_id, closeSpkModal);
+  // Audit trail lazy: data diambil dari Notion saat tombol diklik (toggleAuditTrail).
+  window._auditPage = window._auditPage || {};
+  window._auditCb = window._auditCb || {};
+  window._auditPage['se'] = s.page_id || null;
+  window._auditCb['se'] = closeSpkModal;
+  const _seWrap = document.getElementById('se_audit_wrap');
+  const _seBox = document.getElementById('se_audit_box');
+  const _seCaret = document.getElementById('se_audit_caret');
+  if (_seWrap) _seWrap.style.display = 'none';
+  if (_seCaret) _seCaret.style.transform = 'rotate(0deg)';
+  if (_seBox) { _seBox.dataset.loaded = ''; _seBox.innerHTML = ''; }
 }
 
 function closeSpkModal() { document.getElementById('spkModal').classList.remove('active'); }
@@ -4165,7 +4154,17 @@ function showTaskDetail(idx) {
       </div>
     </div>`;
   document.getElementById('taskModal').classList.add('active');
-  if (t.page_id) loadAuditTrail('te', t.page_id, closeTaskModal);
+  // Audit trail lazy: data diambil dari Notion saat tombol diklik (toggleAuditTrail).
+  window._auditPage = window._auditPage || {};
+  window._auditCb = window._auditCb || {};
+  window._auditPage['te'] = t.page_id || null;
+  window._auditCb['te'] = closeTaskModal;
+  const _teWrap = document.getElementById('te_audit_wrap');
+  const _teBox = document.getElementById('te_audit_box');
+  const _teCaret = document.getElementById('te_audit_caret');
+  if (_teWrap) _teWrap.style.display = 'none';
+  if (_teCaret) _teCaret.style.transform = 'rotate(0deg)';
+  if (_teBox) { _teBox.dataset.loaded = ''; _teBox.innerHTML = ''; }
 }
 function closeTaskModal() { document.getElementById('taskModal').classList.remove('active'); }
 
