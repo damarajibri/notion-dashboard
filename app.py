@@ -1166,6 +1166,16 @@ def api_activity_list():
         user_id=user_id, username=username, action=action,
         date_from=date_from, date_to=date_to,
     )
+
+    # Enrich each row with the user's full name. The activity_log only stores a
+    # denormalised `username`, so we resolve full_name by looking up current
+    # users. Rows whose user has since been deleted (or anonymous rows) keep an
+    # empty full_name.
+    all_users = db.list_users()
+    _fullname_by_username = {u['username']: (u.get('full_name') or '') for u in all_users}
+    for r in rows:
+        r['full_name'] = _fullname_by_username.get(r.get('username'), '')
+
     return jsonify({
         'ok': True,
         'items': rows,
@@ -1176,7 +1186,7 @@ def api_activity_list():
         'actions': db.distinct_activity_actions(),
         'users': [
             {'id': u['id'], 'username': u['username']}
-            for u in db.list_users()
+            for u in all_users
         ],
     })
 

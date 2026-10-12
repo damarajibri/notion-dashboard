@@ -64,6 +64,11 @@ label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); 
 input, select { width: 100%; padding: 10px 12px; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); font-family: inherit; }
 input:focus, select:focus { outline: none; border-color: var(--accent); }
 .hint { font-size: 11px; color: var(--text2); margin-top: 4px; }
+/* Password input with show/hide toggle */
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 44px; }
+.pw-toggle { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px 6px; line-height: 1; color: var(--text2); border-radius: 6px; }
+.pw-toggle:hover { color: var(--text); background: var(--surface2); }
 .check-row { display: flex; align-items: center; gap: 8px; }
 .check-row input { width: auto; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
@@ -174,7 +179,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
       <table>
         <thead>
           <tr>
-            <th>Waktu</th><th>User</th><th>Aksi</th><th>Target</th><th>Perubahan</th><th>Detail</th><th>IP</th>
+            <th>Waktu</th><th>User</th><th>Nama Lengkap</th><th>Aksi</th><th>Target</th><th>Perubahan</th><th>Detail</th><th>IP</th>
           </tr>
         </thead>
         <tbody id="activityTbody"></tbody>
@@ -206,8 +211,19 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
     </div>
     <div class="field">
       <label for="f_password">Password</label>
-      <input type="password" id="f_password" autocomplete="new-password">
+      <div class="pw-wrap">
+        <input type="password" id="f_password" autocomplete="new-password">
+        <button type="button" class="pw-toggle" id="togglePw" onclick="togglePassword()" aria-label="Lihat password" title="Lihat password">👁️</button>
+      </div>
       <div class="hint" id="pwHint">Wajib diisi untuk user baru.</div>
+    </div>
+    <div class="field">
+      <label for="f_password2">Konfirmasi Password</label>
+      <div class="pw-wrap">
+        <input type="password" id="f_password2" autocomplete="new-password">
+        <button type="button" class="pw-toggle" id="togglePw2" onclick="togglePassword2()" aria-label="Lihat konfirmasi password" title="Lihat konfirmasi password">👁️</button>
+      </div>
+      <div class="hint">Ketik ulang password yang sama untuk konfirmasi.</div>
     </div>
     <div class="field">
       <label for="f_role">Role</label>
@@ -312,7 +328,7 @@ function openAdd() {
   document.getElementById('f_username').value = '';
   document.getElementById('f_username').disabled = false;
   document.getElementById('f_fullname').value = '';
-  document.getElementById('f_password').value = '';
+  resetPasswordFields();
   document.getElementById('pwHint').textContent = 'Wajib diisi untuk user baru.';
   document.getElementById('f_role').value = 'user';
   document.getElementById('f_active').checked = true;
@@ -325,7 +341,7 @@ function openEdit(u) {
   document.getElementById('f_username').value = u.username;
   document.getElementById('f_username').disabled = true; // username tidak diubah
   document.getElementById('f_fullname').value = u.full_name || '';
-  document.getElementById('f_password').value = '';
+  resetPasswordFields();
   document.getElementById('pwHint').textContent = 'Kosongkan jika tidak ingin mengubah password.';
   const roleSel = document.getElementById('f_role');
   const isRoot = u.username === ROOT_USERNAME;
@@ -343,6 +359,33 @@ function openEdit(u) {
 
 function closeModal() { document.getElementById('modal').classList.remove('open'); }
 
+// Show/hide password toggles. Switch input type and swap the eye icon.
+function _togglePw(inputId, btnId) {
+  const inp = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.textContent = show ? '🙈' : '👁️';
+  const label = show ? 'Sembunyikan password' : 'Lihat password';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title', label);
+}
+function togglePassword() { _togglePw('f_password', 'togglePw'); }
+function togglePassword2() { _togglePw('f_password2', 'togglePw2'); }
+
+// Reset both password fields to hidden state (used when opening the modal).
+function resetPasswordFields() {
+  for (const [inpId, btnId] of [['f_password', 'togglePw'], ['f_password2', 'togglePw2']]) {
+    const inp = document.getElementById(inpId);
+    const btn = document.getElementById(btnId);
+    inp.value = '';
+    inp.type = 'password';
+    btn.textContent = '👁️';
+    btn.setAttribute('aria-label', 'Lihat password');
+    btn.setAttribute('title', 'Lihat password');
+  }
+}
+
 async function saveUser() {
   const id = document.getElementById('userId').value;
   const body = {
@@ -351,6 +394,12 @@ async function saveUser() {
     is_active: document.getElementById('f_active').checked,
   };
   const pw = document.getElementById('f_password').value;
+  const pw2 = document.getElementById('f_password2').value;
+  // Validate confirmation whenever a password is being set/changed.
+  if (pw || pw2) {
+    if (pw !== pw2) { toast('Konfirmasi password tidak cocok', false); return; }
+    if (pw.length < 4) { toast('Password minimal 4 karakter', false); return; }
+  }
   if (pw) body.password = pw;
 
   let url, method;
@@ -491,17 +540,17 @@ function buildActivityQuery(page) {
 async function loadActivity(page) {
   page = page || 1;
   const tb = document.getElementById('activityTbody');
-  tb.innerHTML = '<tr><td colspan="7" class="empty">Memuat…</td></tr>';
+  tb.innerHTML = '<tr><td colspan="8" class="empty">Memuat…</td></tr>';
   let data;
   try {
     const res = await fetch('/api/activity?' + buildActivityQuery(page));
     data = await res.json();
   } catch (e) {
-    tb.innerHTML = '<tr><td colspan="7" class="empty">Kesalahan jaringan</td></tr>';
+    tb.innerHTML = '<tr><td colspan="8" class="empty">Kesalahan jaringan</td></tr>';
     return;
   }
   if (!data.ok) {
-    tb.innerHTML = `<tr><td colspan="7" class="empty">${esc(data.error || 'Gagal memuat log')}</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="8" class="empty">${esc(data.error || 'Gagal memuat log')}</td></tr>`;
     return;
   }
 
@@ -528,7 +577,7 @@ async function loadActivity(page) {
 
   tb.innerHTML = '';
   if (!data.items.length) {
-    tb.innerHTML = '<tr><td colspan="7" class="empty">Tidak ada aktivitas.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="8" class="empty">Tidak ada aktivitas.</td></tr>';
   } else {
     for (const r of data.items) {
       const tr = document.createElement('tr');
@@ -537,6 +586,7 @@ async function loadActivity(page) {
       tr.innerHTML = `
         <td class="mono">${fmtTs(r.ts)}</td>
         <td>${r.username ? '<b>' + esc(r.username) + '</b>' : '<span style="color:var(--text2)">anonim</span>'}</td>
+        <td>${esc(r.full_name) || '<span style="color:var(--text2)">—</span>'}</td>
         <td><span class="act-badge ${actBadgeClass(r.action)}">${esc(r.action)}</span></td>
         <td class="mono">${esc(r.target) || '—'}</td>
         <td class="detail-cell" title="${esc(changesStr)}">${esc(changesStr) || '—'}</td>
