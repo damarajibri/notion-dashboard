@@ -908,7 +908,7 @@ _VIEW_LOG_SKIP_EXACT = {'/captcha/refresh'}
 
 # Mutating API paths that already record their own domain-specific activity
 # (user CRUD), so the generic mutation logger skips them to avoid duplicates.
-_MUTATION_LOG_SKIP = ('/api/users',)
+_MUTATION_LOG_SKIP = ('/api/users', '/api/account')
 
 # Auto-purge of old 'view' activity (retention handled in db.purge_old_views).
 # Runs opportunistically from the request path, throttled to at most once per
@@ -1042,6 +1042,49 @@ def logout():
     record_activity('auth.logout')
     session.clear()
     return redirect(url_for('login'))
+
+
+# ─── ACCOUNT (self-service) ───────────────────────────────────────────────────
+# Any logged-in user may change their OWN password. The current password must
+# be supplied and verified, so a hijacked session alone cannot silently reset
+# the password. This is distinct from the Master User flow, where root/admin
+# reset other users' passwords without the old one.
+
+@app.route('/api/account/password', methods=['POST'])
+@login_required
+def api_account_password():
+    user = current_user()
+    if not user:
+        return jsonify({'ok': False, 'error': 'Sesi tidak valid. Silakan login ulang.'}), 401
+
+    payload = request.get_json(silent=True) or request.form
+    current_pw = (payload.get('current_password') or '')
+    new_pw = (payload.get('new_password') or '')
+    confirm_pw = (payload.get('confirm_password') or '')
+
+    if not current_pw or not new_pw:
+        return jsonify({'ok': False, 'error': 'Password lama dan baru wajib diisi.'}), 400
+    # Verify the current password against the stored hash.
+    if not db.authenticate(user['username'], current_pw):
+        record_activity('account.password_change_failed',
+                        detail={'reason': 'wrong_current_password'})
+        return jsonify({'ok': False, 'error': 'Password lama salah.'}), 400
+    if new_pw != confirm_pw:
+        return jsonify({'ok': False, 'error': 'Konfirmasi password baru tidak cocok.'}), 400
+    if len(new_pw) < 4:
+        return jsonify({'ok': False, 'error': 'Password baru minimal 4 karakter.'}), 400
+    if new_pw == current_pw:
+        return jsonify({'ok': False, 'error': 'Password baru harus berbeda dari yang lama.'}), 400
+
+    try:
+        db.update_user(user['id'], password=new_pw)
+    except db.UserError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+
+    record_activity('account.password_change', target=str(user['id']),
+                    detail={'username': user['username']},
+                    changes={'op': 'update', 'fields': ['password']})
+    return jsonify({'ok': True})
 
 
 # ─── MASTER USER (CRUD) ───────────────────────────────────────────────────────

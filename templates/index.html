@@ -1049,6 +1049,9 @@ span.file-chip { cursor: default; opacity: .7; }
         <span>👥</span> Master User
       </a>
       {% endif %}
+      <button class="btn btn-ghost" onclick="openPasswordModal()" title="Ganti password akun Anda">
+        <span>🔑</span> Ganti Password
+      </button>
       <a class="btn btn-ghost" href="{{ url_for('logout') }}" title="Keluar">
         <span>🚪</span> Logout
       </a>
@@ -1598,6 +1601,52 @@ span.file-chip { cursor: default; opacity: .7; }
         </button>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Ganti Password (self-service, semua user) -->
+<div class="modal-overlay" id="passwordModal" onclick="if(event.target===this)closePasswordModal()">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">🔑 Ganti Password</div>
+        <div class="modal-subtitle">Ubah password akun Anda sendiri</div>
+      </div>
+      <button class="modal-close" onclick="closePasswordModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <label class="filter-label" for="pwCurrent" style="display:block;margin-bottom:6px">Password Lama</label>
+        <div style="position:relative">
+          <input type="password" id="pwCurrent" class="form-input" style="width:100%;padding-right:44px" autocomplete="current-password">
+          <button type="button" onclick="togglePwField('pwCurrent', this)" title="Lihat password"
+                  style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;line-height:1">👁️</button>
+        </div>
+      </div>
+      <div class="modal-section">
+        <label class="filter-label" for="pwNew" style="display:block;margin-bottom:6px">Password Baru</label>
+        <div style="position:relative">
+          <input type="password" id="pwNew" class="form-input" style="width:100%;padding-right:44px" autocomplete="new-password">
+          <button type="button" onclick="togglePwField('pwNew', this)" title="Lihat password"
+                  style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;line-height:1">👁️</button>
+        </div>
+        <div class="empty-state-sub" style="margin-top:6px;text-align:left">Minimal 4 karakter, dan harus berbeda dari password lama.</div>
+      </div>
+      <div class="modal-section">
+        <label class="filter-label" for="pwConfirm" style="display:block;margin-bottom:6px">Konfirmasi Password Baru</label>
+        <div style="position:relative">
+          <input type="password" id="pwConfirm" class="form-input" style="width:100%;padding-right:44px" autocomplete="new-password">
+          <button type="button" onclick="togglePwField('pwConfirm', this)" title="Lihat password"
+                  style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:16px;padding:4px 6px;line-height:1">👁️</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px">
+        <button class="btn btn-ghost" onclick="closePasswordModal()">Batal</button>
+        <button class="btn btn-primary" id="pwSaveBtn" onclick="submitPasswordChange()">
+          <span>💾</span> Simpan
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -4348,6 +4397,64 @@ function openImportModal() {
 }
 function closeImportModal() {
   document.getElementById('importModal').classList.remove('active');
+}
+
+// ===== GANTI PASSWORD (self-service, semua user) =====
+function openPasswordModal() {
+  ['pwCurrent', 'pwNew', 'pwConfirm'].forEach(id => {
+    const inp = document.getElementById(id);
+    inp.value = '';
+    inp.type = 'password';
+  });
+  // Reset ikon tombol toggle ke "mata terbuka".
+  document.querySelectorAll('#passwordModal button[onclick^="togglePwField"]').forEach(b => b.textContent = '👁️');
+  document.getElementById('passwordModal').classList.add('active');
+  document.getElementById('pwCurrent').focus();
+}
+function closePasswordModal() {
+  document.getElementById('passwordModal').classList.remove('active');
+}
+function togglePwField(id, btn) {
+  const inp = document.getElementById(id);
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.textContent = show ? '🙈' : '👁️';
+  btn.title = show ? 'Sembunyikan password' : 'Lihat password';
+}
+async function submitPasswordChange() {
+  const current = document.getElementById('pwCurrent').value;
+  const next = document.getElementById('pwNew').value;
+  const confirm = document.getElementById('pwConfirm').value;
+
+  if (!current || !next) { showToast('Password lama dan baru wajib diisi', '⚠️'); return; }
+  if (next !== confirm) { showToast('Konfirmasi password baru tidak cocok', '⚠️'); return; }
+  if (next.length < 4) { showToast('Password baru minimal 4 karakter', '⚠️'); return; }
+  if (next === current) { showToast('Password baru harus berbeda dari yang lama', '⚠️'); return; }
+
+  const btn = document.getElementById('pwSaveBtn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/account/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        current_password: current,
+        new_password: next,
+        confirm_password: confirm,
+      }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      closePasswordModal();
+      showSuccessPopup('Password berhasil diubah.', 'Berhasil');
+    } else {
+      showToast(data.error || 'Gagal mengubah password', '❌');
+    }
+  } catch (e) {
+    showToast('Kesalahan jaringan', '❌');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function resetVerify() {
