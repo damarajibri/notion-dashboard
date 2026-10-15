@@ -3652,6 +3652,7 @@ function showProjDetail(idx) {
 
 // Render chip daftar SPK Sebelumnya yang terpilih (dengan tombol hapus).
 function renderSpkPrevChips() {
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
   const box = document.getElementById('pe_spk_prev_chips');
   if (!box) return;
   const sel = window._projSpkPrevSel || [];
@@ -3717,6 +3718,7 @@ function closeSpkPrevPicker() {
 
 // Daftar SPK di dalam dialog, difilter oleh kolom pencarian.
 function renderSpkPrevPickerList() {
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
   const wrap = document.getElementById('spkPrevPickerList');
   if (!wrap) return;
   const byId = window._projSpkById || {};
