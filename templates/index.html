@@ -1431,10 +1431,15 @@ span.file-chip { cursor: default; opacity: .7; }
         <select id="filterMonthlyRekon" class="form-select" onchange="onMonthlyFilterChange()">
           <option value="all">All Status Rekon</option>
         </select>
+        <input type="text" id="filterMonthlySPK" class="form-input" list="monthlySPKList"
+               placeholder="🔎 No. SPK..." autocomplete="off"
+               oninput="onMonthlyFilterChange()" title="Ketik untuk cari No. SPK (autocomplete)">
+        <datalist id="monthlySPKList"></datalist>
         <button class="btn btn-outline btn-sm" id="resetMonthlyBtn" onclick="resetMonthlyFilters()" title="Bersihkan filter">↺ Reset</button>
       </div>
     </div>
     <div id="kpi-monthly" class="kpi-row"></div>
+    <div id="spkInfoCard"></div>
     <div class="card full">
       <div class="section-header">
         <div class="section-title"><span>💵</span> Monthly Performance</div>
@@ -2982,6 +2987,7 @@ function attachBoardDragScroll(board) {
 // ===== MONTHLY PERFORMANCE (manual load, server-side filter) =====
 let MONTHLY_DATA = null;
 let MONTHLY_OPTIONS_LOADED = false;
+let MONTHLY_SPK_DETAIL = {};  // No SPK → {status, provider, jatuh_tempo}
 
 // Baca nilai filter saat ini.
 function monthlyFilterValues() {
@@ -2992,6 +2998,7 @@ function monthlyFilterValues() {
     bayar:   document.getElementById('filterMonthlyBayar').value,
     ba:      document.getElementById('filterMonthlyBA').value,
     rekon:   document.getElementById('filterMonthlyRekon').value,
+    spk:     document.getElementById('filterMonthlySPK').value.trim(),
   };
 }
 
@@ -2999,7 +3006,7 @@ function monthlyFilterValues() {
 function anyMonthlyFilterSet() {
   const f = monthlyFilterValues();
   return !!f.search || f.periode !== 'all' || f.invoice !== 'all' ||
-         f.bayar !== 'all' || f.ba !== 'all' || f.rekon !== 'all';
+         f.bayar !== 'all' || f.ba !== 'all' || f.rekon !== 'all' || !!f.spk;
 }
 
 // Aktif/nonaktifkan tombol Load sesuai keterisian filter.
@@ -3017,6 +3024,10 @@ function onMonthlyFilterChange() {
 // Bersihkan semua filter.
 function resetMonthlyFilters() {
   document.getElementById('searchMonthly').value = '';
+  const spkEl = document.getElementById('filterMonthlySPK');
+  if (spkEl) spkEl.value = '';
+  const card = document.getElementById('spkInfoCard');
+  if (card) card.innerHTML = '';
   ['filterMonthlyPeriode','filterMonthlyInvoice','filterMonthlyBayar',
    'filterMonthlyBA','filterMonthlyRekon'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = 'all';
@@ -3036,6 +3047,8 @@ function initMonthlyOptions() {
       fillMonthlySelect('filterMonthlyBayar',   d.bayars   || []);
       fillMonthlySelect('filterMonthlyBA',      d.bas      || []);
       fillMonthlySelect('filterMonthlyRekon',   d.rekons   || []);
+      fillMonthlyDatalist('monthlySPKList', d.spks || []);
+      MONTHLY_SPK_DETAIL = d.spk_detail || {};
       MONTHLY_OPTIONS_LOADED = true;
       const cnt = document.getElementById('monthlyCount');
       if (cnt && cnt.textContent === 'Belum dimuat') {
@@ -3073,6 +3086,7 @@ function loadMonthly() {
   if (f.bayar   !== 'all') qs.set('bayar',   f.bayar);
   if (f.ba      !== 'all') qs.set('ba',      f.ba);
   if (f.rekon   !== 'all') qs.set('rekon',   f.rekon);
+  if (f.spk)               qs.set('no_spk',  f.spk);
 
   fetch('/api/monthly?' + qs.toString())
     .then(r => r.json().then(d => ({ ok: r.ok, d })))
@@ -3124,6 +3138,75 @@ function fillMonthlySelect(id, values) {
   });
 }
 
+// Isi <datalist> untuk input autocomplete (mis. No. SPK).
+function fillMonthlyDatalist(id, values) {
+  const dl = document.getElementById(id);
+  if (!dl) return;
+  dl.innerHTML = values.map(v => `<option value="${String(v).replace(/"/g, '&quot;')}"></option>`).join('');
+}
+
+// Kartu informasi SPK: tampil saat user memfilter berdasarkan No. SPK.
+// Menampilkan Status SPK, Provider, dan Jatuh Tempo SPK.
+function renderSpkInfoCard() {
+  const el = document.getElementById('spkInfoCard');
+  if (!el) return;
+
+  const spkTyped = (document.getElementById('filterMonthlySPK')?.value || '').trim();
+  if (!spkTyped) { el.innerHTML = ''; return; }
+
+  // Detail dari server (data load) → fallback ke cache options.
+  let info = (MONTHLY_DATA && MONTHLY_DATA.spk_info) || null;
+  if (!info && MONTHLY_SPK_DETAIL) {
+    info = MONTHLY_SPK_DETAIL[spkTyped] ||
+           MONTHLY_SPK_DETAIL[Object.keys(MONTHLY_SPK_DETAIL)
+             .find(k => k.toLowerCase() === spkTyped.toLowerCase()) || ''] || null;
+  }
+
+  if (!info) {
+    el.innerHTML = `<div class="card full" style="margin-bottom:16px">
+      <div class="section-title"><span>📄</span> Informasi SPK</div>
+      <div style="padding:8px 2px;color:var(--text2)">
+        Data SPK untuk <b>${spkTyped}</b> tidak ditemukan.
+      </div>
+    </div>`;
+    return;
+  }
+
+  // Jatuh tempo + sisa hari.
+  let jt = info.jatuh_tempo || '';
+  let jtExtra = '';
+  if (jt) {
+    const due = new Date(jt + 'T00:00:00');
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const days = Math.round((due - today) / 86400000);
+    if (days < 0)       jtExtra = `<span style="color:var(--red);font-weight:600"> (lewat ${Math.abs(days)} hari)</span>`;
+    else if (days === 0) jtExtra = `<span style="color:var(--yellow);font-weight:600"> (hari ini)</span>`;
+    else                jtExtra = `<span style="color:var(--text2)"> (${days} hari lagi)</span>`;
+  } else {
+    jt = '-';
+  }
+
+  el.innerHTML = `<div class="card full" style="margin-bottom:16px">
+    <div class="section-header">
+      <div class="section-title"><span>📄</span> Informasi SPK — ${info.no_spk || spkTyped}</div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:28px;padding:6px 2px">
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Status SPK</div>
+        <div style="font-size:15px">${statusBadge(info.status || '-')}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Provider</div>
+        <div style="font-size:15px;font-weight:600">${info.provider || '-'}</div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Jatuh Tempo SPK</div>
+        <div style="font-size:15px;font-weight:600">${jt}${jtExtra}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderMonthly() {
   if (!MONTHLY_DATA) return;
   // Baris sudah difilter di server; render langsung.
@@ -3131,6 +3214,9 @@ function renderMonthly() {
   window._monthlyRows = rows;  // untuk diakses modal edit
 
   document.getElementById('monthlyCount').textContent = rows.length + ' baris';
+
+  // ── Kartu info SPK (muncul hanya saat filter No. SPK dipakai) ──
+  renderSpkInfoCard();
 
   // KPI
   const totalTagihan  = rows.reduce((s, x) => s + (x.nilai_tagihan || 0), 0);
@@ -3415,8 +3501,28 @@ function showProjDetail(idx) {
   spkList.forEach(s => { if (s.page_id && s.no_spk) window._projSpkNoToId[s.no_spk] = s.page_id; });
   const curSpkPrevId = (p.spk_sebelumnya_ids && p.spk_sebelumnya_ids.length) ? p.spk_sebelumnya_ids[0] : '';
   const curSpkPrevNo = curSpkPrevId ? ((spkList.find(s => s.page_id === curSpkPrevId) || {}).no_spk || '') : '';
-  const spkPrevOptions = spkList.filter(s => s.page_id && s.no_spk)
-    .map(s => `<option value="${esc(s.no_spk)}"></option>`).join('');
+  // Dropdown SPK Sebelumnya: value = page_id, label = "No SPK — Nama project/SPK".
+  // Diurutkan berdasarkan No SPK agar mudah ditelusuri.
+  const spkPrevOptions = spkList
+    .filter(s => s.page_id && s.no_spk)
+    .sort((a, b) => String(a.no_spk).localeCompare(String(b.no_spk)))
+    .map(s => {
+      const nm = (s.project || s.name || '').trim();
+      const label = nm ? `${s.no_spk} — ${nm}` : s.no_spk;
+      return `<option value="${esc(s.page_id)}"${s.page_id === curSpkPrevId ? ' selected' : ''}>${esc(label)}</option>`;
+    }).join('');
+
+  // Dropdown SPK Baru: value = page_id, label = "No SPK — Nama project/SPK".
+  // SPK baru = SPK yang dibuat dari project ini.
+  const curSpkBaruId = (p.spk_baru_ids && p.spk_baru_ids.length) ? p.spk_baru_ids[0] : '';
+  const spkBaruOptions = spkList
+    .filter(s => s.page_id && s.no_spk)
+    .sort((a, b) => String(a.no_spk).localeCompare(String(b.no_spk)))
+    .map(s => {
+      const nm = (s.project || s.name || '').trim();
+      const label = nm ? `${s.no_spk} — ${nm}` : s.no_spk;
+      return `<option value="${esc(s.page_id)}"${s.page_id === curSpkBaruId ? ' selected' : ''}>${esc(label)}</option>`;
+    }).join('');
 
   // PIC (Assignee) sebagai MULTI-SELECT: value tiap opsi = page_id personel.
   // Bisa memilih lebih dari satu (Ctrl/Cmd-klik). Semua PIC saat ini ter-pilih.
@@ -3479,12 +3585,24 @@ function showProjDetail(idx) {
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
         <div style="flex:1;min-width:200px">
           <label class="filter-label" for="pe_spk_prev" style="display:block;margin-bottom:6px">SPK Sebelumnya</label>
-          <input type="text" id="pe_spk_prev" class="form-input" list="pe_spk_prev_list" autocomplete="off" placeholder="Ketik No SPK..." value="${esc(curSpkPrevNo)}" style="width:100%;padding:8px">
-          <datalist id="pe_spk_prev_list">${spkPrevOptions}</datalist>
+          <select id="pe_spk_prev" class="form-input" style="width:100%;padding:8px">
+            <option value="">— Tidak ada —</option>
+            ${spkPrevOptions}
+          </select>
         </div>
         <div style="flex:1;min-width:200px">
           <label class="filter-label" for="pe_pic" style="display:block;margin-bottom:6px">PIC (Assignee)</label>
           ${picSelect}
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:200px">
+          <label class="filter-label" for="pe_spk_baru" style="display:block;margin-bottom:6px">SPK Baru</label>
+          <select id="pe_spk_baru" class="form-input" style="width:100%;padding:8px">
+            <option value="">— Tidak ada —</option>
+            ${spkBaruOptions}
+          </select>
         </div>
       </div>
 
@@ -3497,7 +3615,7 @@ function showProjDetail(idx) {
     </div>
 
     <div class="modal-section">
-      <div class="modal-section-title">SPK Perpanjangan</div>
+      <div class="modal-section-title">SPK Sebelumnya :</div>
       ${spkPerpHtml}
     </div>
 
@@ -3539,14 +3657,10 @@ function saveProjDetail() {
   const $ = id => document.getElementById(id);
   const btn = $('pe_saveBtn'), icon = $('pe_saveIcon'), res = $('pe_result');
 
-  // Resolve autocomplete SPK Sebelumnya (No SPK -> id). PIC kini dropdown
-  // yang value-nya sudah page_id, jadi tidak perlu resolusi.
-  const spkNo = ($('pe_spk_prev') ? $('pe_spk_prev').value.trim() : '');
-  let spkPrevId = '';
-  if (spkNo) {
-    spkPrevId = (window._projSpkNoToId || {})[spkNo] || '';
-    if (!spkPrevId) { res.style.color = 'var(--red,#ef4444)'; res.textContent = 'SPK "' + spkNo + '" tidak ditemukan. Pilih dari daftar atau kosongkan.'; return; }
-  }
+  // SPK Sebelumnya kini dropdown yang value-nya langsung page_id SPK.
+  // PIC juga dropdown (value = page_id), jadi keduanya tak perlu resolusi.
+  const spkPrevId = ($('pe_spk_prev') ? $('pe_spk_prev').value.trim() : '');
+  const spkBaruId = ($('pe_spk_baru') ? $('pe_spk_baru').value.trim() : '');
   // PIC multi-select: kumpulkan semua page_id yang dipilih (CSV untuk backend).
   const picEl = $('pe_pic');
   const picIds = picEl ? Array.from(picEl.selectedOptions).map(o => o.value).filter(Boolean) : [];
@@ -3561,6 +3675,7 @@ function saveProjDetail() {
     nilai_project: parseThousands($('pe_nilai').value),
     no_izin_prinsip: ($('pe_no_ip') ? $('pe_no_ip').value : ''),
     spk_sebelumnya: spkPrevId,
+    spk_baru: spkBaruId,
     pic: picCsv,
   };
   // Dokumen: kirim hanya yang punya elemen select.

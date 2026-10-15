@@ -492,6 +492,8 @@ def extract_project(r, personel):
     nip_raw = props.get('No. Izin Prinsip', {}).get('rich_text', [])
     no_izin_prinsip = nip_raw[0]['plain_text'] if nip_raw else ''
     spk_sebelumnya_ids = [x['id'] for x in props.get('SPK sebelumnya', {}).get('relation', [])]
+    # SPK baru (relation page_ids) — SPK yang dibuat dari project ini
+    spk_baru_ids = [x['id'] for x in props.get('SPK baru', {}).get('relation', [])]
 
     # Progress dari formula (0.0–1.0)
     prog_formula = props.get('Progress', {}).get('formula') or {}
@@ -543,6 +545,7 @@ def extract_project(r, personel):
         'nominal_ip': props.get('Nominal IP', {}).get('number'),
         'no_izin_prinsip': no_izin_prinsip,
         'spk_sebelumnya_ids': spk_sebelumnya_ids,
+        'spk_baru_ids': spk_baru_ids,
         'assignee_ids': assignee_ids,
         'assignees':  assignees,
         'completion': comp_val,
@@ -1683,10 +1686,22 @@ def api_monthly():
         _ensure_fresh()  # Option C: refresh cache from Notion only if stale
 
     # Peta internal SPK page-id → No SPK (untuk menampilkan No SPK dari relation)
+    # Sekaligus bangun detail SPK (status / provider / jatuh tempo) ber-key No SPK,
+    # dipakai untuk kartu info saat user memfilter berdasarkan No. SPK.
+    personel   = get_personel()
     spk_no_map = {}
+    spk_detail = {}  # No SPK → {status, provider, jatuh_tempo}
     for r in cached_query(SPK_DB):
-        arr = r['properties'].get('No SPK', {}).get('title', [])
-        spk_no_map[r['id']] = arr[0]['plain_text'] if arr else ''
+        s = extract_spk(r, personel)
+        no_spk = s.get('no_spk') or ''
+        spk_no_map[r['id']] = no_spk
+        if no_spk:
+            spk_detail[no_spk] = {
+                'no_spk':       no_spk,
+                'status':       s.get('status') or '-',
+                'provider':     s.get('vendor') or '-',
+                'jatuh_tempo':  s.get('spk_selesai') or '',
+            }
 
     all_rows = [extract_monthly(r, spk_no_map) for r in cached_query(MONTHLY_DB)]
 
@@ -1695,6 +1710,15 @@ def api_monthly():
         def uniq_sorted(key):
             return sorted({(x.get(key) or '') for x in all_rows if x.get(key)})
         periodes = sorted({x['periode'][:7] for x in all_rows if x['periode']}, reverse=True)
+        # Daftar No. SPK untuk autocomplete. Satu baris monthly bisa punya
+        # beberapa No SPK (relation) yang digabung koma — pecah agar tiap No SPK
+        # jadi opsi tersendiri. Hanya SPK yang terpakai di data monthly.
+        spk_set = set()
+        for x in all_rows:
+            for part in (x.get('no_spk') or '').split(','):
+                p = part.strip()
+                if p and p != '?':
+                    spk_set.add(p)
         return jsonify({
             'ok': True,
             'options': True,
@@ -1704,6 +1728,8 @@ def api_monthly():
             'bayars':    uniq_sorted('status_bayar'),
             'bas':       uniq_sorted('status_ba'),
             'rekons':    uniq_sorted('status_rekon'),
+            'spks':      sorted(spk_set),
+            'spk_detail': spk_detail,
         })
 
     # ── Baca parameter filter ──
@@ -1713,6 +1739,7 @@ def api_monthly():
     bayar   = request.args.get('bayar')   or 'all'
     ba      = request.args.get('ba')      or 'all'
     rekon   = request.args.get('rekon')   or 'all'
+    no_spk  = (request.args.get('no_spk') or '').strip()
 
     # ── Terapkan filter di server (semantik = frontend applyMonthlyFilters) ──
     rows = all_rows
@@ -1726,6 +1753,14 @@ def api_monthly():
         rows = [x for x in rows if x.get('status_ba') == ba]
     if rekon != 'all':
         rows = [x for x in rows if x.get('status_rekon') == rekon]
+    if no_spk:
+        # Cocokkan No. SPK (satu baris bisa punya beberapa No SPK dipisah koma).
+        nkey = no_spk.lower()
+        rows = [
+            x for x in rows
+            if any(nkey == part.strip().lower()
+                   for part in (x.get('no_spk') or '').split(','))
+        ]
     if q:
         rows = [
             x for x in rows
@@ -1747,6 +1782,10 @@ def api_monthly():
         'total_tagihan': total_tagihan,
         'total_prognosa': total_prognosa,
         'periodes': periodes,
+        # Detail SPK yang sedang difilter (untuk kartu info). Kosong bila
+        # filter No. SPK tidak dipakai atau No SPK tak ditemukan.
+        'no_spk': no_spk,
+        'spk_info': spk_detail.get(no_spk) if no_spk else None,
     })
 
 
@@ -1977,6 +2016,7 @@ _PROJECT_EDITABLE = {
     'nilai_project': ('Nominal IP', 'number'),
     'no_izin_prinsip': ('No. Izin Prinsip', 'rich_text'),
     'spk_sebelumnya':  ('SPK sebelumnya', 'relation'),
+    'spk_baru':        ('SPK baru', 'relation'),
     'pic':             ('Assignee', 'relation_multi'),
     # Dokumen (status). Key frontend memakai nama properti apa adanya.
     'TOR':                                 ('TOR', 'status'),
