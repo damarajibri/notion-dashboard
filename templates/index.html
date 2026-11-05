@@ -3507,17 +3507,9 @@ function showProjDetail(idx) {
   // Set awal SPK Sebelumnya (dedup, hanya yang masih ada di spkList).
   window._projSpkPrevSel = (p.spk_sebelumnya_ids || []).filter(id => window._projSpkById[id]);
 
-  // Dropdown SPK Baru: value = page_id, label = "No SPK — Nama project/SPK".
-  // SPK baru = SPK yang dibuat dari project ini.
-  const curSpkBaruId = (p.spk_baru_ids && p.spk_baru_ids.length) ? p.spk_baru_ids[0] : '';
-  const spkBaruOptions = spkList
-    .filter(s => s.page_id && s.no_spk)
-    .sort((a, b) => String(a.no_spk).localeCompare(String(b.no_spk)))
-    .map(s => {
-      const nm = (s.project || s.name || '').trim();
-      const label = nm ? `${s.no_spk} — ${nm}` : s.no_spk;
-      return `<option value="${esc(s.page_id)}"${s.page_id === curSpkBaruId ? ' selected' : ''}>${esc(label)}</option>`;
-    }).join('');
+  // SPK Baru (MULTI): SPK yang dibuat dari project ini. Pakai peta SPK yang
+  // sama (buildSpkPrevMap) + autocomplete kustom. State: window._projSpkBaruSel.
+  window._projSpkBaruSel = (p.spk_baru_ids || []).filter(id => window._projSpkById[id]);
 
   // PIC (Assignee) sebagai MULTI-SELECT: value tiap opsi = page_id personel.
   // Bisa memilih lebih dari satu (Ctrl/Cmd-klik). Semua PIC saat ini ter-pilih.
@@ -3601,11 +3593,19 @@ function showProjDetail(idx) {
 
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
         <div style="flex:1;min-width:200px">
-          <label class="filter-label" for="pe_spk_baru" style="display:block;margin-bottom:6px">SPK Baru</label>
-          <select id="pe_spk_baru" class="form-input" style="width:100%;padding:8px">
-            <option value="">— Tidak ada —</option>
-            ${spkBaruOptions}
-          </select>
+          <label class="filter-label" for="pe_spk_baru_input" style="display:block;margin-bottom:6px">SPK Baru</label>
+          <div id="pe_spk_baru_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
+          <div style="position:relative">
+            <input type="text" id="pe_spk_baru_input" class="form-input"
+                   placeholder="🔎 Ketik No. SPK atau nama project..." autocomplete="off"
+                   style="width:100%;padding:8px"
+                   oninput="onSpkBaruInput()" onfocus="onSpkBaruInput()"
+                   onkeydown="onSpkBaruKeydown(event)"
+                   onblur="setTimeout(hideSpkBaruSuggest, 150)">
+            <div id="pe_spk_baru_suggest"
+                 style="display:none;position:absolute;z-index:50;left:0;right:0;top:100%;margin-top:2px;max-height:240px;overflow:auto;background:var(--surface1,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18)"></div>
+          </div>
+          <div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari No. SPK atau nama project, lalu klik untuk menambah. Bisa lebih dari satu.</div>
         </div>
       </div>
 
@@ -3618,7 +3618,7 @@ function showProjDetail(idx) {
     </div>
 
     <div class="modal-section">
-      <div class="modal-section-title">SPK Perpanjangan terkait</div>
+      <div class="modal-section-title">SPK Perpanjangan terkait (SPK sebelumnya)</div>
       <div style="font-size:11px;color:var(--text2);margin:-4px 0 8px">SPK yang menjadikan project ini sebagai perpanjangan (relasi otomatis, baca saja). Untuk menambah <b>SPK Sebelumnya</b>, gunakan picker di bagian <b>Informasi Umum</b> lalu klik Simpan.</div>
       ${spkPerpHtml}
     </div>
@@ -3641,6 +3641,7 @@ function showProjDetail(idx) {
   document.getElementById('projModal').classList.add('active');
   attachThousandFormat('pe_nilai');
   renderSpkPrevChips();
+  renderSpkBaruChips();
   buildSpkPrevMap();   // siapkan peta SPK untuk autocomplete
   // Audit trail TIDAK dimuat di sini. Simpan page_id & callback; data baru
   // diambil dari Notion saat user menekan tombol "Audit Trail" (lihat
@@ -3802,16 +3803,133 @@ function pickSpkPrev(id) {
   if (inp) inp.focus();
 }
 
+// ===== SPK BARU (MULTI-SELECT, autocomplete kustom) =====
+// State: window._projSpkBaruSel (array page_id). Peta SPK dipakai bersama
+// (buildSpkPrevMap -> window._projSpkById). Pola sama dengan SPK Sebelumnya.
+
+function renderSpkBaruChips() {
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const box = document.getElementById('pe_spk_baru_chips');
+  if (!box) return;
+  const sel = window._projSpkBaruSel || [];
+  const byId = window._projSpkById || {};
+  if (!sel.length) {
+    box.innerHTML = '<span style="color:var(--text2);font-size:12px">Belum ada SPK baru dipilih.</span>';
+    return;
+  }
+  box.innerHTML = sel.map(id => {
+    const s = byId[id] || {};
+    const label = s.project ? `${s.no_spk} — ${s.project}` : (s.no_spk || id);
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);color:var(--text1);border:1px solid var(--border,#d1d5db);border-radius:16px;padding:4px 10px;font-size:12px">
+      📄 ${esc(label)}
+      <a href="javascript:void(0)" onclick="removeSpkBaru('${esc(id)}')" title="Hapus" style="color:var(--red,#ef4444);text-decoration:none;font-weight:700">✕</a>
+    </span>`;
+  }).join('');
+}
+
+function removeSpkBaru(id) {
+  window._projSpkBaruSel = (window._projSpkBaruSel || []).filter(x => x !== id);
+  renderSpkBaruChips();
+  onSpkBaruInput();
+}
+
+function hideSpkBaruSuggest() {
+  const box = document.getElementById('pe_spk_baru_suggest');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  window._spkBaruActiveIdx = -1;
+}
+
+// Kandidat SPK (belum dipilih di SPK Baru) yang cocok query No. SPK / project.
+function _spkBaruCandidates(q) {
+  const byId = buildSpkPrevMap();                 // page_id -> {no_spk, project}
+  const chosen = new Set(window._projSpkBaruSel || []);
+  const needle = (q || '').trim().toLowerCase();
+  let items = Object.keys(byId)
+    .filter(id => !chosen.has(id))
+    .map(id => ({ id, ...byId[id] }));
+  if (needle) {
+    items = items.filter(it =>
+      (it.no_spk || '').toLowerCase().includes(needle) ||
+      (it.project || '').toLowerCase().includes(needle));
+  }
+  items.sort((a, b) => String(a.no_spk).localeCompare(String(b.no_spk)));
+  return items;
+}
+
+function onSpkBaruInput() {
+  const inp = document.getElementById('pe_spk_baru_input');
+  const box = document.getElementById('pe_spk_baru_suggest');
+  if (!inp || !box) return;
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+
+  const hasData = (typeof DATA !== 'undefined' && DATA && Array.isArray(DATA.spk) && DATA.spk.length);
+  if (!hasData) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Data SPK belum termuat. Klik 🔄 Refresh di pojok kanan atas, lalu coba lagi.</div>';
+    return;
+  }
+
+  const items = _spkBaruCandidates(inp.value).slice(0, 50);
+  window._spkBaruActiveIdx = -1;
+  window._spkBaruSuggestItems = items;
+  if (!items.length) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Tidak ada SPK cocok. Coba kata kunci lain.</div>';
+    return;
+  }
+  box.innerHTML = items.map((it, i) => {
+    const label = it.project ? `${it.no_spk} — ${it.project}` : it.no_spk;
+    return `<div class="spk-baru-opt" data-idx="${i}" onmousedown="event.preventDefault()"
+         onclick="pickSpkBaru('${esc(it.id)}')"
+         style="cursor:pointer;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border,#eee)">
+      📄 ${esc(label)}
+    </div>`;
+  }).join('');
+  box.style.display = 'block';
+}
+
+function onSpkBaruKeydown(e) {
+  const box = document.getElementById('pe_spk_baru_suggest');
+  const items = window._spkBaruSuggestItems || [];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!items.length) return;
+    let idx = window._spkBaruActiveIdx ?? -1;
+    idx = e.key === 'ArrowDown' ? Math.min(items.length - 1, idx + 1) : Math.max(0, idx - 1);
+    window._spkBaruActiveIdx = idx;
+    if (box) Array.from(box.querySelectorAll('.spk-baru-opt')).forEach((el, i) => {
+      el.style.background = (i === idx) ? 'var(--surface2,#eef2ff)' : '';
+    });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const idx = window._spkBaruActiveIdx ?? -1;
+    const pick = (idx >= 0 && idx < items.length) ? items[idx] : items[0];
+    if (pick) pickSpkBaru(pick.id);
+  } else if (e.key === 'Escape') {
+    hideSpkBaruSuggest();
+  }
+}
+
+function pickSpkBaru(id) {
+  if (!id) return;
+  const arr = window._projSpkBaruSel || (window._projSpkBaruSel = []);
+  if (!arr.includes(id)) arr.push(id);
+  const inp = document.getElementById('pe_spk_baru_input');
+  if (inp) inp.value = '';
+  hideSpkBaruSuggest();
+  renderSpkBaruChips();
+  if (inp) inp.focus();
+}
+
 function saveProjDetail() {
   const p = window._editingProject;
   if (!p) return;
   const $ = id => document.getElementById(id);
   const btn = $('pe_saveBtn'), icon = $('pe_saveIcon'), res = $('pe_result');
 
-  // SPK Sebelumnya kini MULTI: ambil daftar page_id terpilih (CSV untuk backend).
-  // SPK Baru & PIC: value sudah berupa page_id.
+  // SPK Sebelumnya & SPK Baru kini MULTI: ambil daftar page_id terpilih (CSV).
   const spkPrevCsv = (window._projSpkPrevSel || []).filter(Boolean).join(',');
-  const spkBaruId = ($('pe_spk_baru') ? $('pe_spk_baru').value.trim() : '');
+  const spkBaruCsv = (window._projSpkBaruSel || []).filter(Boolean).join(',');
   // PIC multi-select: kumpulkan semua page_id yang dipilih (CSV untuk backend).
   const picEl = $('pe_pic');
   const picIds = picEl ? Array.from(picEl.selectedOptions).map(o => o.value).filter(Boolean) : [];
@@ -3826,7 +3944,7 @@ function saveProjDetail() {
     nilai_project: parseThousands($('pe_nilai').value),
     no_izin_prinsip: ($('pe_no_ip') ? $('pe_no_ip').value : ''),
     spk_sebelumnya: spkPrevCsv,
-    spk_baru: spkBaruId,
+    spk_baru: spkBaruCsv,
     pic: picCsv,
   };
   // Dokumen: kirim hanya yang punya elemen select.

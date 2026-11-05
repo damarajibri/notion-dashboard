@@ -2016,7 +2016,7 @@ _PROJECT_EDITABLE = {
     'nilai_project': ('Nominal IP', 'number'),
     'no_izin_prinsip': ('No. Izin Prinsip', 'rich_text'),
     'spk_sebelumnya':  ('SPK sebelumnya', 'relation_multi'),
-    'spk_baru':        ('SPK baru', 'relation'),
+    'spk_baru':        ('SPK baru', 'relation_multi'),
     'pic':             ('Assignee', 'relation_multi'),
     # Dokumen (status). Key frontend memakai nama properti apa adanya.
     'TOR':                                 ('TOR', 'status'),
