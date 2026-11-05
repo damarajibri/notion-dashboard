@@ -3581,15 +3581,17 @@ function showProjDetail(idx) {
         <div style="flex:1;min-width:200px">
           <label class="filter-label" for="pe_spk_prev_input" style="display:block;margin-bottom:6px">SPK Sebelumnya</label>
           <div id="pe_spk_prev_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-          <div style="display:flex;gap:6px">
-            <input type="text" id="pe_spk_prev_input" class="form-input" list="pe_spk_prev_datalist"
-                   placeholder="🔎 Ketik / pilih No. SPK..." autocomplete="off"
-                   style="flex:1;min-width:0;padding:8px"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();addSpkPrevFromInput();}">
-            <datalist id="pe_spk_prev_datalist"></datalist>
-            <button type="button" class="btn btn-outline btn-sm" onclick="addSpkPrevFromInput()" title="Tambah SPK yang diketik">➕ Tambah</button>
+          <div style="position:relative">
+            <input type="text" id="pe_spk_prev_input" class="form-input"
+                   placeholder="🔎 Ketik No. SPK atau nama project..." autocomplete="off"
+                   style="width:100%;padding:8px"
+                   oninput="onSpkPrevInput()" onfocus="onSpkPrevInput()"
+                   onkeydown="onSpkPrevKeydown(event)"
+                   onblur="setTimeout(hideSpkPrevSuggest, 150)">
+            <div id="pe_spk_prev_suggest"
+                 style="display:none;position:absolute;z-index:50;left:0;right:0;top:100%;margin-top:2px;max-height:240px;overflow:auto;background:var(--surface1,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18)"></div>
           </div>
-          <div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Ketik No. SPK lalu pilih dari daftar (atau tekan Enter). Bisa menambah lebih dari satu.</div>
+          <div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari berdasarkan No. SPK atau nama project, lalu klik salah satu untuk menambah. Bisa lebih dari satu.</div>
         </div>
         <div style="flex:1;min-width:200px">
           <label class="filter-label" for="pe_pic" style="display:block;margin-bottom:6px">PIC (Assignee)</label>
@@ -3639,7 +3641,7 @@ function showProjDetail(idx) {
   document.getElementById('projModal').classList.add('active');
   attachThousandFormat('pe_nilai');
   renderSpkPrevChips();
-  renderSpkPrevDatalist();
+  buildSpkPrevMap();   // siapkan peta SPK untuk autocomplete
   // Audit trail TIDAK dimuat di sini. Simpan page_id & callback; data baru
   // diambil dari Notion saat user menekan tombol "Audit Trail" (lihat
   // toggleAuditTrail). Reset status loaded agar tombol memuat ulang per project.
@@ -3698,73 +3700,106 @@ function renderSpkPrevChips() {
 function removeSpkPrev(id) {
   window._projSpkPrevSel = (window._projSpkPrevSel || []).filter(x => x !== id);
   renderSpkPrevChips();
-  renderSpkPrevDatalist();   // SPK yang dilepas kembali muncul di autocomplete
+  // Jika sedang ada teks pencarian, segarkan daftar saran agar SPK yang
+  // baru dilepas muncul kembali sebagai kandidat.
+  onSpkPrevInput();
 }
 
-// Isi <datalist> autocomplete dengan semua No. SPK tersimpan (dari DATA.spk).
-// Label opsi: "No SPK — Nama project" agar mudah dikenali; value = No. SPK.
-// SPK yang SUDAH dipilih tidak ditawarkan lagi.
-function renderSpkPrevDatalist() {
-  const dl = document.getElementById('pe_spk_prev_datalist');
-  if (!dl) return;
-  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+// ── Autocomplete kustom (filter No. SPK + nama project) ──────────────────────
+// Native <datalist> hanya mencocokkan prefix pada "value" (No. SPK panjang
+// dengan titik/slash) dan tidak bisa mencari berdasarkan nama project. Karena
+// itu kita render dropdown saran sendiri yang memfilter kedua field.
+
+function hideSpkPrevSuggest() {
+  const box = document.getElementById('pe_spk_prev_suggest');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  window._spkPrevActiveIdx = -1;
+}
+
+// Kumpulkan kandidat SPK (belum dipilih) yang cocok dengan query.
+function _spkPrevCandidates(q) {
   const byId = buildSpkPrevMap();                 // page_id -> {no_spk, project}
   const chosen = new Set(window._projSpkPrevSel || []);
-  // Peta No. SPK -> page_id (untuk resolusi saat user menambah).
-  const noToId = {};
-  Object.keys(byId).forEach(id => { const s = byId[id]; if (s.no_spk) noToId[s.no_spk] = id; });
-  window._projSpkNoToId = noToId;
-
-  const opts = Object.keys(byId)
-    .filter(id => !chosen.has(id))                // sembunyikan yang sudah dipilih
-    .map(id => byId[id])
-    .sort((a, b) => String(a.no_spk).localeCompare(String(b.no_spk)))
-    .map(s => {
-      const label = s.project ? `${s.no_spk} — ${s.project}` : s.no_spk;
-      return `<option value="${esc(s.no_spk)}" label="${esc(label)}"></option>`;
-    }).join('');
-  dl.innerHTML = opts;
+  const needle = (q || '').trim().toLowerCase();
+  let items = Object.keys(byId)
+    .filter(id => !chosen.has(id))
+    .map(id => ({ id, ...byId[id] }));
+  if (needle) {
+    items = items.filter(it =>
+      (it.no_spk || '').toLowerCase().includes(needle) ||
+      (it.project || '').toLowerCase().includes(needle));
+  }
+  items.sort((a, b) => String(a.no_spk).localeCompare(String(b.no_spk)));
+  return items;
 }
 
-// Tambah SPK Sebelumnya dari nilai input autocomplete.
-// Menerima No. SPK persis, atau label "No SPK — Project" (ambil bagian sebelum —).
-function addSpkPrevFromInput() {
+// Render dropdown saran berdasarkan isi input.
+function onSpkPrevInput() {
   const inp = document.getElementById('pe_spk_prev_input');
-  if (!inp) return;
-  let val = (inp.value || '').trim();
-  if (!val) { showToast('Ketik atau pilih No. SPK dulu', '⚠️'); return; }
+  const box = document.getElementById('pe_spk_prev_suggest');
+  if (!inp || !box) return;
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
 
-  const noToId = window._projSpkNoToId || {};
-  // Coba cocokkan langsung; bila user memilih label "No — Project", ambil prefix.
-  let id = noToId[val];
-  if (!id && val.includes('—')) {
-    const head = val.split('—')[0].trim();
-    id = noToId[head];
-    if (id) val = head;
+  const all = _spkPrevCandidates('');
+  // Tidak ada data SPK sama sekali.
+  if (!all.length && !(window.DATA && Array.isArray(DATA.spk) && DATA.spk.length)) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Data SPK belum termuat. Klik 🔄 Refresh di pojok kanan atas, lalu coba lagi.</div>';
+    return;
   }
-  if (!id) {
-    // Cocokkan tanpa peduli huruf besar/kecil sebagai bantuan terakhir.
-    const hit = Object.keys(noToId).find(k => k.toLowerCase() === val.toLowerCase());
-    if (hit) id = noToId[hit];
-  }
-  if (!id) { showToast(`No. SPK "${val}" tidak ditemukan`, '❌'); return; }
 
-  const arr = window._projSpkPrevSel || (window._projSpkPrevSel = []);
-  if (arr.includes(id)) { showToast('SPK itu sudah dipilih', 'ℹ️'); inp.value = ''; return; }
-  arr.push(id);
-  inp.value = '';
-  renderSpkPrevChips();
-  renderSpkPrevDatalist();   // perbarui daftar (sembunyikan yang baru dipilih)
-  inp.focus();
+  const items = _spkPrevCandidates(inp.value).slice(0, 50);
+  window._spkPrevActiveIdx = -1;
+  window._spkPrevSuggestItems = items;
+  if (!items.length) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Tidak ada SPK cocok. Coba kata kunci lain.</div>';
+    return;
+  }
+  box.innerHTML = items.map((it, i) => {
+    const label = it.project ? `${it.no_spk} — ${it.project}` : it.no_spk;
+    return `<div class="spk-prev-opt" data-idx="${i}" onmousedown="event.preventDefault()"
+         onclick="pickSpkPrev('${esc(it.id)}')"
+         style="cursor:pointer;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border,#eee)">
+      📄 ${esc(label)}
+    </div>`;
+  }).join('');
+  box.style.display = 'block';
 }
 
-// Tambah/lepas satu SPK dari pilihan, lalu refresh dialog + chip.
-function toggleSpkPrevPick(id) {
+// Navigasi keyboard: panah atas/bawah, Enter pilih, Esc tutup.
+function onSpkPrevKeydown(e) {
+  const box = document.getElementById('pe_spk_prev_suggest');
+  const items = window._spkPrevSuggestItems || [];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!items.length) return;
+    let idx = window._spkPrevActiveIdx ?? -1;
+    idx = e.key === 'ArrowDown' ? Math.min(items.length - 1, idx + 1) : Math.max(0, idx - 1);
+    window._spkPrevActiveIdx = idx;
+    if (box) Array.from(box.querySelectorAll('.spk-prev-opt')).forEach((el, i) => {
+      el.style.background = (i === idx) ? 'var(--surface2,#eef2ff)' : '';
+    });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const idx = window._spkPrevActiveIdx ?? -1;
+    const pick = (idx >= 0 && idx < items.length) ? items[idx] : items[0];
+    if (pick) pickSpkPrev(pick.id);
+  } else if (e.key === 'Escape') {
+    hideSpkPrevSuggest();
+  }
+}
+
+// Tambah satu SPK (by page_id) ke daftar terpilih.
+function pickSpkPrev(id) {
+  if (!id) return;
   const arr = window._projSpkPrevSel || (window._projSpkPrevSel = []);
-  const i = arr.indexOf(id);
-  if (i >= 0) arr.splice(i, 1); else arr.push(id);
+  if (!arr.includes(id)) arr.push(id);
+  const inp = document.getElementById('pe_spk_prev_input');
+  if (inp) inp.value = '';
+  hideSpkPrevSuggest();
   renderSpkPrevChips();
-  renderSpkPrevDatalist();
+  if (inp) inp.focus();
 }
 
 function saveProjDetail() {
