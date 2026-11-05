@@ -1514,8 +1514,8 @@ def api_data():
             }
             for i, pid in enumerate(s['perp_ids'])
         ]
-        # Simpan page_id project perpanjangan agar form edit bisa pre-select
-        # relasi saat ini (hanya yang pertama dipakai oleh dropdown single-select).
+        # Simpan SEMUA page_id project perpanjangan agar form edit (multi-select)
+        # bisa pre-select seluruh relasi saat ini.
         s['perp_project_ids'] = list(s['perp_ids'])
         del s['perp_ids'], s['status_perpanjangan'], s['_id']
 
@@ -2224,7 +2224,7 @@ _SPK_EDITABLE = {
     'spk_mulai':       ('SPK Mulai', 'date'),
     'spk_selesai':     ('SPK Selesai', 'date'),
     'notes':           ('Notes', 'rich_text'),
-    'perp_project':    ('Projects Perpanjangan', 'relation'),
+    'perp_projects':   ('Projects Perpanjangan', 'relation_multi'),
 }
 
 

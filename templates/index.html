@@ -4077,32 +4077,21 @@ function showSpkDetail(idx) {
     return `<select id="${id}" class="form-input" style="width:100%;padding:8px"><option value="">—</option>${extra}${opts}</select>`;
   };
 
-  // Project Perpanjangan — editable via AUTOCOMPLETE (ketik untuk mencari).
-  // Pakai <input list> + <datalist> native. Input menampilkan JUDUL project;
-  // page_id dipetakan dari judul saat menyimpan (via window._perpTitleToId).
-  const curPerpId = (s.perp_project_ids && s.perp_project_ids.length) ? s.perp_project_ids[0] : '';
-  const projList = (DATA && DATA.projects) ? [...DATA.projects] : [];
-  projList.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-  // Peta judul -> page_id (global, dipakai saat save). Judul duplikat memakai id terakhir.
-  window._perpTitleToId = {};
-  projList.forEach(p => { if (p.page_id && p.title) window._perpTitleToId[p.title] = p.page_id; });
-  const curPerpTitle = curPerpId
-    ? ((projList.find(p => p.page_id === curPerpId) || {}).title || '')
-    : '';
-  const perpDatalistId = 'se_perp_list';
-  const perpOptions = projList
-    .filter(p => p.page_id && p.title)
-    .map(p => `<option value="${esc(p.title)}"></option>`)
-    .join('');
-  const perpInput =
-    `<input type="text" id="se_perp" class="form-input" list="${perpDatalistId}" autocomplete="off"` +
-    ` placeholder="Ketik untuk mencari project..." value="${esc(curPerpTitle)}" style="width:100%;padding:8px">` +
-    `<datalist id="${perpDatalistId}">${perpOptions}</datalist>` +
-    `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Ketik lalu pilih dari daftar. Kosongkan untuk menghapus relasi.</div>`;
-  const perpStatusInfo = (s.perpanjangan && s.perpanjangan.length)
-    ? `<div style="margin-top:8px;font-size:12px;color:var(--text2)">Saat ini: ${s.perpanjangan.map(pp => `🎯 ${esc(pp.title || '-')}${pp.status ? ' ' + statusBadge(pp.status) : ''}`).join('<br>')}</div>`
-    : '';
-  const perpHtml = perpInput + perpStatusInfo;
+  // Project Perpanjangan — MULTI via autocomplete kustom (ketik No./nama project).
+  // State: window._spkPerpSel (array page_id). Peta page_id -> {title} dibangun
+  // dari DATA.projects. Chip + dropdown saran, sama seperti SPK Sebelumnya.
+  buildSpkPerpMap();
+  window._spkPerpSel = (s.perp_project_ids || []).filter(id => window._spkPerpById[id]);
+  const perpHtml =
+    `<div id="se_perp_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>` +
+    `<div style="position:relative">` +
+      `<input type="text" id="se_perp_input" class="form-input" autocomplete="off"` +
+      ` placeholder="🔎 Ketik nama project..." style="width:100%;padding:8px"` +
+      ` oninput="onSpkPerpInput()" onfocus="onSpkPerpInput()"` +
+      ` onkeydown="onSpkPerpKeydown(event)" onblur="setTimeout(hideSpkPerpSuggest, 150)">` +
+      `<div id="se_perp_suggest" style="display:none;position:absolute;z-index:50;left:0;right:0;top:100%;margin-top:2px;max-height:240px;overflow:auto;background:var(--surface1,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18)"></div>` +
+    `</div>` +
+    `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari & klik project untuk menambah. Bisa lebih dari satu.</div>`;
 
   document.getElementById('spkModalBody').innerHTML = `
     <input type="hidden" id="se_page_id" value="${esc(s.page_id || '')}">
@@ -4182,6 +4171,7 @@ function showSpkDetail(idx) {
 
   document.getElementById('spkModal').classList.add('active');
   attachThousandFormat('se_total_anggaran');
+  renderSpkPerpChips();
   // Audit trail lazy: data diambil dari Notion saat tombol diklik (toggleAuditTrail).
   window._auditPage = window._auditPage || {};
   window._auditCb = window._auditCb || {};
@@ -4197,23 +4187,136 @@ function showSpkDetail(idx) {
 
 function closeSpkModal() { document.getElementById('spkModal').classList.remove('active'); }
 
+// ===== PROJECT PERPANJANGAN (MULTI-SELECT, autocomplete kustom) =====
+// State: window._spkPerpSel (array page_id), window._spkPerpById (peta page_id->{title}).
+
+// Bangun peta page_id -> {title} dari DATA.projects terkini.
+function buildSpkPerpMap() {
+  const map = {};
+  const list = (typeof DATA !== 'undefined' && DATA && Array.isArray(DATA.projects)) ? DATA.projects : [];
+  list.forEach(p => {
+    if (p && p.page_id && p.title) map[p.page_id] = { title: String(p.title).trim() };
+  });
+  window._spkPerpById = map;
+  return map;
+}
+
+// Render chip project perpanjangan terpilih (dengan tombol hapus).
+function renderSpkPerpChips() {
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const box = document.getElementById('se_perp_chips');
+  if (!box) return;
+  const sel = window._spkPerpSel || [];
+  const byId = window._spkPerpById || {};
+  if (!sel.length) {
+    box.innerHTML = '<span style="color:var(--text2);font-size:12px">Belum ada project perpanjangan dipilih.</span>';
+    return;
+  }
+  box.innerHTML = sel.map(id => {
+    const p = byId[id] || {};
+    const label = p.title || id;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);color:var(--text1);border:1px solid var(--border,#d1d5db);border-radius:16px;padding:4px 10px;font-size:12px">
+      🎯 ${esc(label)}
+      <a href="javascript:void(0)" onclick="removeSpkPerp('${esc(id)}')" title="Hapus" style="color:var(--red,#ef4444);text-decoration:none;font-weight:700">✕</a>
+    </span>`;
+  }).join('');
+}
+
+function removeSpkPerp(id) {
+  window._spkPerpSel = (window._spkPerpSel || []).filter(x => x !== id);
+  renderSpkPerpChips();
+  onSpkPerpInput();   // project yang dilepas kembali jadi kandidat
+}
+
+function hideSpkPerpSuggest() {
+  const box = document.getElementById('se_perp_suggest');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  window._spkPerpActiveIdx = -1;
+}
+
+// Kandidat project (belum dipilih) yang cocok dengan query (judul).
+function _spkPerpCandidates(q) {
+  const byId = buildSpkPerpMap();
+  const chosen = new Set(window._spkPerpSel || []);
+  const needle = (q || '').trim().toLowerCase();
+  let items = Object.keys(byId)
+    .filter(id => !chosen.has(id))
+    .map(id => ({ id, ...byId[id] }));
+  if (needle) items = items.filter(it => (it.title || '').toLowerCase().includes(needle));
+  items.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+  return items;
+}
+
+function onSpkPerpInput() {
+  const inp = document.getElementById('se_perp_input');
+  const box = document.getElementById('se_perp_suggest');
+  if (!inp || !box) return;
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+
+  const hasData = (typeof DATA !== 'undefined' && DATA && Array.isArray(DATA.projects) && DATA.projects.length);
+  if (!hasData) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Data project belum termuat. Klik 🔄 Refresh di pojok kanan atas, lalu coba lagi.</div>';
+    return;
+  }
+
+  const items = _spkPerpCandidates(inp.value).slice(0, 50);
+  window._spkPerpActiveIdx = -1;
+  window._spkPerpSuggestItems = items;
+  if (!items.length) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Tidak ada project cocok. Coba kata kunci lain.</div>';
+    return;
+  }
+  box.innerHTML = items.map((it, i) => {
+    return `<div class="spk-perp-opt" data-idx="${i}" onmousedown="event.preventDefault()"
+         onclick="pickSpkPerp('${esc(it.id)}')"
+         style="cursor:pointer;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border,#eee)">
+      🎯 ${esc(it.title)}
+    </div>`;
+  }).join('');
+  box.style.display = 'block';
+}
+
+function onSpkPerpKeydown(e) {
+  const box = document.getElementById('se_perp_suggest');
+  const items = window._spkPerpSuggestItems || [];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!items.length) return;
+    let idx = window._spkPerpActiveIdx ?? -1;
+    idx = e.key === 'ArrowDown' ? Math.min(items.length - 1, idx + 1) : Math.max(0, idx - 1);
+    window._spkPerpActiveIdx = idx;
+    if (box) Array.from(box.querySelectorAll('.spk-perp-opt')).forEach((el, i) => {
+      el.style.background = (i === idx) ? 'var(--surface2,#eef2ff)' : '';
+    });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const idx = window._spkPerpActiveIdx ?? -1;
+    const pick = (idx >= 0 && idx < items.length) ? items[idx] : items[0];
+    if (pick) pickSpkPerp(pick.id);
+  } else if (e.key === 'Escape') {
+    hideSpkPerpSuggest();
+  }
+}
+
+function pickSpkPerp(id) {
+  if (!id) return;
+  const arr = window._spkPerpSel || (window._spkPerpSel = []);
+  if (!arr.includes(id)) arr.push(id);
+  const inp = document.getElementById('se_perp_input');
+  if (inp) inp.value = '';
+  hideSpkPerpSuggest();
+  renderSpkPerpChips();
+  if (inp) inp.focus();
+}
+
 function saveSpkDetail() {
   const $ = id => document.getElementById(id);
   const btn = $('se_saveBtn'), icon = $('se_saveIcon'), res = $('se_result');
 
-  // Resolve autocomplete Project Perpanjangan: judul -> page_id.
-  const perpEl = document.getElementById('se_perp');
-  const perpTitle = perpEl ? perpEl.value.trim() : '';
-  const titleToId = window._perpTitleToId || {};
-  let perpId = '';
-  if (perpTitle) {
-    perpId = titleToId[perpTitle] || '';
-    if (!perpId) {
-      res.style.color = 'var(--red,#ef4444)';
-      res.textContent = 'Project Perpanjangan "' + perpTitle + '" tidak ditemukan. Pilih dari daftar atau kosongkan.';
-      return;
-    }
-  }
+  // Project Perpanjangan kini MULTI: kirim daftar page_id terpilih (CSV).
+  const perpCsv = (window._spkPerpSel || []).filter(Boolean).join(',');
 
   const payload = {
     page_id:         $('se_page_id').value,
@@ -4227,7 +4330,7 @@ function saveSpkDetail() {
     spk_mulai:       $('se_mulai').value,
     spk_selesai:     $('se_selesai').value,
     notes:           $('se_notes').value,
-    perp_project:    perpId,
+    perp_projects:   perpCsv,
   };
 
   if (!payload.page_id) { showToast('page_id kosong', '⚠️'); return; }
