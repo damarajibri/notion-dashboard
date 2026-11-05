@@ -3501,11 +3501,9 @@ function showProjDetail(idx) {
   spkList.forEach(s => { if (s.page_id && s.no_spk) window._projSpkNoToId[s.no_spk] = s.page_id; });
   // SPK Sebelumnya (MULTI): kumpulan page_id yang sudah terpilih untuk project ini.
   // UI berupa daftar chip + tombol "Tambah" yang membuka dialog pemilihan SPK.
-  // Peta page_id -> {no_spk, project} dipakai untuk render label chip & dialog.
-  window._projSpkById = {};
-  spkList.forEach(s => { if (s.page_id && s.no_spk) {
-    window._projSpkById[s.page_id] = { no_spk: s.no_spk, project: (s.project || s.name || '').trim() };
-  }});
+  // Peta page_id -> {no_spk, project} dibangun dari data SPK global (fungsi
+  // buildSpkPrevMap dipakai bersama oleh picker agar tidak pernah divergen).
+  buildSpkPrevMap();
   // Set awal SPK Sebelumnya (dedup, hanya yang masih ada di spkList).
   window._projSpkPrevSel = (p.spk_sebelumnya_ids || []).filter(id => window._projSpkById[id]);
 
@@ -3650,6 +3648,22 @@ function showProjDetail(idx) {
 // ===== SPK SEBELUMNYA (MULTI-SELECT) =====
 // State: window._projSpkPrevSel (array page_id), window._projSpkById (peta detail).
 
+// Bangun ulang peta page_id -> {no_spk, project} dari data SPK global terkini.
+// Dipakai saat membuka detail project DAN saat membuka picker, sehingga picker
+// tidak pernah "kosong" hanya karena snapshot lama. Jika data SPK belum termuat
+// (DATA.spk kosong), peta akan kosong dan picker menampilkan pesan yang jelas.
+function buildSpkPrevMap() {
+  const map = {};
+  const list = (window.DATA && Array.isArray(DATA.spk)) ? DATA.spk : [];
+  list.forEach(s => {
+    if (s && s.page_id && s.no_spk) {
+      map[s.page_id] = { no_spk: s.no_spk, project: (s.project || s.name || '').trim() };
+    }
+  });
+  window._projSpkById = map;
+  return map;
+}
+
 // Render chip daftar SPK Sebelumnya yang terpilih (dengan tombol hapus).
 function renderSpkPrevChips() {
   const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
@@ -3708,6 +3722,9 @@ function openSpkPrevPicker() {
   dlg.classList.add('active');
   const s = document.getElementById('spkPrevSearch');
   if (s) s.value = '';
+  // Selalu bangun ulang peta dari data global terkini sebelum menampilkan daftar,
+  // agar picker tidak kosong karena snapshot lama / urutan pemuatan data.
+  buildSpkPrevMap();
   renderSpkPrevPickerList();
 }
 
@@ -3725,7 +3742,16 @@ function renderSpkPrevPickerList() {
   const sel = new Set(window._projSpkPrevSel || []);
   const q = (document.getElementById('spkPrevSearch')?.value || '').trim().toLowerCase();
 
-  let items = Object.keys(byId).map(id => ({ id, ...byId[id] }));
+  const allItems = Object.keys(byId).map(id => ({ id, ...byId[id] }));
+  // Tidak ada data SPK sama sekali (DATA.spk kosong / belum termuat).
+  if (!allItems.length) {
+    wrap.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">'
+      + 'Data SPK belum termuat. Klik tombol <b>🔄 Refresh</b> di pojok kanan atas, '
+      + 'lalu buka kembali picker ini.</div>';
+    return;
+  }
+
+  let items = allItems;
   items.sort((a, b) => String(a.no_spk).localeCompare(String(b.no_spk)));
   if (q) {
     items = items.filter(it =>
@@ -3733,7 +3759,7 @@ function renderSpkPrevPickerList() {
       (it.project || '').toLowerCase().includes(q));
   }
   if (!items.length) {
-    wrap.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">Tidak ada SPK cocok.</div>';
+    wrap.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">Tidak ada SPK cocok dengan pencarian.</div>';
     return;
   }
   wrap.innerHTML = items.map(it => {
