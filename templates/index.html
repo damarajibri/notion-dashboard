@@ -3666,7 +3666,7 @@ function showProjDetail(idx) {
 // (DATA.spk kosong), peta akan kosong dan picker menampilkan pesan yang jelas.
 function buildSpkPrevMap() {
   const map = {};
-  const list = (window.DATA && Array.isArray(DATA.spk)) ? DATA.spk : [];
+  const list = (typeof DATA !== 'undefined' && DATA && Array.isArray(DATA.spk)) ? DATA.spk : [];
   list.forEach(s => {
     if (s && s.page_id && s.no_spk) {
       map[s.page_id] = { no_spk: s.no_spk, project: (s.project || s.name || '').trim() };
@@ -3742,7 +3742,7 @@ function onSpkPrevInput() {
 
   const all = _spkPrevCandidates('');
   // Tidak ada data SPK sama sekali.
-  if (!all.length && !(window.DATA && Array.isArray(DATA.spk) && DATA.spk.length)) {
+  if (!all.length && !(typeof DATA !== 'undefined' && DATA && Array.isArray(DATA.spk) && DATA.spk.length)) {
     box.style.display = 'block';
     box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Data SPK belum termuat. Klik 🔄 Refresh di pojok kanan atas, lalu coba lagi.</div>';
     return;
