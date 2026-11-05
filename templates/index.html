@@ -3579,9 +3579,17 @@ function showProjDetail(idx) {
 
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
         <div style="flex:1;min-width:200px">
-          <label class="filter-label" for="pe_spk_prev" style="display:block;margin-bottom:6px">SPK Sebelumnya</label>
+          <label class="filter-label" for="pe_spk_prev_input" style="display:block;margin-bottom:6px">SPK Sebelumnya</label>
           <div id="pe_spk_prev_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>
-          <button type="button" class="btn btn-outline btn-sm" onclick="openSpkPrevPicker()">➕ Tambah SPK Sebelumnya</button>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="pe_spk_prev_input" class="form-input" list="pe_spk_prev_datalist"
+                   placeholder="🔎 Ketik / pilih No. SPK..." autocomplete="off"
+                   style="flex:1;min-width:0;padding:8px"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addSpkPrevFromInput();}">
+            <datalist id="pe_spk_prev_datalist"></datalist>
+            <button type="button" class="btn btn-outline btn-sm" onclick="addSpkPrevFromInput()" title="Tambah SPK yang diketik">➕ Tambah</button>
+          </div>
+          <div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Ketik No. SPK lalu pilih dari daftar (atau tekan Enter). Bisa menambah lebih dari satu.</div>
         </div>
         <div style="flex:1;min-width:200px">
           <label class="filter-label" for="pe_pic" style="display:block;margin-bottom:6px">PIC (Assignee)</label>
@@ -3631,6 +3639,7 @@ function showProjDetail(idx) {
   document.getElementById('projModal').classList.add('active');
   attachThousandFormat('pe_nilai');
   renderSpkPrevChips();
+  renderSpkPrevDatalist();
   // Audit trail TIDAK dimuat di sini. Simpan page_id & callback; data baru
   // diambil dari Notion saat user menekan tombol "Audit Trail" (lihat
   // toggleAuditTrail). Reset status loaded agar tombol memuat ulang per project.
@@ -3689,89 +3698,64 @@ function renderSpkPrevChips() {
 function removeSpkPrev(id) {
   window._projSpkPrevSel = (window._projSpkPrevSel || []).filter(x => x !== id);
   renderSpkPrevChips();
+  renderSpkPrevDatalist();   // SPK yang dilepas kembali muncul di autocomplete
 }
 
-// Buka dialog pemilihan SPK: menampilkan semua SPK terinput (bisa dicari),
-// yang sudah dipilih ditandai. User klik untuk menambah; bisa berkali-kali.
-function openSpkPrevPicker() {
-  let dlg = document.getElementById('spkPrevPicker');
-  if (!dlg) {
-    dlg = document.createElement('div');
-    dlg.id = 'spkPrevPicker';
-    dlg.className = 'modal-overlay';
-    dlg.onclick = (e) => { if (e.target === dlg) closeSpkPrevPicker(); };
-    dlg.innerHTML = `
-      <div class="modal" style="max-width:560px">
-        <div class="modal-header">
-          <div>
-            <div class="modal-title">Pilih SPK Sebelumnya</div>
-            <div class="modal-subtitle">Klik SPK untuk menambah. Bisa memilih lebih dari satu.</div>
-          </div>
-          <button class="modal-close" onclick="closeSpkPrevPicker()">✕</button>
-        </div>
-        <div class="modal-body">
-          <input type="text" id="spkPrevSearch" class="form-input" placeholder="🔍 Cari No. SPK atau nama project..."
-                 style="width:100%;padding:8px;margin-bottom:10px" oninput="renderSpkPrevPickerList()">
-          <div id="spkPrevPickerList" style="max-height:360px;overflow:auto;display:flex;flex-direction:column;gap:4px"></div>
-        </div>
-        <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;padding:12px 16px">
-          <button class="btn btn-primary" onclick="closeSpkPrevPicker()">Selesai</button>
-        </div>
-      </div>`;
-    document.body.appendChild(dlg);
-  }
-  dlg.classList.add('active');
-  const s = document.getElementById('spkPrevSearch');
-  if (s) s.value = '';
-  // Selalu bangun ulang peta dari data global terkini sebelum menampilkan daftar,
-  // agar picker tidak kosong karena snapshot lama / urutan pemuatan data.
-  buildSpkPrevMap();
-  renderSpkPrevPickerList();
-}
-
-function closeSpkPrevPicker() {
-  const dlg = document.getElementById('spkPrevPicker');
-  if (dlg) dlg.classList.remove('active');
-}
-
-// Daftar SPK di dalam dialog, difilter oleh kolom pencarian.
-function renderSpkPrevPickerList() {
+// Isi <datalist> autocomplete dengan semua No. SPK tersimpan (dari DATA.spk).
+// Label opsi: "No SPK — Nama project" agar mudah dikenali; value = No. SPK.
+// SPK yang SUDAH dipilih tidak ditawarkan lagi.
+function renderSpkPrevDatalist() {
+  const dl = document.getElementById('pe_spk_prev_datalist');
+  if (!dl) return;
   const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
-  const wrap = document.getElementById('spkPrevPickerList');
-  if (!wrap) return;
-  const byId = window._projSpkById || {};
-  const sel = new Set(window._projSpkPrevSel || []);
-  const q = (document.getElementById('spkPrevSearch')?.value || '').trim().toLowerCase();
+  const byId = buildSpkPrevMap();                 // page_id -> {no_spk, project}
+  const chosen = new Set(window._projSpkPrevSel || []);
+  // Peta No. SPK -> page_id (untuk resolusi saat user menambah).
+  const noToId = {};
+  Object.keys(byId).forEach(id => { const s = byId[id]; if (s.no_spk) noToId[s.no_spk] = id; });
+  window._projSpkNoToId = noToId;
 
-  const allItems = Object.keys(byId).map(id => ({ id, ...byId[id] }));
-  // Tidak ada data SPK sama sekali (DATA.spk kosong / belum termuat).
-  if (!allItems.length) {
-    wrap.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">'
-      + 'Data SPK belum termuat. Klik tombol <b>🔄 Refresh</b> di pojok kanan atas, '
-      + 'lalu buka kembali picker ini.</div>';
-    return;
-  }
+  const opts = Object.keys(byId)
+    .filter(id => !chosen.has(id))                // sembunyikan yang sudah dipilih
+    .map(id => byId[id])
+    .sort((a, b) => String(a.no_spk).localeCompare(String(b.no_spk)))
+    .map(s => {
+      const label = s.project ? `${s.no_spk} — ${s.project}` : s.no_spk;
+      return `<option value="${esc(s.no_spk)}" label="${esc(label)}"></option>`;
+    }).join('');
+  dl.innerHTML = opts;
+}
 
-  let items = allItems;
-  items.sort((a, b) => String(a.no_spk).localeCompare(String(b.no_spk)));
-  if (q) {
-    items = items.filter(it =>
-      (it.no_spk || '').toLowerCase().includes(q) ||
-      (it.project || '').toLowerCase().includes(q));
+// Tambah SPK Sebelumnya dari nilai input autocomplete.
+// Menerima No. SPK persis, atau label "No SPK — Project" (ambil bagian sebelum —).
+function addSpkPrevFromInput() {
+  const inp = document.getElementById('pe_spk_prev_input');
+  if (!inp) return;
+  let val = (inp.value || '').trim();
+  if (!val) { showToast('Ketik atau pilih No. SPK dulu', '⚠️'); return; }
+
+  const noToId = window._projSpkNoToId || {};
+  // Coba cocokkan langsung; bila user memilih label "No — Project", ambil prefix.
+  let id = noToId[val];
+  if (!id && val.includes('—')) {
+    const head = val.split('—')[0].trim();
+    id = noToId[head];
+    if (id) val = head;
   }
-  if (!items.length) {
-    wrap.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">Tidak ada SPK cocok dengan pencarian.</div>';
-    return;
+  if (!id) {
+    // Cocokkan tanpa peduli huruf besar/kecil sebagai bantuan terakhir.
+    const hit = Object.keys(noToId).find(k => k.toLowerCase() === val.toLowerCase());
+    if (hit) id = noToId[hit];
   }
-  wrap.innerHTML = items.map(it => {
-    const picked = sel.has(it.id);
-    const label = it.project ? `${it.no_spk} — ${it.project}` : it.no_spk;
-    return `<div onclick="toggleSpkPrevPick('${esc(it.id)}')" title="${picked ? 'Klik untuk melepas' : 'Klik untuk menambah'}"
-         style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border,#d1d5db);border-radius:8px;${picked ? 'background:var(--surface2,#eef2ff)' : ''}">
-      <span style="font-size:14px">${picked ? '✅' : '➕'}</span>
-      <span style="font-size:13px">${esc(label)}</span>
-    </div>`;
-  }).join('');
+  if (!id) { showToast(`No. SPK "${val}" tidak ditemukan`, '❌'); return; }
+
+  const arr = window._projSpkPrevSel || (window._projSpkPrevSel = []);
+  if (arr.includes(id)) { showToast('SPK itu sudah dipilih', 'ℹ️'); inp.value = ''; return; }
+  arr.push(id);
+  inp.value = '';
+  renderSpkPrevChips();
+  renderSpkPrevDatalist();   // perbarui daftar (sembunyikan yang baru dipilih)
+  inp.focus();
 }
 
 // Tambah/lepas satu SPK dari pilihan, lalu refresh dialog + chip.
@@ -3779,8 +3763,8 @@ function toggleSpkPrevPick(id) {
   const arr = window._projSpkPrevSel || (window._projSpkPrevSel = []);
   const i = arr.indexOf(id);
   if (i >= 0) arr.splice(i, 1); else arr.push(id);
-  renderSpkPrevPickerList();
   renderSpkPrevChips();
+  renderSpkPrevDatalist();
 }
 
 function saveProjDetail() {
