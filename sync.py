@@ -19,6 +19,21 @@ from datetime import datetime, timedelta, timezone
 
 import db
 
+# NOTE: Jangan bekukan token di tingkat modul. app.py memanggil _load_dotenv()
+# SETELAH `import sync`, jadi bila token hanya ada di .env (bukan di environment
+# OS), nilai os.environ["NOTION_TOKEN"] belum terisi saat modul ini diimpor.
+# Membekukan TOKEN di sini membuat header memakai "Bearer " kosong → semua
+# sync 401 Unauthorized, sehingga cache tidak pernah ter-refresh setelah user
+# menyimpan perubahan. Karena itu token dibaca LAZY (per request) via _token().
+
+
+def _token():
+    """Baca NOTION_TOKEN dari environment saat dipanggil (bukan saat import)."""
+    return os.environ.get("NOTION_TOKEN", "")
+
+
+# Backward-compat: beberapa pemanggil / blok __main__ masih membaca sync.TOKEN.
+# Ini hanya snapshot saat import (boleh kosong); jangan dipakai untuk header.
 TOKEN = os.environ.get("NOTION_TOKEN", "")
 
 # Database ids (mirror app.py).
@@ -30,11 +45,15 @@ DATABASES = {
     "monthly_perf": "358a31d192f4809ca281cd6849efa28a",
 }
 
-HEADERS = {
-    "Authorization": f"Bearer {TOKEN}",
-    "Notion-Version": "2022-06-28",
-    "Content-Type": "application/json",
-}
+
+def _headers():
+    """Bangun header Notion dengan token terkini (dibaca lazy)."""
+    return {
+        "Authorization": f"Bearer {_token()}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json",
+    }
+
 
 # Overlap window subtracted from the last sync time to avoid missing rows due to
 # clock skew between our server and Notion. Overlapping rows are simply re-UPSERTed.
@@ -43,7 +62,7 @@ OVERLAP_MINUTES = 5
 
 def _notion_post(url, body):
     req = urllib.request.Request(
-        url, data=json.dumps(body).encode(), headers=HEADERS, method="POST"
+        url, data=json.dumps(body).encode(), headers=_headers(), method="POST"
     )
     return json.loads(urllib.request.urlopen(req).read())
 
@@ -125,7 +144,7 @@ def incremental_sync():
 if __name__ == "__main__":
     import sys
 
-    if not TOKEN:
+    if not _token():
         print("ERROR: NOTION_TOKEN env var is not set.")
         sys.exit(1)
 
