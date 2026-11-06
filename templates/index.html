@@ -2528,6 +2528,7 @@ function renderTasksTable(d) {
 
 // ===== PROJECTS FILTER =====
 function renderProjectsTable(d) {
+  const esc = v => (v == null ? '' : String(v)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const asel = document.getElementById('filterProjAssignee');
   if (asel.options.length <= 1) {
     d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; asel.appendChild(o); });
@@ -2561,11 +2562,13 @@ function applyProjFilters() {
   document.getElementById('projCount').textContent = projects.length + ' projects';
 
   const table = document.getElementById('projTable');
-  table.querySelector('thead tr').innerHTML = ['#', 'Project', 'Status', 'Assignee', 'Due', 'Sisa', 'Completion', 'Docs', 'Priority', 'SPK Baru', 'Last Edit'].map(h => `<th>${h}</th>`).join('');
+  table.querySelector('thead tr').innerHTML = ['#', 'Project', 'Status', 'Assignee', 'Due', 'Sisa', 'Completion', 'Docs', 'Priority', 'No. Izin Prinsip', 'SPK Baru', 'Last Edit'].map(h => `<th>${h}</th>`).join('');
   table.querySelector('tbody').innerHTML = projects.map((p, i) => {
     const spkb = p.spk_baru && p.spk_baru.length > 0 ? p.spk_baru.map(s => `<span class="tag">${s}</span>`).join('') : '-';
     const rd = p.remaining_days !== null && p.remaining_days !== undefined ? sisaBadge(p.remaining_days) : '-';
     const due = p.due ? `<span style="color:var(--text2);font-size:12px">${p.due}</span>` : '-';
+    const nip = (p.no_izin_prinsip && String(p.no_izin_prinsip).trim())
+      ? `<span style="font-size:12px">${esc(p.no_izin_prinsip)}</span>` : '-';
     return `<tr>
       <td class="col-num">${i + 1}</td>
       <td class="col-name"><a href="javascript:void(0)" onclick="openProjDetailFresh(${i})" class="col-name-text" style="font-weight:600;color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk detail/edit">${p.title}</a></td>
@@ -2576,10 +2579,11 @@ function applyProjFilters() {
       <td>${progBar(p.completion)}</td>
       <td><span style="font-size:13px;font-weight:600;color:var(--text)">${p.docs}</span></td>
       <td>${priorityBadge(p.priority)}</td>
+      <td>${nip}</td>
       <td>${spkb}</td>
       <td style="color:var(--text2);font-size:12px">${p.edited}</td>
     </tr>`;
-  }).join('') || emptyState(11);
+  }).join('') || emptyState(12);
   window._filteredProjects = projects;
   makeSortable(table);
 }
@@ -4646,6 +4650,8 @@ function openProjCreate(opts) {
       </div>
       <label class="filter-label" style="display:block;margin:12px 0 6px">Nominal IP (Rp)</label>
       <input type="text" inputmode="numeric" id="pc_nilai" class="form-input" style="width:100%;padding:8px" placeholder="0">
+      <label class="filter-label" for="pc_no_ip" style="display:block;margin:12px 0 6px">No. Izin Prinsip</label>
+      <input type="text" id="pc_no_ip" class="form-input" style="width:100%;padding:8px" placeholder="mis. B.358.e-INF/07/2026">
       ${spkPrefillRow}
     </div>
     <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
@@ -4667,6 +4673,7 @@ function saveProjCreate() {
     priority: $('pc_priority').value,
     due:      $('pc_due').value,
     nilai_project: parseThousands($('pc_nilai').value),
+    no_izin_prinsip: ($('pc_no_ip') ? $('pc_no_ip').value : ''),
   };
   // Prefill relasi "SPK sebelumnya" bila form dibuka dari detail SPK.
   if (window._projCreateSpkPrefill) payload.spk_sebelumnya = window._projCreateSpkPrefill;
