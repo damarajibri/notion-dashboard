@@ -4454,6 +4454,8 @@ function openProjCreateForSpk() {
   const prevSel = [...(window._spkPerpSel || [])];
   openProjCreate({
     subtitle: 'Project baru akan ditambahkan sebagai Perpanjangan untuk SPK ' + (spk.no_spk || ''),
+    prefillSpkSebelumnya: spkPageId,
+    prefillSpkLabel: (spk.no_spk || spkPageId),
     onCreated: (newProjId) => {
       // DATA sudah dimuat ulang oleh saveProjCreate (via _reloadDataThen).
       const list = (DATA && DATA.spk) || [];
@@ -4611,9 +4613,20 @@ function saveSpkCreate() {
 function openProjCreate(opts) {
   // opts.onCreated(page_id): dipanggil setelah project baru dibuat (opsional).
   // opts.subtitle: teks subtitle khusus (opsional).
+  // opts.prefillSpkSebelumnya: page_id SPK yg otomatis diisi ke relasi
+  //   "SPK sebelumnya" project baru (opsional); opts.prefillSpkLabel: label tampil.
   window._projCreateOnCreated = (opts && typeof opts.onCreated === 'function') ? opts.onCreated : null;
+  window._projCreateSpkPrefill = (opts && opts.prefillSpkSebelumnya) ? opts.prefillSpkSebelumnya : '';
   const _sub = document.querySelector('#projCreateModal .modal-subtitle');
   if (_sub) _sub.textContent = (opts && opts.subtitle) ? opts.subtitle : 'Buat Project Submission baru di Notion';
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const spkPrefillRow = (opts && opts.prefillSpkSebelumnya)
+    ? `<label class="filter-label" style="display:block;margin:12px 0 6px">SPK Sebelumnya</label>
+       <div style="display:flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);border:1px solid var(--border,#d1d5db);border-radius:8px;padding:8px 10px;font-size:13px">
+         📄 <b>${esc(opts.prefillSpkLabel || opts.prefillSpkSebelumnya)}</b>
+         <span style="color:var(--text2);font-size:11px;margin-left:auto">otomatis terisi dari SPK ini</span>
+       </div>`
+    : '';
   const STATUS_OPTS = ['Planning', 'In Progress', 'Done', 'Canceled'];
   const PRIO_OPTS = ['High', 'Medium', 'Low'];
   document.getElementById('projCreateBody').innerHTML = `
@@ -4628,6 +4641,7 @@ function openProjCreate(opts) {
       </div>
       <label class="filter-label" style="display:block;margin:12px 0 6px">Nominal IP (Rp)</label>
       <input type="text" inputmode="numeric" id="pc_nilai" class="form-input" style="width:100%;padding:8px" placeholder="0">
+      ${spkPrefillRow}
     </div>
     <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
       <span id="pc_result" style="font-size:13px;margin-right:auto"></span>
@@ -4649,6 +4663,8 @@ function saveProjCreate() {
     due:      $('pc_due').value,
     nilai_project: parseThousands($('pc_nilai').value),
   };
+  // Prefill relasi "SPK sebelumnya" bila form dibuka dari detail SPK.
+  if (window._projCreateSpkPrefill) payload.spk_sebelumnya = window._projCreateSpkPrefill;
   if (!payload.title.trim()) { res.style.color = 'var(--red)'; res.textContent = 'Nama Project wajib diisi.'; return; }
   btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
   showProcessing('Membuat project...');
@@ -4660,6 +4676,7 @@ function saveProjCreate() {
         const newId = d.page_id;
         const cb = window._projCreateOnCreated;
         window._projCreateOnCreated = null;
+        window._projCreateSpkPrefill = '';
         closeProjCreate();
         if (cb) {
           // Muat ulang data agar project baru ada di DATA.projects, lalu callback.
