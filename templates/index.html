@@ -4209,7 +4209,8 @@ function showSpkDetail(idx) {
       ` onkeydown="onSpkPerpKeydown(event)" onblur="setTimeout(hideSpkPerpSuggest, 150)">` +
       `<div id="se_perp_suggest" style="display:none;position:absolute;z-index:50;left:0;right:0;top:100%;margin-top:2px;max-height:240px;overflow:auto;background:var(--surface1,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18)"></div>` +
     `</div>` +
-    `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari & klik project untuk menambah. Bisa lebih dari satu.</div>`;
+    `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari & klik project untuk menambah. Bisa lebih dari satu.</div>` +
+    `<button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="openProjCreateForSpk()">➕ Tambah Project Perpanjangan (buat baru)</button>`;
 
   document.getElementById('spkModalBody').innerHTML = `
     <input type="hidden" id="se_page_id" value="${esc(s.page_id || '')}">
@@ -4429,6 +4430,34 @@ function pickSpkPerp(id) {
   if (inp) inp.focus();
 }
 
+// Tombol "Tambah Project Perpanjangan (buat baru)": buka form Project Submission.
+// Setelah project baru dibuat, buka kembali detail SPK ini dengan project baru
+// otomatis ditambahkan ke daftar perpanjangan (dan pilihan sebelumnya dipulihkan).
+function openProjCreateForSpk() {
+  const spk = window._editingSpk;
+  if (!spk || !spk.page_id) { showToast('Buka detail SPK dulu.', '⚠️'); return; }
+  // Simpan konteks: SPK yang sedang diedit + pilihan perpanjangan yang belum disimpan.
+  const spkPageId = spk.page_id;
+  const prevSel = [...(window._spkPerpSel || [])];
+  openProjCreate({
+    subtitle: 'Project baru akan ditambahkan sebagai Perpanjangan untuk SPK ' + (spk.no_spk || ''),
+    onCreated: (newProjId) => {
+      // DATA sudah dimuat ulang oleh saveProjCreate (via _reloadDataThen).
+      const list = (DATA && DATA.spk) || [];
+      const i = list.findIndex(s => s.page_id === spkPageId);
+      if (i < 0) { showToast('SPK tidak ditemukan setelah refresh.', '⚠️'); return; }
+      window._filteredSpk = list;
+      showSpkDetail(i);
+      // Pulihkan pilihan perpanjangan yg belum tersimpan + tambahkan project baru.
+      const merged = Array.from(new Set([...prevSel, newProjId]))
+        .filter(id => (window._spkPerpById || {})[id] || id === newProjId);
+      window._spkPerpSel = merged;
+      renderSpkPerpChips();
+      showToast('Project baru ditambahkan ke Perpanjangan. Klik Simpan untuk menyimpan ke SPK.', 'ℹ️');
+    }
+  });
+}
+
 function saveSpkDetail() {
   const $ = id => document.getElementById(id);
   const btn = $('se_saveBtn'), icon = $('se_saveIcon'), res = $('se_result');
@@ -4566,7 +4595,12 @@ function saveSpkCreate() {
     .finally(() => { hideProcessing(); btn.disabled = false; icon.textContent = '💾'; });
 }
 
-function openProjCreate() {
+function openProjCreate(opts) {
+  // opts.onCreated(page_id): dipanggil setelah project baru dibuat (opsional).
+  // opts.subtitle: teks subtitle khusus (opsional).
+  window._projCreateOnCreated = (opts && typeof opts.onCreated === 'function') ? opts.onCreated : null;
+  const _sub = document.querySelector('#projCreateModal .modal-subtitle');
+  if (_sub) _sub.textContent = (opts && opts.subtitle) ? opts.subtitle : 'Buat Project Submission baru di Notion';
   const STATUS_OPTS = ['Planning', 'In Progress', 'Done', 'Canceled'];
   const PRIO_OPTS = ['High', 'Medium', 'Low'];
   document.getElementById('projCreateBody').innerHTML = `
@@ -4608,7 +4642,19 @@ function saveProjCreate() {
   fetch('/api/project/create', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     .then(r => r.json())
     .then(d => {
-      if (d.ok) { showToast('Project baru dibuat di Notion', '✅'); closeProjCreate(); loadData(); }
+      if (d.ok) {
+        showToast('Project baru dibuat di Notion', '✅');
+        const newId = d.page_id;
+        const cb = window._projCreateOnCreated;
+        window._projCreateOnCreated = null;
+        closeProjCreate();
+        if (cb) {
+          // Muat ulang data agar project baru ada di DATA.projects, lalu callback.
+          _reloadDataThen(() => cb(newId));
+        } else {
+          loadData();
+        }
+      }
       else { const e = (d.errors && d.errors.length) ? ' — ' + d.errors.join('; ') : ''; res.style.color = 'var(--red)'; res.textContent = 'Gagal: ' + (d.error || 'unknown') + e; }
     })
     .catch(e => { res.style.color = 'var(--red)'; res.textContent = 'Gagal menghubungi server: ' + e; })
