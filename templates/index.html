@@ -1210,7 +1210,7 @@ span.file-chip { cursor: default; opacity: .7; }
   <div id="tab-projects" class="tab-content">
     <div class="filter-bar">
       <div class="filter-group">
-        <input type="text" id="searchProj" class="form-input" placeholder="🔍 Search projects..." oninput="applyProjFilters()">
+        <input type="text" id="searchProj" class="form-input" placeholder="🔍 Cari project / assignee / No. Izin Prinsip..." oninput="applyProjFilters()">
         <select id="filterProjStatus" class="form-select" onchange="applyProjFilters()">
           <option value="all">All Status</option>
           <option value="In Progress">In Progress</option>
@@ -2556,7 +2556,7 @@ function applyProjFilters() {
     const maxDue = dt.toISOString().slice(0, 10);
     projects = projects.filter(p => p.due && p.due <= maxDue);
   }
-  if (query) projects = projects.filter(p => (p.title + p.assignees.join(',')).toLowerCase().includes(query));
+  if (query) projects = projects.filter(p => (p.title + p.assignees.join(',') + ' ' + (p.no_izin_prinsip || '')).toLowerCase().includes(query));
   projects.sort((a, b) => { const o = { 'In Progress': 0, 'Planning': 1, 'Done': 2 }; return (o[a.status] || 5) - (o[b.status] || 5); });
 
   document.getElementById('projCount').textContent = projects.length + ' projects';
@@ -3830,10 +3830,23 @@ function renderSpkBaruChips() {
     const s = byId[id] || {};
     const label = s.project ? `${s.no_spk} — ${s.project}` : (s.no_spk || id);
     return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);color:var(--text1);border:1px solid var(--border,#d1d5db);border-radius:16px;padding:4px 10px;font-size:12px">
-      📄 ${esc(label)}
+      📄 <a href="javascript:void(0)" onclick="openSpkFromProj('${esc(id)}')" title="Lihat detail SPK" style="color:var(--accent,#7c6af7);text-decoration:underline;text-underline-offset:2px">${esc(label)}</a>
+      <a href="javascript:void(0)" onclick="openSpkFromProj('${esc(id)}')" title="Lihat detail SPK" style="text-decoration:none">🔗</a>
       <a href="javascript:void(0)" onclick="removeSpkBaru('${esc(id)}')" title="Hapus" style="color:var(--red,#ef4444);text-decoration:none;font-weight:700">✕</a>
     </span>`;
   }).join('');
+}
+
+// Buka detail SPK dari chip "SPK Baru" di detail Project.
+// Menutup modal Project lalu membuka modal SPK (dari cache lokal).
+function openSpkFromProj(spkId) {
+  if (!spkId) return;
+  const list = (DATA && DATA.spk) || [];
+  const i = list.findIndex(s => s.page_id === spkId);
+  if (i < 0) { showToast('SPK tidak ditemukan. Coba 🔄 Refresh.', '⚠️'); return; }
+  closeProjModal();
+  window._filteredSpk = list;
+  showSpkDetail(i);
 }
 
 function removeSpkBaru(id) {
