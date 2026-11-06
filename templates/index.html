@@ -4335,10 +4335,23 @@ function renderSpkPerpChips() {
     const p = byId[id] || {};
     const label = p.title || id;
     return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);color:var(--text1);border:1px solid var(--border,#d1d5db);border-radius:16px;padding:4px 10px;font-size:12px">
-      🎯 ${esc(label)}
+      🎯 <a href="javascript:void(0)" onclick="openProjFromSpk('${esc(id)}')" title="Lihat detail Project Submission" style="color:var(--accent,#7c6af7);text-decoration:underline;text-underline-offset:2px">${esc(label)}</a>
+      <a href="javascript:void(0)" onclick="openProjFromSpk('${esc(id)}')" title="Lihat detail Project Submission" style="text-decoration:none">🔗</a>
       <a href="javascript:void(0)" onclick="removeSpkPerp('${esc(id)}')" title="Hapus" style="color:var(--red,#ef4444);text-decoration:none;font-weight:700">✕</a>
     </span>`;
   }).join('');
+}
+
+// Buka detail Project Submission dari chip Perpanjangan di detail SPK.
+// Menutup modal SPK lalu membuka modal Project (dari cache lokal).
+function openProjFromSpk(projId) {
+  if (!projId) return;
+  const list = (DATA && DATA.projects) || [];
+  const i = list.findIndex(p => p.page_id === projId);
+  if (i < 0) { showToast('Project tidak ditemukan. Coba 🔄 Refresh.', '⚠️'); return; }
+  closeSpkModal();
+  window._filteredProjects = list;
+  showProjDetail(i);
 }
 
 function removeSpkPerp(id) {
