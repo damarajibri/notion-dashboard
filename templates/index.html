@@ -1041,6 +1041,11 @@ span.file-chip { cursor: default; opacity: .7; }
       <button class="btn btn-primary" onclick="loadData()">
         <span id="refreshIcon">🔄</span> Refresh
       </button>
+      {% if user and user.role == 'root' %}
+      <button class="btn btn-ghost" id="fullSyncBtn" onclick="runFullSync()" title="Tarik ulang SEMUA data dari Notion (menangkap relasi dua-arah & penghapusan). Hanya root.">
+        <span id="fullSyncIcon">🔁</span> Full Sync
+      </button>
+      {% endif %}
       <button class="btn btn-ghost" onclick="openImportModal()" title="Import data CSV ke Monthly Performance">
         <span>📥</span> Import CSV
       </button>
@@ -4908,6 +4913,40 @@ function showProcessing(msg = 'Memproses...') {
 function hideProcessing() {
   const ov = document.getElementById('processingOverlay');
   if (ov) ov.style.display = 'none';
+}
+
+// ===== FULL SYNC (root only) =====
+// Tarik ulang SEMUA baris dari Notion (menangkap perubahan relasi dua-arah yang
+// diubah dari sisi lawan & penghapusan — yang tidak tertangkap incremental sync),
+// lalu muat ulang dashboard. Endpoint di-gate role 'root' di server.
+function runFullSync() {
+  const btn = document.getElementById('fullSyncBtn');
+  const icon = document.getElementById('fullSyncIcon');
+  if (btn && btn.disabled) return;
+  if (!confirm('Full Sync menarik ulang SEMUA data dari Notion dan bisa memakan waktu beberapa saat. Lanjutkan?')) return;
+  if (btn) btn.disabled = true;
+  if (icon) icon.style.animation = 'spin 0.8s linear infinite';
+  showProcessing('Full sync dari Notion...');
+  fetch('/api/refresh/full', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    .then(r => r.json().then(d => ({ status: r.status, d })))
+    .then(({ status, d }) => {
+      if (d.ok) {
+        const parts = Object.entries(d.summary || {})
+          .map(([k, v]) => `${k}: ${v && v.fetched != null ? v.fetched : '?'}${v && v.deleted ? ' (-' + v.deleted + ')' : ''}`);
+        showToast('Full sync selesai. ' + parts.join(', '), '✅');
+        loadData();  // muat ulang dashboard dari cache yang sudah segar
+      } else if (status === 403) {
+        showToast('Akses ditolak: Full Sync hanya untuk root.', '🚫');
+      } else {
+        showToast('Full sync gagal: ' + (d.error || 'unknown'), '❌');
+      }
+    })
+    .catch(e => showToast('Full sync gagal menghubungi server: ' + e, '❌'))
+    .finally(() => {
+      hideProcessing();
+      if (btn) btn.disabled = false;
+      if (icon) icon.style.animation = '';
+    });
 }
 
 // ===== LOAD DATA =====

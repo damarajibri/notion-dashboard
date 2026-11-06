@@ -2208,6 +2208,28 @@ def api_refresh():
     return jsonify({'ok': True, 'mode': mode, 'summary': summary})
 
 
+@app.route('/api/refresh/full', methods=['POST'])
+@roles_required('root')
+def api_refresh_full():
+    """Full sync: tarik ulang SEMUA baris dari Notion & rekonsiliasi penghapusan.
+
+    Dibutuhkan untuk menangkap perubahan relasi dua-arah yang diubah dari sisi
+    lawan (mis. set 'SPK sebelumnya' di Project tidak selalu mengubah
+    last_edited_time halaman SPK, sehingga incremental sync melewatkannya).
+    Dibatasi role 'root'. Mencatat aktivitas ke audit log.
+    """
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+    try:
+        summary = sync.full_sync()
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Full sync (root) failed: %s', e)
+        record_activity('sync.full_failed', detail={'error': str(e)})
+        return jsonify({'ok': False, 'error': f'Full sync gagal: {e}'}), 502
+    record_activity('sync.full', detail={'summary': summary})
+    return jsonify({'ok': True, 'mode': 'full', 'summary': summary})
+
+
 # ─── SPK: edit → Notion ────────────────────────────────────────────────────────
 # Peta field frontend → (nama properti Notion, tipe). Hanya field skalar yang
 # aman diedit. 'Total Terbayar' adalah rollup, 'Sisa Anggaran'/'Sisa Hari'
