@@ -2528,7 +2528,6 @@ function renderTasksTable(d) {
 
 // ===== PROJECTS FILTER =====
 function renderProjectsTable(d) {
-  const esc = v => (v == null ? '' : String(v)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const asel = document.getElementById('filterProjAssignee');
   if (asel.options.length <= 1) {
     d.personel.sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; asel.appendChild(o); });
@@ -2538,6 +2537,7 @@ function renderProjectsTable(d) {
 
 function applyProjFilters() {
   if (!DATA) return;
+  const esc = v => (v == null ? '' : String(v)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const query = document.getElementById('searchProj').value.toLowerCase();
   const status = document.getElementById('filterProjStatus').value;
   const assignee = document.getElementById('filterProjAssignee').value;
