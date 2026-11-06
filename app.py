@@ -659,6 +659,9 @@ def extract_spk(r, personel):
     # Projects Perpanjangan
     perp_ids = [rel['id'] for rel in props.get('Projects Perpanjangan', {}).get('relation', [])]
 
+    # Projects Asal (relation ke Projects DB) — project asal dari SPK ini.
+    asal_ids = [rel['id'] for rel in props.get('Projects Asal', {}).get('relation', [])]
+
     # Status Project Perpanjangan (rollup)
     status_perp_arr = props.get('Status Project Perpanjangan', {}).get('rollup', {}).get('array', [])
     status_perp = [
@@ -689,6 +692,7 @@ def extract_spk(r, personel):
         'notes':         notes_text,
         'pic':           pic,
         'perp_ids':      perp_ids,
+        'asal_ids':      asal_ids,
         'status_perpanjangan': status_perp,
         'files':         files,
         'page_id':       r['id'],
@@ -1517,7 +1521,15 @@ def api_data():
         # Simpan SEMUA page_id project perpanjangan agar form edit (multi-select)
         # bisa pre-select seluruh relasi saat ini.
         s['perp_project_ids'] = list(s['perp_ids'])
+        # Project Asal (relation balik ke Projects): daftar {title, page_id}
+        # untuk ditampilkan sebagai hyperlink di tab/detail SPK.
+        s['projects_asal'] = [
+            {'title': proj_map.get(pid, '?'), 'page_id': pid}
+            for pid in s.get('asal_ids', [])
+        ]
+        s['asal_project_ids'] = list(s.get('asal_ids', []))
         del s['perp_ids'], s['status_perpanjangan'], s['_id']
+        s.pop('asal_ids', None)
 
     # Attach daftar SPK perpanjangan ke tiap project (relasi balik).
     for p in projects:

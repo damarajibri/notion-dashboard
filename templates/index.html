@@ -2932,11 +2932,20 @@ function renderSpkGrouping() {
             `<div class="spk-card-perp-item">🎯 <span class="spk-card-perp-title">${pp.title || '-'}</span>${pp.status ? ' ' + statusBadge(pp.status) : ''}</div>`
           ).join('')}</div>`
         : '';
+      // Project Asal (🏁) — hyperlink ke detail Project; stopPropagation agar
+      // tidak ikut membuka modal SPK dari klik kartu.
+      const asal = (s.projects_asal && s.projects_asal.length)
+        ? `<div class="spk-card-perp">${s.projects_asal.map(a =>
+            `<div class="spk-card-perp-item">🏁 <a href="javascript:void(0)" class="spk-card-perp-title" title="Lihat detail Project Asal"
+                onclick="event.stopPropagation(); openProjByPageId('${a.page_id}')">${a.title || '-'}</a></div>`
+          ).join('')}</div>`
+        : '';
       const clickAttr = s.page_id ? `onclick="showSpkByPageId('${s.page_id}')"` : '';
       return `<div class="spk-card" ${clickAttr} title="Klik untuk edit">
           <div class="spk-card-no">${s.no_spk || '-'}</div>
           <div class="spk-card-proj">${s.project || ''}</div>
           ${perp}
+          ${asal}
           <div class="spk-card-meta">${statusBadge(s.status)} ${sisa}</div>
           <div class="spk-card-meta">${vendor} ${value}</div>
           <div class="spk-card-meta">${pics}</div>
@@ -4194,6 +4203,18 @@ function showSpkByPageId(pid) {
   showSpkDetail(i);
 }
 
+// Buka detail Project by page_id (dipakai link "Project Asal" di kartu/detail SPK).
+// Menutup modal SPK bila sedang terbuka, lalu membuka modal Project.
+function openProjByPageId(pid) {
+  if (!pid) return;
+  const list = (DATA && DATA.projects) || [];
+  const i = list.findIndex(p => p.page_id === pid);
+  if (i < 0) { showToast('Project tidak ditemukan. Coba 🔄 Refresh.', '⚠️'); return; }
+  closeSpkModal();
+  window._filteredProjects = list;
+  showProjDetail(i);
+}
+
 function showSpkDetail(idx) {
   const list = window._filteredSpk || [];
   const s = list[idx];
@@ -4233,6 +4254,15 @@ function showSpkDetail(idx) {
     `</div>` +
     `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari & klik project untuk menambah. Bisa lebih dari satu.</div>` +
     `<button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="openProjCreateForSpk()">➕ Tambah Project Perpanjangan (buat baru)</button>`;
+
+  // Project Asal (read-only): daftar project asal dari SPK ini, sebagai hyperlink.
+  const asalList = s.projects_asal || [];
+  const asalHtml = asalList.length
+    ? asalList.map(a => {
+        const click = a.page_id ? `onclick="openProjByPageId('${esc(a.page_id)}')" style="cursor:pointer"` : '';
+        return `<div class="spk-card-perp-item" ${click} title="Klik untuk buka Project">🏁 <span class="spk-card-perp-title">${esc(a.title || '-')}</span></div>`;
+      }).join('')
+    : '<span style="color:var(--text2);font-size:13px">Tidak ada Project Asal terkait</span>';
 
   document.getElementById('spkModalBody').innerHTML = `
     <input type="hidden" id="se_page_id" value="${esc(s.page_id || '')}">
@@ -4277,6 +4307,12 @@ function showSpkDetail(idx) {
     <div class="modal-section">
       <div class="modal-section-title">Project Perpanjangan</div>
       ${perpHtml}
+    </div>
+
+    <div class="modal-section">
+      <div class="modal-section-title">Project Asal</div>
+      <div style="font-size:11px;color:var(--text2);margin:-4px 0 8px">Project submission asal dari SPK ini (relasi otomatis, baca saja). Klik untuk membuka detail Project.</div>
+      ${asalHtml}
     </div>
 
     <div class="modal-section">
