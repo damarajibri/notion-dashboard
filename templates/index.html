@@ -1034,6 +1034,21 @@ span.file-chip { cursor: default; opacity: .7; }
 .tree-link:hover { text-decoration: underline; }
 .tree-none { border: 2px dashed var(--border); border-radius: var(--radius-sm); padding: 10px 14px; text-align: center; font-size: 12px; color: var(--text2); }
 .tree-msg { padding: 28px 16px; text-align: center; color: var(--text2); font-size: 14px; border: 2px dashed var(--border); border-radius: var(--radius-md); }
+.tree-canvas { min-width: 0; }
+.tg-block { display: flex; flex-direction: column; gap: 8px; }
+.tg-info { font-size: 12px; color: var(--text2); }
+.tg-scroll { overflow: auto; padding: 8px 4px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.tg-wrap { position: relative; display: inline-block; min-width: 100%; }
+.tg-svg { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.tg-cols { position: relative; display: flex; gap: 90px; align-items: center; padding: 8px; }
+.tg-col { display: flex; flex-direction: column; gap: 16px; width: 270px; flex: 0 0 270px; }
+.tg-edge { fill: none; stroke: var(--text2); stroke-width: 1.8; opacity: .75; }
+.tg-edge.on { stroke: var(--accent); stroke-width: 3; opacity: 1; }
+.tg-edge.dim { opacity: .15; }
+.tg-arrow { fill: var(--text2); }
+.tg-arrow.on { fill: var(--accent); }
+.tree-type { font-size: 10px; letter-spacing: .08em; color: var(--text2); margin-bottom: 4px; }
+.tree-box.sel { box-shadow: 0 0 0 3px var(--accent); }
 .tree-pick { cursor: pointer; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 13px; background: var(--surface); transition: var(--transition); }
 .tree-pick:hover { border-color: var(--accent); background: var(--surface2); }
 .tree-pick small { color: var(--text2); display: block; margin-top: 2px; }
@@ -1452,10 +1467,12 @@ span.file-chip { cursor: default; opacity: .7; }
       </div>
       <div class="tree-panel">
         <div class="tree-panel-title">🔎 Cari data</div>
-        <input type="text" id="treeSpkQ" class="form-input" style="padding:10px" autocomplete="off"
-               placeholder="Data SPK (nama SPK / No. SPK)" onkeydown="if(event.key==='Enter')treeSearch()">
-        <input type="text" id="treeProjQ" class="form-input" style="padding:10px" autocomplete="off"
-               placeholder="Data project (nama project / No. IP)" onkeydown="if(event.key==='Enter')treeSearch()">
+        <input type="text" id="treeSpkQ" class="form-input" style="padding:10px" autocomplete="off" list="treeSpkList"
+               placeholder="Data SPK (nama SPK / No. SPK)" oninput="treeSuggest('spk', event)" onkeydown="if(event.key==='Enter')treeSearch()">
+        <datalist id="treeSpkList"></datalist>
+        <input type="text" id="treeProjQ" class="form-input" style="padding:10px" autocomplete="off" list="treeProjList"
+               placeholder="Data project (nama project / No. IP)" oninput="treeSuggest('proj', event)" onkeydown="if(event.key==='Enter')treeSearch()">
+        <datalist id="treeProjList"></datalist>
         <button class="btn btn-primary" onclick="treeSearch()">🔍 Cari</button>
         <button class="btn btn-ghost" onclick="treeReset()">↺ Reset</button>
         <div class="hint" style="font-size:11px;color:var(--text2)">Isi salah satu atau keduanya (hasil digabung). Klik kotak untuk memfokuskan; <b>Detail ↗</b> membuka datanya.</div>
@@ -5189,44 +5206,171 @@ function _treeIndex() {
 
 function _treeMsg(html) { return `<div class="tree-msg">${html}</div>`; }
 
-function _treeHtml(sid, idx, hl) {
-  const s = idx.spkById[sid];
-  if (!s) return '';
-  const projsOf = set => [...(set || [])].map(id => idx.projById[id]).filter(Boolean)
-    .sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
-  const pbox = p => `<div class="tree-box tree-proj${hl.has(p.page_id) ? ' hl' : ''}" onclick="treeFocusProj('${_treeEsc(p.page_id)}')" title="Klik untuk lihat semua SPK project ini">
-      <div class="tree-row"><span class="tree-k">Proyek</span><span class="tree-v">${_treeEsc(p.title || '-')}</span></div>
-      <div class="tree-row"><span class="tree-k">No. IP</span><span class="tree-v">${_treeEsc((p.no_izin_prinsip || '').trim() || '-')}</span></div>
-      <a class="tree-link" href="javascript:void(0)" onclick="event.stopPropagation();openProjByPageId('${_treeEsc(p.page_id)}')">Detail ↗</a>
-    </div>`;
-  const group = (label, list, emptyText) => `<div class="tree-group"><div class="tree-cap">${label}${list.length > 1 ? ' (' + list.length + ')' : ''}</div>${
-    list.length ? list.map(pbox).join('') : `<div class="tree-none">${emptyText}</div>`}</div>`;
-  const asalL = projsOf(idx.asal[sid]), perpL = projsOf(idx.perp[sid]);
-  return `<div class="tree-one">
-    ${group('Project Asal', asalL, '— tidak ada Project Asal —')}
-    <div class="tree-line"></div>
-    <div class="tree-group"><div class="tree-cap">SPK</div>
-      <div class="tree-box tree-spk" onclick="treeFocusSpk('${_treeEsc(sid)}')" title="Klik untuk fokus ke SPK ini">
-        <div class="tree-row"><span class="tree-k">Nama SPK</span><span class="tree-v">${_treeEsc(s.project || '-')}</span></div>
-        <div class="tree-row"><span class="tree-k">No. SPK</span><span class="tree-v">${_treeEsc(s.no_spk || '-')}</span></div>
-        <a class="tree-link" href="javascript:void(0)" onclick="event.stopPropagation();showSpkByPageId('${_treeEsc(sid)}')">Detail ↗</a>
-      </div>
-    </div>
-    <div class="tree-line"></div>
-    ${group('Project Perpanjangan', perpL, '— tidak ada Project Perpanjangan —')}
-  </div>`;
+// ---- Graf relasi: node = Project ('P:id') / SPK ('S:id'); edge berarah:
+//   Project --(SPK baru)--> SPK --(SPK sebelumnya milik project lanjutan)--> Project
+// Satu project bisa punya banyak SPK baru (percabangan), satu SPK bisa
+// berujung ke banyak project (penggabungan/percabangan).
+function _treeGraph(idx) {
+  if (idx._g) return idx._g;
+  const edges = [], seen = new Set(), adj = {};
+  const link = (a, b) => {
+    const k = a + '>' + b;
+    if (seen.has(k)) return;
+    seen.add(k); edges.push([a, b]);
+    (adj[a] || (adj[a] = new Set())).add(b);
+    (adj[b] || (adj[b] = new Set())).add(a);
+  };
+  Object.keys(idx.asal).forEach(sid => idx.asal[sid].forEach(pid => link('P:' + pid, 'S:' + sid)));
+  Object.keys(idx.perp).forEach(sid => idx.perp[sid].forEach(pid => link('S:' + sid, 'P:' + pid)));
+  idx._g = { edges, adj };
+  return idx._g;
 }
 
-// Tampilkan hasil: <=3 SPK langsung digambar; lebih banyak -> daftar untuk dipilih.
+// Kelompokkan SPK terpilih menjadi komponen graf yang saling terhubung.
+function _treeComponents(spkIds, idx) {
+  const g = _treeGraph(idx), done = new Set(), comps = [];
+  spkIds.forEach(sid => {
+    const start = 'S:' + sid;
+    if (done.has(start)) return;
+    const nodes = new Set([start]), queue = [start];
+    while (queue.length) {
+      const cur = queue.shift();
+      (g.adj[cur] || []).forEach(n => { if (!nodes.has(n)) { nodes.add(n); queue.push(n); } });
+    }
+    nodes.forEach(n => done.add(n));
+    comps.push({ nodes, edges: g.edges.filter(e => nodes.has(e[0]) && nodes.has(e[1])) });
+  });
+  return comps;
+}
+
+// Susun kolom (layer) dengan longest-path; aman terhadap siklus (dibatasi N putaran).
+function _treeLayout(comp, idx) {
+  const keys = [...comp.nodes], N = keys.length, layer = {};
+  const title = k => k[0] === 'S' ? String((idx.spkById[k.slice(2)] || {}).no_spk || '') : String((idx.projById[k.slice(2)] || {}).title || '');
+  keys.forEach(k => { layer[k] = 0; });
+  for (let i = 0; i < N; i++) {
+    let changed = false;
+    comp.edges.forEach(([a, b]) => { if (layer[b] < layer[a] + 1 && layer[a] + 1 < N) { layer[b] = layer[a] + 1; changed = true; } });
+    if (!changed) break;
+  }
+  const cols = [];
+  keys.sort((a, b) => title(a).localeCompare(title(b))).forEach(k => { (cols[layer[k]] || (cols[layer[k]] = [])).push(k); });
+  const dense = cols.filter(Boolean);
+  // Urutkan baris per kolom dengan barycenter agar garis tidak banyak bersilangan.
+  const nbr = {};
+  comp.edges.forEach(([a, b]) => { (nbr[a] || (nbr[a] = [])).push(b); (nbr[b] || (nbr[b] = [])).push(a); });
+  const pos = {};
+  dense.forEach(c => c.forEach((k, i) => { pos[k] = i; }));
+  for (let pass = 0; pass < 3; pass++) {
+    dense.forEach(c => {
+      const bc = k => { const n = nbr[k] || []; return n.length ? n.reduce((s, x) => s + pos[x], 0) / n.length : pos[k]; };
+      c.sort((a, b) => bc(a) - bc(b));
+      c.forEach((k, i) => { pos[k] = i; });
+    });
+  }
+  return dense;
+}
+
+function _treeNodeHtml(k, uid, i, idx, hl) {
+  const id = k.slice(2), cls = hl.has(id) ? ' hl' : '';
+  if (k[0] === 'S') {
+    const s = idx.spkById[id];
+    return `<div class="tree-box tree-spk${cls}" id="${uid}_${i}" data-key="${_treeEsc(k)}" onclick="treeSelect(this)" title="Klik untuk menyorot jalur relasi">
+      <div class="tree-type">SPK</div>
+      <div class="tree-row"><span class="tree-k">Nama SPK</span><span class="tree-v">${_treeEsc(s.project || '-')}</span></div>
+      <div class="tree-row"><span class="tree-k">No. SPK</span><span class="tree-v">${_treeEsc(s.no_spk || '-')}</span></div>
+      <a class="tree-link" href="javascript:void(0)" onclick="event.stopPropagation();showSpkByPageId('${_treeEsc(id)}')">Detail ↗</a>
+    </div>`;
+  }
+  const p = idx.projById[id];
+  return `<div class="tree-box tree-proj${cls}" id="${uid}_${i}" data-key="${_treeEsc(k)}" onclick="treeSelect(this)" title="Klik untuk menyorot jalur relasi">
+      <div class="tree-type">PROJECT</div>
+      <div class="tree-row"><span class="tree-k">Proyek</span><span class="tree-v">${_treeEsc(p.title || '-')}</span></div>
+      <div class="tree-row"><span class="tree-k">No. IP</span><span class="tree-v">${_treeEsc((p.no_izin_prinsip || '').trim() || '-')}</span></div>
+      <a class="tree-link" href="javascript:void(0)" onclick="event.stopPropagation();openProjByPageId('${_treeEsc(id)}')">Detail ↗</a>
+    </div>`;
+}
+
+window._treeGraphs = window._treeGraphs || {};
+let _treeUid = 0;
+
+function _treeGraphHtml(comp, idx, hl) {
+  const uid = 'tg' + (++_treeUid);
+  const cols = _treeLayout(comp, idx);
+  const num = {};
+  let n = 0;
+  const colsHtml = cols.map(c => `<div class="tg-col">${c.map(k => { num[k] = n; return _treeNodeHtml(k, uid, n++, idx, hl); }).join('')}</div>`).join('');
+  const nSpk = [...comp.nodes].filter(k => k[0] === 'S').length, nProj = comp.nodes.size - nSpk;
+  window._treeGraphs[uid] = { edges: comp.edges.map(([a, b]) => [num[a], num[b], a[0] === 'P' ? 'SPK baru' : 'SPK sebelumnya']), sel: null };
+  return `<div class="tg-block">
+    <div class="tg-info">${nProj} project · ${nSpk} SPK · ${comp.edges.length} garis relasi</div>
+    <div class="tg-scroll"><div class="tg-wrap" id="${uid}" data-uid="${uid}">
+      <svg class="tg-svg"><defs>
+        <marker id="${uid}_a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="tg-arrow"/></marker>
+        <marker id="${uid}_b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="tg-arrow on"/></marker>
+      </defs></svg>
+      <div class="tg-cols">${colsHtml}</div>
+    </div></div></div>`;
+}
+
+function _treeDraw(wrap) {
+  const g = window._treeGraphs[wrap.dataset.uid];
+  if (!g) return;
+  const svg = wrap.querySelector('.tg-svg'), uid = wrap.dataset.uid;
+  const wr = wrap.getBoundingClientRect();
+  svg.setAttribute('width', wrap.scrollWidth);
+  svg.setAttribute('height', wrap.scrollHeight);
+  svg.querySelectorAll('path.tg-edge').forEach(e => e.remove());
+  const sel = g.sel;
+  const box = i => { const r = document.getElementById(uid + '_' + i).getBoundingClientRect(); return { l: r.left - wr.left, r: r.right - wr.left, y: r.top - wr.top + r.height / 2 }; };
+  g.edges.forEach(([a, b, lbl]) => {
+    const A = box(a), B = box(b), on = sel !== null && (a === sel || b === sel);
+    let d;
+    if (B.l > A.r + 4) { const dx = (B.l - A.r) / 2; d = `M${A.r},${A.y} C${A.r + dx},${A.y} ${B.l - dx},${B.y} ${B.l},${B.y}`; }
+    else { const o = Math.max(A.r, B.r) + 50; d = `M${A.r},${A.y} C${o},${A.y} ${o},${B.y} ${B.r},${B.y}`; }
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', d);
+    p.setAttribute('class', 'tg-edge' + (on ? ' on' : (sel !== null ? ' dim' : '')));
+    p.setAttribute('marker-end', `url(#${uid}_${on ? 'b' : 'a'})`);
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    t.textContent = lbl;
+    p.appendChild(t);
+    svg.appendChild(p);
+  });
+  wrap.querySelectorAll('.tree-box').forEach(el => {
+    const i = Number(el.id.slice(uid.length + 1));
+    el.classList.toggle('sel', sel === i);
+  });
+}
+
+function _treeDrawAll() { document.querySelectorAll('#treeResult .tg-wrap').forEach(_treeDraw); }
+window.addEventListener('resize', _treeDrawAll);
+
+// Klik kotak -> sorot garis yang terhubung langsung; klik lagi untuk batal.
+function treeSelect(el) {
+  const wrap = el.closest('.tg-wrap'), g = window._treeGraphs[wrap.dataset.uid];
+  const i = Number(el.id.slice(wrap.dataset.uid.length + 1));
+  g.sel = g.sel === i ? null : i;
+  _treeDraw(wrap);
+}
+
+// Tampilkan hasil: SPK yang ditemukan dikelompokkan per komponen relasi.
+// <=3 komponen -> digambar langsung; lebih banyak -> daftar untuk dipilih.
 function _treeShow(spkIds, idx, hl, note) {
   const out = document.getElementById('treeResult');
   if (!out) return;
   window._treeHl = hl;
+  window._treeGraphs = {};
   const ids = [...spkIds].filter(id => idx.spkById[id])
     .sort((a, b) => String(idx.spkById[a].no_spk || '').localeCompare(String(idx.spkById[b].no_spk || '')));
   if (!ids.length) { out.innerHTML = _treeMsg(note || 'Tidak ada data yang cocok.'); return; }
-  const head = ids.length > 1 ? `<div style="font-size:13px;color:var(--text2)">Ditemukan <b>${ids.length}</b> SPK${ids.length > 3 ? ' — pilih salah satu untuk melihat diagramnya:' : ':'}</div>` : '';
-  if (ids.length <= 3) { out.innerHTML = head + ids.map(id => _treeHtml(id, idx, hl)).join(''); return; }
+  const comps = _treeComponents(ids, idx);
+  const head = ids.length > 1 ? `<div style="font-size:13px;color:var(--text2)">Ditemukan <b>${ids.length}</b> SPK${comps.length > 3 ? ' — pilih salah satu untuk melihat diagramnya:' : ':'}</div>` : '';
+  if (comps.length <= 3) {
+    out.innerHTML = head + comps.map(c => _treeGraphHtml(c, idx, hl)).join('');
+    requestAnimationFrame(_treeDrawAll);
+    return;
+  }
   const CAP = 100;
   out.innerHTML = head + ids.slice(0, CAP).map(id => {
     const s = idx.spkById[id];
@@ -5234,6 +5378,32 @@ function _treeShow(spkIds, idx, hl, note) {
     return `<div class="tree-pick" onclick="treeFocusSpk('${_treeEsc(id)}')">${_treeEsc(s.no_spk || '-')} — ${_treeEsc(s.project || '-')}
       <small>${na} project asal · ${np} project perpanjangan</small></div>`;
   }).join('') + (ids.length > CAP ? `<div style="font-size:12px;color:var(--text2)">Menampilkan ${CAP} pertama — persempit pencarian.</div>` : '');
+}
+
+// Autocomplete untuk kolom pencarian (datalist, maks 30 saran).
+// Memilih saran dari daftar langsung menjalankan pencarian.
+function treeSuggest(kind, ev) {
+  const inp = document.getElementById(kind === 'spk' ? 'treeSpkQ' : 'treeProjQ');
+  const dl = document.getElementById(kind === 'spk' ? 'treeSpkList' : 'treeProjList');
+  const raw = inp.value.trim(), q = raw.toLowerCase();
+  const picked = ev && (!ev.inputType || ev.inputType === 'insertReplacementText');
+  if (!DATA || !q) { dl.innerHTML = ''; return; }
+  const seen = new Set();
+  let html = '', n = 0;
+  const push = (v, l) => {
+    v = (v || '').trim();
+    if (!v || seen.has(v) || !v.toLowerCase().includes(q)) return;
+    seen.add(v); n++;
+    html += `<option value="${_treeEsc(v)}" label="${_treeEsc((l || '').trim())}"></option>`;
+  };
+  const rows = kind === 'spk' ? DATA.spk : DATA.projects;
+  for (const r of rows) {
+    if (n >= 30) break;
+    if (kind === 'spk') { push(r.no_spk, r.project); push(r.project, r.no_spk); }
+    else { push(r.title, r.no_izin_prinsip); push(r.no_izin_prinsip, r.title); }
+  }
+  dl.innerHTML = html;
+  if (picked && seen.has(raw)) treeSearch();
 }
 
 function treeSearch() {
@@ -5247,6 +5417,7 @@ function treeSearch() {
   if (q1) {
     spkIds = new Set(DATA.spk.filter(s => (s.no_spk || '').toLowerCase().includes(q1) || (s.project || '').toLowerCase().includes(q1))
       .map(s => s.page_id));
+    spkIds.forEach(id => hl.add(id));
   }
   if (q2) {
     projMatches = DATA.projects.filter(p => (p.title || '').toLowerCase().includes(q2) || (p.no_izin_prinsip || '').toLowerCase().includes(q2));
@@ -5264,7 +5435,7 @@ function treeSearch() {
   _treeShow(spkIds, idx, hl, note);
 }
 
-function treeFocusSpk(sid) { _treeShow([sid], _treeIndex(), window._treeHl || new Set()); }
+function treeFocusSpk(sid) { _treeShow([sid], _treeIndex(), new Set([sid])); }
 
 function treeFocusProj(pid) {
   const idx = _treeIndex();
