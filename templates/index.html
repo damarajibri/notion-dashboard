@@ -4255,6 +4255,22 @@ function showSpkDetail(idx) {
     `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari & klik project untuk menambah. Bisa lebih dari satu.</div>` +
     `<button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="openProjCreateForSpk()">➕ Tambah Project Perpanjangan (buat baru)</button>`;
 
+  // Vendor — MULTI via autocomplete kustom (chip + dropdown). State:
+  // window._spkVendorSel (array page_id); nama dari s.vendors + daftar /api/vendors.
+  window._spkVendorNames = {};
+  (s.vendors || []).forEach(v => { if (v.page_id) window._spkVendorNames[v.page_id] = v.name; });
+  window._spkVendorSel = (s.vendors || []).map(v => v.page_id).filter(Boolean);
+  const vendorHtml =
+    `<div id="se_vendor_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>` +
+    `<div style="position:relative">` +
+      `<input type="text" id="se_vendor_input" class="form-input" autocomplete="off"` +
+      ` placeholder="🔎 Ketik nama vendor..." style="width:100%;padding:8px"` +
+      ` oninput="onSpkVendorInput()" onfocus="onSpkVendorInput()"` +
+      ` onkeydown="onSpkVendorKeydown(event)" onblur="setTimeout(hideSpkVendorSuggest, 150)">` +
+      `<div id="se_vendor_suggest" style="display:none;position:absolute;z-index:50;left:0;right:0;top:100%;margin-top:2px;max-height:240px;overflow:auto;background:var(--surface1,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18)"></div>` +
+    `</div>` +
+    `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari & klik vendor untuk menambah. Kosongkan semua chip untuk menghapus vendor.</div>`;
+
   // Project Asal (read-only): daftar project asal dari SPK ini, sebagai hyperlink.
   const asalList = s.projects_asal || [];
   const asalHtml = asalList.length
@@ -4305,6 +4321,11 @@ function showSpkDetail(idx) {
     </div>
 
     <div class="modal-section">
+      <div class="modal-section-title">Vendor</div>
+      ${vendorHtml}
+    </div>
+
+    <div class="modal-section">
       <div class="modal-section-title">Project Perpanjangan</div>
       ${perpHtml}
     </div>
@@ -4349,6 +4370,8 @@ function showSpkDetail(idx) {
   document.getElementById('spkModal').classList.add('active');
   attachThousandFormat('se_total_anggaran');
   renderSpkPerpChips();
+  renderSpkVendorChips();
+  loadVendorList();
   // Audit trail lazy: data diambil dari Notion saat tombol diklik (toggleAuditTrail).
   window._auditPage = window._auditPage || {};
   window._auditCb = window._auditCb || {};
@@ -4501,6 +4524,123 @@ function pickSpkPerp(id) {
   if (inp) inp.focus();
 }
 
+// ===== VENDOR (MULTI-SELECT, autocomplete kustom) =====
+// Daftar vendor diambil dari /api/vendors (database Vendor di Notion), di-cache
+// di window._vendorList selama sesi halaman.
+function loadVendorList(force) {
+  if (window._vendorList && !force) return Promise.resolve(window._vendorList);
+  return fetch('/api/vendors' + (force ? '?refresh=1' : ''))
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        window._vendorList = d.vendors || [];
+        window._vendorList.forEach(v => { (window._spkVendorNames = window._spkVendorNames || {})[v.page_id] = v.name; });
+        renderSpkVendorChips();
+      } else {
+        window._vendorListError = d.error || 'gagal memuat vendor';
+      }
+      return window._vendorList || [];
+    })
+    .catch(e => { window._vendorListError = String(e); return []; });
+}
+
+function renderSpkVendorChips() {
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const box = document.getElementById('se_vendor_chips');
+  if (!box) return;
+  const sel = window._spkVendorSel || [];
+  const names = window._spkVendorNames || {};
+  if (!sel.length) {
+    box.innerHTML = '<span style="color:var(--text2);font-size:12px">Belum ada vendor dipilih.</span>';
+    return;
+  }
+  box.innerHTML = sel.map(id => `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);color:var(--text1);border:1px solid var(--border,#d1d5db);border-radius:16px;padding:4px 10px;font-size:12px">
+      🏢 ${esc(names[id] || id)}
+      <a href="javascript:void(0)" onclick="removeSpkVendor('${esc(id)}')" title="Hapus" style="color:var(--red,#ef4444);text-decoration:none;font-weight:700">✕</a>
+    </span>`).join('');
+}
+
+function removeSpkVendor(id) {
+  window._spkVendorSel = (window._spkVendorSel || []).filter(x => x !== id);
+  renderSpkVendorChips();
+  onSpkVendorInput();
+}
+
+function hideSpkVendorSuggest() {
+  const box = document.getElementById('se_vendor_suggest');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  window._spkVendorActiveIdx = -1;
+}
+
+function _spkVendorCandidates(q) {
+  const chosen = new Set(window._spkVendorSel || []);
+  const needle = (q || '').trim().toLowerCase();
+  let items = (window._vendorList || []).filter(v => !chosen.has(v.page_id));
+  if (needle) items = items.filter(v => (v.name || '').toLowerCase().includes(needle));
+  return items;
+}
+
+function onSpkVendorInput() {
+  const inp = document.getElementById('se_vendor_input');
+  const box = document.getElementById('se_vendor_suggest');
+  if (!inp || !box) return;
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  if (!window._vendorList) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">' +
+      (window._vendorListError ? 'Gagal memuat daftar vendor: ' + esc(window._vendorListError)
+                               : 'Memuat daftar vendor...') + '</div>';
+    if (window._vendorListError) { window._vendorListError = null; loadVendorList(true).then(onSpkVendorInput); }
+    else loadVendorList().then(onSpkVendorInput);
+    return;
+  }
+  const items = _spkVendorCandidates(inp.value).slice(0, 50);
+  window._spkVendorActiveIdx = -1;
+  window._spkVendorSuggestItems = items;
+  if (!items.length) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Tidak ada vendor cocok. Coba kata kunci lain.</div>';
+    return;
+  }
+  box.innerHTML = items.map((it, i) => `<div class="spk-vendor-opt" data-idx="${i}" onmousedown="event.preventDefault()"
+         onclick="pickSpkVendor('${esc(it.page_id)}')"
+         style="cursor:pointer;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border,#eee)">🏢 ${esc(it.name)}</div>`).join('');
+  box.style.display = 'block';
+}
+
+function onSpkVendorKeydown(e) {
+  const box = document.getElementById('se_vendor_suggest');
+  const items = window._spkVendorSuggestItems || [];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!items.length) return;
+    let idx = window._spkVendorActiveIdx ?? -1;
+    idx = e.key === 'ArrowDown' ? Math.min(items.length - 1, idx + 1) : Math.max(0, idx - 1);
+    window._spkVendorActiveIdx = idx;
+    if (box) Array.from(box.querySelectorAll('.spk-vendor-opt')).forEach((el, i) => {
+      el.style.background = (i === idx) ? 'var(--surface2,#eef2ff)' : '';
+    });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const idx = window._spkVendorActiveIdx ?? -1;
+    const pick = (idx >= 0 && idx < items.length) ? items[idx] : items[0];
+    if (pick) pickSpkVendor(pick.page_id);
+  } else if (e.key === 'Escape') {
+    hideSpkVendorSuggest();
+  }
+}
+
+function pickSpkVendor(id) {
+  if (!id) return;
+  const arr = window._spkVendorSel || (window._spkVendorSel = []);
+  if (!arr.includes(id)) arr.push(id);
+  const inp = document.getElementById('se_vendor_input');
+  if (inp) inp.value = '';
+  hideSpkVendorSuggest();
+  renderSpkVendorChips();
+  if (inp) inp.focus();
+}
+
 // Tombol "Tambah Project Perpanjangan (buat baru)": buka form Project Submission.
 // Setelah project baru dibuat, buka kembali detail SPK ini dengan project baru
 // otomatis ditambahkan ke daftar perpanjangan (dan pilihan sebelumnya dipulihkan).
@@ -4551,6 +4691,7 @@ function saveSpkDetail() {
     spk_selesai:     $('se_selesai').value,
     notes:           $('se_notes').value,
     perp_projects:   perpCsv,
+    vendor_ids:      (window._spkVendorSel || []).filter(Boolean).join(','),
   };
 
   if (!payload.page_id) { showToast('page_id kosong', '⚠️'); return; }

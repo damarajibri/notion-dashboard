@@ -165,6 +165,7 @@ TASKS_DB    = '2c3a31d192f481d68c65d0f289ebd111'
 PROJECTS_DB = '2c3a31d192f48104ba5fecc8ee9c66d1'
 PERSONEL_DB = '2c4a31d192f480aab819f688af756ed1'
 SPK_DB      = '2c5a31d192f4803a86e4fb50b19df8dc'
+VENDOR_DB   = '2e1a31d192f48040ba94cb19cecb2c90'   # database Vendor (relasi dari SPK.Vendor)
 MONTHLY_DB  = '358a31d192f4809ca281cd6849efa28a'
 
 HEADERS = {
@@ -599,9 +600,9 @@ def extract_spk(r, personel):
 
     # Vendor
     vendor_rel  = props.get('Vendor', {}).get('relation', [])
-    vendor_name = ', '.join(
-        resolve_title(v['id'], personel) for v in vendor_rel
-    ) if vendor_rel else '-'
+    vendor_items = [{'page_id': v['id'], 'name': resolve_title(v['id'], personel)}
+                    for v in vendor_rel]
+    vendor_name = ', '.join(v['name'] for v in vendor_items) if vendor_items else '-'
 
     # Status
     status_obj  = props.get('Status', {}).get('status') or {}
@@ -679,6 +680,7 @@ def extract_spk(r, personel):
         'no_spk':        no_spk,
         'project':       proj_name,
         'vendor':        vendor_name,
+        'vendors':       vendor_items,
         'status':        status_name,
         'spk_mulai':     spk_mulai,
         'spk_selesai':   spk_selesai,
@@ -2242,11 +2244,61 @@ def api_refresh_full():
     return jsonify({'ok': True, 'mode': 'full', 'summary': summary})
 
 
+# ─── Vendor: daftar untuk autocomplete form SPK ───────────────────────────────
+# Database Vendor tidak ikut di-sync ke SQLite, jadi dibaca langsung dari Notion
+# dan di-cache di memori selama _VENDOR_TTL detik agar form tidak lambat.
+_VENDOR_TTL = 600
+_vendor_cache = {'ts': 0.0, 'items': []}
+
+
+def _load_vendors(force=False):
+    now = time.time()
+    if not force and _vendor_cache['items'] and now - _vendor_cache['ts'] < _VENDOR_TTL:
+        return _vendor_cache['items']
+    items, cursor = [], None
+    while True:
+        body = {'page_size': 100}
+        if cursor:
+            body['start_cursor'] = cursor
+        res = notion_post(f'https://api.notion.com/v1/databases/{VENDOR_DB}/query', body)
+        for r in res.get('results', []):
+            name = ''
+            for v in r['properties'].values():
+                if v.get('type') == 'title' and v.get('title'):
+                    name = ''.join(t.get('plain_text', '') for t in v['title']).strip()
+                    break
+            if name:
+                items.append({'page_id': r['id'], 'name': name})
+        if not res.get('has_more'):
+            break
+        cursor = res.get('next_cursor')
+    items.sort(key=lambda x: x['name'].lower())
+    _vendor_cache.update(ts=now, items=items)
+    return items
+
+
+@app.route('/api/vendors', methods=['GET'])
+@login_required
+def api_vendors():
+    """Daftar semua Vendor [{page_id, name}] untuk autocomplete di form SPK."""
+    if not TOKEN:
+        return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
+    try:
+        items = _load_vendors(force=request.args.get('refresh') == '1')
+    except Exception as e:  # noqa: BLE001
+        app.logger.warning('Load vendors failed: %s', e)
+        # Fallback: kembalikan cache lama bila ada.
+        if _vendor_cache['items']:
+            return jsonify({'ok': True, 'vendors': _vendor_cache['items'], 'stale': True})
+        return jsonify({'ok': False, 'error': f'Gagal memuat vendor: {e}'}), 502
+    return jsonify({'ok': True, 'vendors': items})
+
+
 # ─── SPK: edit → Notion ────────────────────────────────────────────────────────
 # Peta field frontend → (nama properti Notion, tipe). Hanya field skalar yang
 # aman diedit. 'Total Terbayar' adalah rollup, 'Sisa Anggaran'/'Sisa Hari'
-# adalah formula (read-only), dan 'Vendor' adalah relation (dikelola di Notion),
-# jadi tidak disertakan.
+# adalah formula (read-only). 'Vendor' adalah relation ke database Vendor dan
+# bisa diedit lewat 'vendor_ids' (page_id dipisah koma).
 _SPK_EDITABLE = {
     'no_spk':          ('No SPK', 'title'),
     'project':         ('Project Name', 'rich_text'),
@@ -2259,6 +2311,7 @@ _SPK_EDITABLE = {
     'spk_selesai':     ('SPK Selesai', 'date'),
     'notes':           ('Notes', 'rich_text'),
     'perp_projects':   ('Projects Perpanjangan', 'relation_multi'),
+    'vendor_ids':      ('Vendor', 'relation_multi'),
 }
 
 
