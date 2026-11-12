@@ -1012,6 +1012,32 @@ span.file-chip { cursor: default; opacity: .7; }
   transform: translateX(-50%) translateY(0);
 }
 
+
+/* ===== TAB RELASI (tree Project Asal -> SPK -> Project Perpanjangan) ===== */
+.tree-layout { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+.tree-canvas { flex: 1; min-width: 320px; display: flex; flex-direction: column; gap: 36px; }
+.tree-panel { width: 300px; display: flex; flex-direction: column; gap: 12px; position: sticky; top: 12px; }
+.tree-panel .tree-panel-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.tree-one { display: flex; flex-direction: column; align-items: center; }
+.tree-group { display: flex; flex-direction: column; gap: 8px; align-items: stretch; width: min(580px, 100%); }
+.tree-cap { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .06em; text-align: center; }
+.tree-line { width: 2px; height: 30px; background: var(--text2); }
+.tree-box { border: 2px solid var(--blue); border-radius: var(--radius-sm); background: var(--surface); padding: 10px 14px; cursor: pointer; transition: var(--transition); }
+.tree-box:hover { box-shadow: var(--shadow-md); }
+.tree-spk { border-color: var(--accent); background: var(--surface2); }
+.tree-box.hl { border-color: var(--yellow); box-shadow: 0 0 0 3px var(--yellow-bg); }
+.tree-row { display: flex; gap: 8px; font-size: 13px; line-height: 1.45; }
+.tree-k { flex: 0 0 74px; color: var(--text2); }
+.tree-k::after { content: ' :'; }
+.tree-v { flex: 1; min-width: 0; word-break: break-word; font-weight: 600; color: var(--text); }
+.tree-link { display: block; text-align: right; font-size: 11px; margin-top: 4px; color: var(--accent); text-decoration: none; }
+.tree-link:hover { text-decoration: underline; }
+.tree-none { border: 2px dashed var(--border); border-radius: var(--radius-sm); padding: 10px 14px; text-align: center; font-size: 12px; color: var(--text2); }
+.tree-msg { padding: 28px 16px; text-align: center; color: var(--text2); font-size: 14px; border: 2px dashed var(--border); border-radius: var(--radius-md); }
+.tree-pick { cursor: pointer; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 13px; background: var(--surface); transition: var(--transition); }
+.tree-pick:hover { border-color: var(--accent); background: var(--surface2); }
+.tree-pick small { color: var(--text2); display: block; margin-top: 2px; }
+@media (max-width: 900px) { .tree-panel { order: -1; width: 100%; position: static; } }
 </style>
 </head>
 
@@ -1090,6 +1116,9 @@ span.file-chip { cursor: default; opacity: .7; }
     </button>
     <button class="tab" onclick="switchTab('monthly', this)">
       <span class="tab-icon">💵</span> Monthly Performance
+    </button>
+    <button class="tab" onclick="switchTab('tree', this)">
+      <span class="tab-icon">🌳</span> Relasi SPK
     </button>
   </div>
 
@@ -1414,6 +1443,26 @@ span.file-chip { cursor: default; opacity: .7; }
   </div>
 
   <!-- ===== MONTHLY PERFORMANCE TAB (manual load) ===== -->
+  <!-- ===== RELASI SPK TAB (tree: Project Asal -> SPK -> Project Perpanjangan) ===== -->
+  <div id="tab-tree" class="tab-content">
+    <div class="tree-layout">
+      <div class="tree-canvas" id="treeResult">
+        <div class="tree-msg">Cari data SPK atau Project di panel kanan untuk menampilkan diagram relasi<br>
+          <b>Project Asal → SPK → Project Perpanjangan</b>.</div>
+      </div>
+      <div class="tree-panel">
+        <div class="tree-panel-title">🔎 Cari data</div>
+        <input type="text" id="treeSpkQ" class="form-input" style="padding:10px" autocomplete="off"
+               placeholder="Data SPK (nama SPK / No. SPK)" onkeydown="if(event.key==='Enter')treeSearch()">
+        <input type="text" id="treeProjQ" class="form-input" style="padding:10px" autocomplete="off"
+               placeholder="Data project (nama project / No. IP)" onkeydown="if(event.key==='Enter')treeSearch()">
+        <button class="btn btn-primary" onclick="treeSearch()">🔍 Cari</button>
+        <button class="btn btn-ghost" onclick="treeReset()">↺ Reset</button>
+        <div class="hint" style="font-size:11px;color:var(--text2)">Isi salah satu atau keduanya (hasil digabung). Klik kotak untuk memfokuskan; <b>Detail ↗</b> membuka datanya.</div>
+      </div>
+    </div>
+  </div>
+
   <div id="tab-monthly" class="tab-content">
     <div class="filter-bar">
       <div class="filter-group">
@@ -5110,6 +5159,126 @@ function showProcessing(msg = 'Memproses...') {
 function hideProcessing() {
   const ov = document.getElementById('processingOverlay');
   if (ov) ov.style.display = 'none';
+}
+
+// ===== TAB RELASI: Project Asal -> SPK -> Project Perpanjangan =====
+// Relasi Notion dua-arah: Project.'SPK baru' <-> SPK.'Projects Asal' dan
+// Project.'SPK sebelumnya' <-> SPK.'Projects Perpanjangan'. Karena cache bisa
+// basi di salah satu sisi, indeks dibangun dari KEDUA sisi lalu digabung.
+function _treeEsc(v) {
+  return (v == null ? '' : String(v)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function _treeIndex() {
+  const spks = (DATA && DATA.spk) || [], projs = (DATA && DATA.projects) || [];
+  const spkById = {}, projById = {};
+  spks.forEach(s => { if (s.page_id) spkById[s.page_id] = s; });
+  projs.forEach(p => { if (p.page_id) projById[p.page_id] = p; });
+  const asal = {}, perp = {}, projSpk = {};
+  const add = (m, k, v) => { (m[k] || (m[k] = new Set())).add(v); };
+  spks.forEach(s => {
+    (s.asal_project_ids || []).forEach(pid => { if (projById[pid]) { add(asal, s.page_id, pid); add(projSpk, pid, s.page_id); } });
+    (s.perp_project_ids || []).forEach(pid => { if (projById[pid]) { add(perp, s.page_id, pid); add(projSpk, pid, s.page_id); } });
+  });
+  projs.forEach(p => {
+    (p.spk_baru_ids || []).forEach(sid => { if (spkById[sid]) { add(asal, sid, p.page_id); add(projSpk, p.page_id, sid); } });
+    (p.spk_sebelumnya_ids || []).forEach(sid => { if (spkById[sid]) { add(perp, sid, p.page_id); add(projSpk, p.page_id, sid); } });
+  });
+  return { spkById, projById, asal, perp, projSpk };
+}
+
+function _treeMsg(html) { return `<div class="tree-msg">${html}</div>`; }
+
+function _treeHtml(sid, idx, hl) {
+  const s = idx.spkById[sid];
+  if (!s) return '';
+  const projsOf = set => [...(set || [])].map(id => idx.projById[id]).filter(Boolean)
+    .sort((a, b) => String(a.title || '').localeCompare(String(b.title || '')));
+  const pbox = p => `<div class="tree-box tree-proj${hl.has(p.page_id) ? ' hl' : ''}" onclick="treeFocusProj('${_treeEsc(p.page_id)}')" title="Klik untuk lihat semua SPK project ini">
+      <div class="tree-row"><span class="tree-k">Proyek</span><span class="tree-v">${_treeEsc(p.title || '-')}</span></div>
+      <div class="tree-row"><span class="tree-k">No. IP</span><span class="tree-v">${_treeEsc((p.no_izin_prinsip || '').trim() || '-')}</span></div>
+      <a class="tree-link" href="javascript:void(0)" onclick="event.stopPropagation();openProjByPageId('${_treeEsc(p.page_id)}')">Detail ↗</a>
+    </div>`;
+  const group = (label, list, emptyText) => `<div class="tree-group"><div class="tree-cap">${label}${list.length > 1 ? ' (' + list.length + ')' : ''}</div>${
+    list.length ? list.map(pbox).join('') : `<div class="tree-none">${emptyText}</div>`}</div>`;
+  const asalL = projsOf(idx.asal[sid]), perpL = projsOf(idx.perp[sid]);
+  return `<div class="tree-one">
+    ${group('Project Asal', asalL, '— tidak ada Project Asal —')}
+    <div class="tree-line"></div>
+    <div class="tree-group"><div class="tree-cap">SPK</div>
+      <div class="tree-box tree-spk" onclick="treeFocusSpk('${_treeEsc(sid)}')" title="Klik untuk fokus ke SPK ini">
+        <div class="tree-row"><span class="tree-k">Nama SPK</span><span class="tree-v">${_treeEsc(s.project || '-')}</span></div>
+        <div class="tree-row"><span class="tree-k">No. SPK</span><span class="tree-v">${_treeEsc(s.no_spk || '-')}</span></div>
+        <a class="tree-link" href="javascript:void(0)" onclick="event.stopPropagation();showSpkByPageId('${_treeEsc(sid)}')">Detail ↗</a>
+      </div>
+    </div>
+    <div class="tree-line"></div>
+    ${group('Project Perpanjangan', perpL, '— tidak ada Project Perpanjangan —')}
+  </div>`;
+}
+
+// Tampilkan hasil: <=3 SPK langsung digambar; lebih banyak -> daftar untuk dipilih.
+function _treeShow(spkIds, idx, hl, note) {
+  const out = document.getElementById('treeResult');
+  if (!out) return;
+  window._treeHl = hl;
+  const ids = [...spkIds].filter(id => idx.spkById[id])
+    .sort((a, b) => String(idx.spkById[a].no_spk || '').localeCompare(String(idx.spkById[b].no_spk || '')));
+  if (!ids.length) { out.innerHTML = _treeMsg(note || 'Tidak ada data yang cocok.'); return; }
+  const head = ids.length > 1 ? `<div style="font-size:13px;color:var(--text2)">Ditemukan <b>${ids.length}</b> SPK${ids.length > 3 ? ' — pilih salah satu untuk melihat diagramnya:' : ':'}</div>` : '';
+  if (ids.length <= 3) { out.innerHTML = head + ids.map(id => _treeHtml(id, idx, hl)).join(''); return; }
+  const CAP = 100;
+  out.innerHTML = head + ids.slice(0, CAP).map(id => {
+    const s = idx.spkById[id];
+    const na = (idx.asal[id] || new Set()).size, np = (idx.perp[id] || new Set()).size;
+    return `<div class="tree-pick" onclick="treeFocusSpk('${_treeEsc(id)}')">${_treeEsc(s.no_spk || '-')} — ${_treeEsc(s.project || '-')}
+      <small>${na} project asal · ${np} project perpanjangan</small></div>`;
+  }).join('') + (ids.length > CAP ? `<div style="font-size:12px;color:var(--text2)">Menampilkan ${CAP} pertama — persempit pencarian.</div>` : '');
+}
+
+function treeSearch() {
+  const out = document.getElementById('treeResult');
+  if (!DATA) { out.innerHTML = _treeMsg('Data belum termuat. Klik 🔄 Refresh di pojok kanan atas, lalu coba lagi.'); return; }
+  const q1 = (document.getElementById('treeSpkQ').value || '').trim().toLowerCase();
+  const q2 = (document.getElementById('treeProjQ').value || '').trim().toLowerCase();
+  if (!q1 && !q2) { out.innerHTML = _treeMsg('Isi pencarian SPK (nama / No. SPK) dan/atau Project (nama / No. IP), lalu klik <b>Cari</b>.'); return; }
+  const idx = _treeIndex();
+  let spkIds = null, hl = new Set(), projMatches = [];
+  if (q1) {
+    spkIds = new Set(DATA.spk.filter(s => (s.no_spk || '').toLowerCase().includes(q1) || (s.project || '').toLowerCase().includes(q1))
+      .map(s => s.page_id));
+  }
+  if (q2) {
+    projMatches = DATA.projects.filter(p => (p.title || '').toLowerCase().includes(q2) || (p.no_izin_prinsip || '').toLowerCase().includes(q2));
+    projMatches.forEach(p => hl.add(p.page_id));
+    const rel = new Set();
+    projMatches.forEach(p => (idx.projSpk[p.page_id] || new Set()).forEach(id => rel.add(id)));
+    spkIds = spkIds ? new Set([...spkIds].filter(id => rel.has(id))) : rel;
+  }
+  let note = 'Tidak ada data yang cocok dengan pencarian.';
+  if (q2 && projMatches.length && !spkIds.size && !q1) {
+    note = `Project ditemukan (${projMatches.length}) tetapi belum terhubung ke SPK manapun:<br><b>${projMatches.slice(0, 5).map(p => _treeEsc(p.title)).join('<br>')}</b>`;
+  } else if (q1 && q2) {
+    note = 'Tidak ada SPK yang cocok dengan KEDUA pencarian (SPK dan Project) sekaligus.';
+  }
+  _treeShow(spkIds, idx, hl, note);
+}
+
+function treeFocusSpk(sid) { _treeShow([sid], _treeIndex(), window._treeHl || new Set()); }
+
+function treeFocusProj(pid) {
+  const idx = _treeIndex();
+  const ids = idx.projSpk[pid] || new Set();
+  const p = idx.projById[pid];
+  _treeShow(ids, idx, new Set([pid]),
+    `Project <b>${_treeEsc(p ? p.title : '')}</b> belum terhubung ke SPK manapun.`);
+}
+
+function treeReset() {
+  document.getElementById('treeSpkQ').value = '';
+  document.getElementById('treeProjQ').value = '';
+  window._treeHl = new Set();
+  document.getElementById('treeResult').innerHTML = _treeMsg('Cari data SPK atau Project di panel kanan untuk menampilkan diagram relasi<br><b>Project Asal → SPK → Project Perpanjangan</b>.');
 }
 
 // ===== FULL SYNC (root only) =====
