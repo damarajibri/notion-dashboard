@@ -4317,7 +4317,7 @@ function showSpkDetail(idx) {
     `<div id="se_perp_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>` +
     `<div style="position:relative">` +
       `<input type="text" id="se_perp_input" class="form-input" autocomplete="off"` +
-      ` placeholder="🔎 Ketik nama project..." style="width:100%;padding:8px"` +
+      ` placeholder="🔎 Ketik nama project atau No. IP..." style="width:100%;padding:8px"` +
       ` oninput="onSpkPerpInput()" onfocus="onSpkPerpInput()"` +
       ` onkeydown="onSpkPerpKeydown(event)" onblur="setTimeout(hideSpkPerpSuggest, 150)">` +
       `<div id="se_perp_suggest" style="display:none;position:absolute;z-index:50;left:0;right:0;top:100%;margin-top:2px;max-height:240px;overflow:auto;background:var(--surface1,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18)"></div>` +
@@ -4349,7 +4349,7 @@ function showSpkDetail(idx) {
     `<div id="se_asal_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>` +
     `<div style="position:relative">` +
       `<input type="text" id="se_asal_input" class="form-input" autocomplete="off"` +
-      ` placeholder="🔎 Ketik nama project..." style="width:100%;padding:8px"` +
+      ` placeholder="🔎 Ketik nama project atau No. IP..." style="width:100%;padding:8px"` +
       ` oninput="onSpkAsalInput()" onfocus="onSpkAsalInput()"` +
       ` onkeydown="onSpkAsalKeydown(event)" onblur="setTimeout(hideSpkAsalSuggest, 150)">` +
       `<div id="se_asal_suggest" style="display:none;position:absolute;z-index:50;left:0;right:0;top:100%;margin-top:2px;max-height:240px;overflow:auto;background:var(--surface1,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18)"></div>` +
@@ -4473,7 +4473,7 @@ function buildSpkPerpMap() {
   const map = {};
   const list = (typeof DATA !== 'undefined' && DATA && Array.isArray(DATA.projects)) ? DATA.projects : [];
   list.forEach(p => {
-    if (p && p.page_id && p.title) map[p.page_id] = { title: String(p.title).trim() };
+    if (p && p.page_id && p.title) map[p.page_id] = { title: String(p.title).trim(), ip: String(p.no_izin_prinsip || '').trim() };
   });
   window._spkPerpById = map;
   return map;
@@ -4492,7 +4492,7 @@ function renderSpkPerpChips() {
   }
   box.innerHTML = sel.map(id => {
     const p = byId[id] || {};
-    const label = p.title || id;
+    const label = (p.title || id) + (p.ip ? ' · ' + p.ip : '');
     return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);color:var(--text1);border:1px solid var(--border,#d1d5db);border-radius:16px;padding:4px 10px;font-size:12px">
       🎯 <a href="javascript:void(0)" onclick="openProjFromSpk('${esc(id)}')" title="Lihat detail Project Submission" style="color:var(--accent,#7c6af7);text-decoration:underline;text-underline-offset:2px">${esc(label)}</a>
       <a href="javascript:void(0)" onclick="openProjFromSpk('${esc(id)}')" title="Lihat detail Project Submission" style="text-decoration:none">🔗</a>
@@ -4533,7 +4533,7 @@ function _spkPerpCandidates(q) {
   let items = Object.keys(byId)
     .filter(id => !chosen.has(id))
     .map(id => ({ id, ...byId[id] }));
-  if (needle) items = items.filter(it => (it.title || '').toLowerCase().includes(needle));
+  if (needle) items = items.filter(it => (it.title || '').toLowerCase().includes(needle) || (it.ip || '').toLowerCase().includes(needle));
   items.sort((a, b) => String(a.title).localeCompare(String(b.title)));
   return items;
 }
@@ -4563,7 +4563,7 @@ function onSpkPerpInput() {
     return `<div class="spk-perp-opt" data-idx="${i}" onmousedown="event.preventDefault()"
          onclick="pickSpkPerp('${esc(it.id)}')"
          style="cursor:pointer;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border,#eee)">
-      🎯 ${esc(it.title)}
+      🎯 ${esc(it.title)}${it.ip ? `<div style="font-size:11px;color:var(--text2)">No. IP: ${esc(it.ip)}</div>` : ''}
     </div>`;
   }).join('');
   box.style.display = 'block';
@@ -4615,7 +4615,8 @@ function renderSpkAsalChips() {
     return;
   }
   box.innerHTML = sel.map(id => {
-    const label = (byId[id] || {}).title || id;
+    const _p = byId[id] || {};
+    const label = (_p.title || id) + (_p.ip ? ' · ' + _p.ip : '');
     return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);color:var(--text1);border:1px solid var(--border,#d1d5db);border-radius:16px;padding:4px 10px;font-size:12px">
       🏁 <a href="javascript:void(0)" onclick="openProjFromSpk('${esc(id)}')" title="Lihat detail Project Submission" style="color:var(--accent,#7c6af7);text-decoration:underline;text-underline-offset:2px">${esc(label)}</a>
       <a href="javascript:void(0)" onclick="removeSpkAsal('${esc(id)}')" title="Hapus" style="color:var(--red,#ef4444);text-decoration:none;font-weight:700">✕</a>
@@ -4650,7 +4651,7 @@ function onSpkAsalInput() {
   const chosen = new Set(window._spkAsalSel || []);
   const needle = inp.value.trim().toLowerCase();
   let items = Object.keys(byId).filter(id => !chosen.has(id)).map(id => ({ id, ...byId[id] }));
-  if (needle) items = items.filter(it => (it.title || '').toLowerCase().includes(needle));
+  if (needle) items = items.filter(it => (it.title || '').toLowerCase().includes(needle) || (it.ip || '').toLowerCase().includes(needle));
   items.sort((a, b) => String(a.title).localeCompare(String(b.title)));
   items = items.slice(0, 50);
   window._spkAsalActiveIdx = -1;
@@ -4662,7 +4663,7 @@ function onSpkAsalInput() {
   }
   box.innerHTML = items.map((it, i) => `<div class="spk-asal-opt" data-idx="${i}" onmousedown="event.preventDefault()"
          onclick="pickSpkAsal('${esc(it.id)}')"
-         style="cursor:pointer;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border,#eee)">🏁 ${esc(it.title)}</div>`).join('');
+         style="cursor:pointer;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border,#eee)">🏁 ${esc(it.title)}${it.ip ? `<div style="font-size:11px;color:var(--text2)">No. IP: ${esc(it.ip)}</div>` : ''}</div>`).join('');
   box.style.display = 'block';
 }
 
@@ -5035,6 +5036,11 @@ function openProjCreate(opts) {
     : '';
   const STATUS_OPTS = ['Planning', 'In Progress', 'Done', 'Canceled'];
   const PRIO_OPTS = ['High', 'Medium', 'Low'];
+  // PIC (Assignee): value opsi = page_id personel.
+  const _pcNames = (DATA && DATA.personel) ? [...DATA.personel].sort() : [];
+  const _pcMap = (DATA && DATA.personel_map) ? DATA.personel_map : {};
+  const picOpts = _pcNames.filter(n => _pcMap[n])
+    .map(n => `<option value="${esc(_pcMap[n])}">${String(n).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</option>`).join('');
   document.getElementById('projCreateBody').innerHTML = `
     <div class="modal-section">
       <div class="modal-section-title">Informasi Umum</div>
@@ -5050,6 +5056,9 @@ function openProjCreate(opts) {
       <label class="filter-label" for="pc_no_ip" style="display:block;margin:12px 0 6px">No. Izin Prinsip</label>
       <input type="text" id="pc_no_ip" class="form-input" style="width:100%;padding:8px" placeholder="mis. B.358.e-INF/07/2026">
       ${spkPrefillRow}
+      <label class="filter-label" for="pc_pic" style="display:block;margin:12px 0 6px">PIC (Assignee)</label>
+      <select id="pc_pic" class="form-input" multiple size="5" style="width:100%;padding:8px;min-height:120px">${picOpts}</select>
+      <div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Tahan Ctrl (Windows) / Cmd (Mac) untuk memilih lebih dari satu.</div>
     </div>
     <div class="modal-section" style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
       <span id="pc_result" style="font-size:13px;margin-right:auto"></span>
@@ -5072,6 +5081,11 @@ function saveProjCreate() {
     nilai_project: parseThousands($('pc_nilai').value),
     no_izin_prinsip: ($('pc_no_ip') ? $('pc_no_ip').value : ''),
   };
+  const _pcPic = $('pc_pic');
+  if (_pcPic) {
+    const ids = Array.from(_pcPic.selectedOptions).map(o => o.value).filter(Boolean);
+    if (ids.length) payload.pic = ids.join(',');
+  }
   // Prefill relasi "SPK sebelumnya" bila form dibuka dari detail SPK.
   if (window._projCreateSpkPrefill) payload.spk_sebelumnya = window._projCreateSpkPrefill;
   if (window._projCreateSpkBaruPrefill) payload.spk_baru = window._projCreateSpkBaruPrefill;

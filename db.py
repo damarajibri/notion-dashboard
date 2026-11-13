@@ -433,7 +433,7 @@ class UserError(Exception):
     """Raised for user-management validation errors (duplicate, not found...)."""
 
 
-VALID_ROLES = {"root", "admin", "user"}
+VALID_ROLES = {"root", "admin", "engineer", "user"}
 
 
 def create_user(username, password, full_name="", role="user", is_active=True):
