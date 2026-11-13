@@ -1859,12 +1859,12 @@ def api_monthly_update():
             if val == '':
                 props[notion_name] = {'number': None}
             else:
-                # Terima format ribuan Indonesia (titik/koma/spasi sbg pemisah).
-                digits = val.replace('.', '').replace(',', '').replace(' ', '')
-                try:
-                    props[notion_name] = {'number': float(digits)}
-                except ValueError:
+                # Terima format Indonesia (1.234.567,89) maupun desimal titik (1234.56).
+                num = parse_number(val)
+                if num is None:
                     errors.append(f"'{notion_name}' bukan angka valid: {raw!r}")
+                else:
+                    props[notion_name] = {'number': num}
         elif ftype == 'select':
             props[notion_name] = {'select': {'name': val} if val else None}
         elif ftype == 'date':
@@ -2002,6 +2002,31 @@ def _build_props_from_map(editable_map, payload, only_present=True):
                 else:
                     errors.append(f"'{notion_name}': {derr}")
     return props, errors
+
+
+def parse_number(text):
+    """Parse angka dari input pengguna, mendukung desimal. Return float|None.
+
+    - Ada koma  -> format Indonesia: titik = ribuan, koma = desimal ("1.234.567,89").
+    - Titik > 1 -> titik semua ribuan ("1.234.567").
+    - Satu titik -> desimal ("1234.56"; format kanonik dari frontend).
+    Awalan "Rp" dan spasi diabaikan; tanda minus didukung.
+    """
+    s = str(text or '').strip().replace(' ', '')
+    if s[:2].lower() == 'rp':
+        s = s[2:]
+    if not s:
+        return None
+    neg = s.startswith('-')
+    s = s.lstrip('-')
+    if ',' in s:
+        s = s.replace('.', '').replace(',', '.')
+    elif s.count('.') > 1:
+        s = s.replace('.', '')
+    if s.count('.') > 1 or not s.replace('.', '', 1).isdigit():
+        return None
+    v = float(s)
+    return -v if neg else v
 
 
 def _create_notion_page(db_id, props):
@@ -2228,14 +2253,14 @@ def api_refresh():
 
 
 @app.route('/api/refresh/full', methods=['POST'])
-@roles_required('root')
+@roles_required('root', 'engineer')
 def api_refresh_full():
     """Full sync: tarik ulang SEMUA baris dari Notion & rekonsiliasi penghapusan.
 
     Dibutuhkan untuk menangkap perubahan relasi dua-arah yang diubah dari sisi
     lawan (mis. set 'SPK sebelumnya' di Project tidak selalu mengubah
     last_edited_time halaman SPK, sehingga incremental sync melewatkannya).
-    Dibatasi role 'root'. Mencatat aktivitas ke audit log.
+    Dibatasi role 'root' dan 'engineer'. Mencatat aktivitas ke audit log.
     """
     if not TOKEN:
         return jsonify({'ok': False, 'error': 'NOTION_TOKEN belum di-set di server.'}), 400
@@ -2778,9 +2803,9 @@ def build_page_properties(row, relation_prop):
 
     for col in CSV_NUMBER_FIELDS:
         if val(col):
-            digits = ''.join(ch for ch in val(col) if ch.isdigit())
-            if digits:
-                props[col] = {'number': float(digits)}
+            num = parse_number(val(col))
+            if num is not None:
+                props[col] = {'number': num}
 
     for col in CSV_TEXT_FIELDS:
         if val(col):

@@ -1082,8 +1082,8 @@ span.file-chip { cursor: default; opacity: .7; }
       <button class="btn btn-primary" onclick="loadData()">
         <span id="refreshIcon">🔄</span> Refresh
       </button>
-      {% if user and user.role == 'root' %}
-      <button class="btn btn-ghost" id="fullSyncBtn" onclick="runFullSync()" title="Tarik ulang SEMUA data dari Notion (menangkap relasi dua-arah & penghapusan). Hanya root.">
+      {% if user and user.role in ['root', 'engineer'] %}
+      <button class="btn btn-ghost" id="fullSyncBtn" onclick="runFullSync()" title="Tarik ulang SEMUA data dari Notion (menangkap relasi dua-arah & penghapusan). Hanya root & engineer.">
         <span id="fullSyncIcon">🔁</span> Full Sync
       </button>
       {% endif %}
@@ -1751,11 +1751,11 @@ span.file-chip { cursor: default; opacity: .7; }
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
           <div style="flex:1;min-width:180px">
             <label class="filter-label" for="me_nilai_tagihan" style="display:block;margin-bottom:6px">Nilai Tagihan (Rp)</label>
-            <input type="text" inputmode="numeric" id="me_nilai_tagihan" class="form-input" style="width:100%;padding:8px" placeholder="0">
+            <input type="text" inputmode="decimal" id="me_nilai_tagihan" class="form-input" style="width:100%;padding:8px" placeholder="0,00">
           </div>
           <div style="flex:1;min-width:180px">
             <label class="filter-label" for="me_prognosa" style="display:block;margin-bottom:6px">Prognosa (Rp)</label>
-            <input type="text" inputmode="numeric" id="me_prognosa" class="form-input" style="width:100%;padding:8px" placeholder="0">
+            <input type="text" inputmode="decimal" id="me_prognosa" class="form-input" style="width:100%;padding:8px" placeholder="0,00">
           </div>
         </div>
       </div>
@@ -1992,7 +1992,7 @@ function sisaBadge(n) {
 // ===== FORMAT RUPIAH =====
 function fmtRp(n) {
   if (n === null || n === undefined) return '-';
-  return 'Rp ' + n.toLocaleString('id-ID');
+  return 'Rp ' + n.toLocaleString('id-ID', { maximumFractionDigits: 2 });
 }
 
 // ===== FORMAT RIBUAN UNTUK INPUT (000.000.000) =====
@@ -2006,6 +2006,50 @@ function fmtThousands(v) {
 function parseThousands(v) {
   return String(v == null ? '' : v).replace(/\D/g, '');
 }
+// ===== INPUT ANGKA DESIMAL (format Indonesia: 1.234.567,89) =====
+// Titik = ribuan, koma = desimal (maks 2 digit di belakang koma). Ketik "." juga
+// dianggap koma desimal. Nilai kanonik untuk server: "1234567.89" (parseDecimal).
+function fmtDecimal(v) {
+  let s = String(v == null ? '' : v).replace(/[^\d,.]/g, '');
+  // Titik yang diketik user dianggap pemisah desimal bila belum ada koma.
+  // Aman terhadap backspace pada "1.234" (-> "1.23" tetap ribuan): konversi hanya bila
+  // titik di akhir ("1234.") atau digit sebelum titik >3 (mis. paste "1234.5").
+  if (!s.includes(',') && (s.match(/\./g) || []).length === 1) {
+    const [a, b] = s.split('.');
+    if (b === '' ? a.length > 0 : (b.length <= 2 && a.length > 3)) s = a + ',' + b;
+  }
+  const i = s.indexOf(',');
+  let ip = (i >= 0 ? s.slice(0, i) : s).replace(/\D/g, '');
+  let dp = i >= 0 ? s.slice(i + 1).replace(/\D/g, '').slice(0, 2) : null;
+  ip = ip.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  if (dp === null) return ip;
+  return (ip || '0') + ',' + dp;
+}
+// Angka (Number) dari server -> teks input berformat.
+function numToDecimalText(n) {
+  if (n == null || n === '') return '';
+  const x = Number(n);
+  if (!isFinite(x)) return '';
+  return fmtDecimal(String(Math.round(x * 100) / 100).replace('.', ','));
+}
+// Teks input berformat -> string kanonik "1234567.89" ('' bila kosong).
+function parseDecimal(v) {
+  const s = String(v == null ? '' : v).replace(/\./g, '').replace(',', '.');
+  return /^\d+(\.\d*)?$/.test(s) ? s.replace(/\.$/, '') : '';
+}
+function attachDecimalFormat(id) {
+  const el = document.getElementById(id);
+  if (!el || el.dataset.decFmt) return;
+  el.dataset.decFmt = '1';
+  el.addEventListener('input', () => {
+    const before = el.value;
+    const caretFromEnd = before.length - el.selectionStart;
+    el.value = fmtDecimal(before);
+    const pos = Math.max(0, el.value.length - caretFromEnd);
+    try { el.setSelectionRange(pos, pos); } catch (e) {}
+  });
+}
+
 // Pasang auto-format ribuan pada sebuah <input type=text> saat user mengetik.
 // Mempertahankan posisi kursor relatif terhadap akhir string.
 function attachThousandFormat(id) {
@@ -3446,10 +3490,10 @@ function openMonthlyEdit(idx) {
   $('me_page_id').value       = x.page_id;
   $('me_name').value          = x.name || '';
   $('me_periode').value       = x.periode ? x.periode.slice(0, 7) : '';  // input type=month → YYYY-MM
-  $('me_nilai_tagihan').value = (x.nilai_tagihan == null) ? '' : fmtThousands(x.nilai_tagihan);
-  $('me_prognosa').value      = (x.prognosa == null) ? '' : fmtThousands(x.prognosa);
-  attachThousandFormat('me_nilai_tagihan');
-  attachThousandFormat('me_prognosa');
+  $('me_nilai_tagihan').value = numToDecimalText(x.nilai_tagihan);
+  $('me_prognosa').value      = numToDecimalText(x.prognosa);
+  attachDecimalFormat('me_nilai_tagihan');
+  attachDecimalFormat('me_prognosa');
   $('me_status_invoice').value= x.status_invoice || '';
   $('me_status_bayar').value  = x.status_bayar || '';
   $('me_status_ba').value     = x.status_ba || '';
@@ -3502,8 +3546,8 @@ function saveMonthlyEdit() {
     page_id:        $('me_page_id').value,
     name:           $('me_name').value,
     periode:        periodeVal,
-    nilai_tagihan:  parseThousands($('me_nilai_tagihan').value),
-    prognosa:       parseThousands($('me_prognosa').value),
+    nilai_tagihan:  parseDecimal($('me_nilai_tagihan').value),
+    prognosa:       parseDecimal($('me_prognosa').value),
     status_invoice: $('me_status_invoice').value,
     status_bayar:   $('me_status_bayar').value,
     status_ba:      $('me_status_ba').value,
@@ -5612,7 +5656,7 @@ function treeReset() {
 // ===== FULL SYNC (root only) =====
 // Tarik ulang SEMUA baris dari Notion (menangkap perubahan relasi dua-arah yang
 // diubah dari sisi lawan & penghapusan — yang tidak tertangkap incremental sync),
-// lalu muat ulang dashboard. Endpoint di-gate role 'root' di server.
+// lalu muat ulang dashboard. Endpoint di-gate role 'root'/'engineer' di server.
 function runFullSync() {
   const btn = document.getElementById('fullSyncBtn');
   const icon = document.getElementById('fullSyncIcon');
