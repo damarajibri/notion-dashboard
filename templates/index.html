@@ -305,6 +305,8 @@ body {
 .spk-card-perp-title { color: var(--accent, #7c6af7); text-decoration: underline; text-underline-offset: 2px; }
 .spk-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
 .spk-card-vendor { color: var(--text2); display: inline-flex; align-items: center; gap: 4px; }
+.spk-card-rekon { font-size: 11px; color: var(--text2); }
+.spk-card-rekon b { color: var(--text); }
 .spk-card-value { font-weight: 700; color: var(--green, #22d4a0); font-size: 12px; }
 .spk-card-pics { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .spk-card-nopic { color: var(--red, #f05673); font-size: 11px; font-weight: 600; }
@@ -3051,6 +3053,9 @@ function renderSpkGrouping() {
                 onclick="event.stopPropagation(); openProjByPageId('${a.page_id}')">${a.title || '-'}</a></div>`
           ).join('')}</div>`
         : '';
+      // Rekon Done berurutan tanpa celah sejak awal (dari Monthly Performance).
+      const rk = rekonSummary(s);
+      const rekonLine = `<div class="spk-card-meta spk-card-rekon" title="${String(rk.title).replace(/"/g, '&quot;')}">📑 Rekon Done s/d: <b>${rk.text}</b></div>`;
       const clickAttr = s.page_id ? `onclick="showSpkByPageId('${s.page_id}')"` : '';
       return `<div class="spk-card" ${clickAttr} title="Klik untuk edit">
           <div class="spk-card-no">${s.no_spk || '-'}</div>
@@ -3059,6 +3064,7 @@ function renderSpkGrouping() {
           ${asal}
           <div class="spk-card-meta">${statusBadge(s.status)} ${sisa}</div>
           <div class="spk-card-meta">${vendor} ${value}</div>
+          ${rekonLine}
           <div class="spk-card-meta">${pics}</div>
         </div>`;
     }).join('');
@@ -4443,6 +4449,12 @@ function showSpkDetail(idx) {
     </div>
 
     <div class="modal-section">
+      <div class="modal-section-title">Rekon Monthly Performance</div>
+      <div style="font-size:13px"><b>Rekon Done berurutan s/d: ${esc(rekonSummary(s).text)}</b></div>
+      <div style="font-size:11px;color:var(--text2);margin-top:4px">${esc(rekonSummary(s).title)}</div>
+    </div>
+
+    <div class="modal-section">
       <div class="modal-section-title">Vendor</div>
       ${vendorHtml}
     </div>
@@ -5406,6 +5418,25 @@ function _treeIndex() {
   return { spkById, projById, asal, perp, projSpk };
 }
 
+// Format 'YYYY-MM' -> 'Agustus 2026'.
+function fmtBulan(ym) {
+  if (!ym) return '-';
+  const m = /^(\d{4})-(\d{2})/.exec(ym);
+  if (!m) return ym;
+  return new Date(Number(m[1]), Number(m[2]) - 1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+}
+// Ringkasan rekon berurutan tanpa celah dari awal (hasil compute_rekon_progress).
+function rekonSummary(s) {
+  const r = s && s.rekon;
+  if (!r) return { text: 'Belum ada data monthly', title: 'SPK ini belum punya baris Monthly Performance.' };
+  const text = r.last_done ? fmtBulan(r.last_done) : 'Belum ada yang Done';
+  let title = `${r.done_count} dari ${r.total} periode Done berurutan sejak awal.`;
+  if (r.first_gap) title += ` Periode pertama yang belum Done: ${fmtBulan(r.first_gap)}.`;
+  else title += ' Semua periode sudah Done.';
+  if (r.done_after_gap) title += ` (${r.done_after_gap} periode setelah celah itu sudah Done, tidak dihitung.)`;
+  return { text: text + (r.first_gap ? '' : ' (semua Done)'), title };
+}
+
 function _treeMsg(html) { return `<div class="tree-msg">${html}</div>`; }
 
 // ---- Graf relasi: node = Project ('P:id') / SPK ('S:id'); edge berarah:
@@ -5482,6 +5513,7 @@ function _treeNodeHtml(k, uid, i, idx, hl) {
       <div class="tree-row"><span class="tree-k">Nama SPK</span><span class="tree-v">${_treeEsc(s.project || '-')}</span></div>
       <div class="tree-row"><span class="tree-k">No. SPK</span><span class="tree-v">${_treeEsc(s.no_spk || '-')}</span></div>
       <div class="tree-row"><span class="tree-k">Total Anggaran (Rp)</span><span class="tree-v">${s.total_anggaran == null ? '-' : _treeEsc(fmtRp(s.total_anggaran))}</span></div>
+      <div class="tree-row" title="${_treeEsc(rekonSummary(s).title)}"><span class="tree-k">Rekon Done s/d</span><span class="tree-v">${_treeEsc(rekonSummary(s).text)}</span></div>
       <div class="tree-row"><span class="tree-k">Sisa Anggaran (Rp)</span><span class="tree-v">${s.sisa_anggaran == null ? '-' : _treeEsc(fmtRp(s.sisa_anggaran))}</span></div>
       <a class="tree-link" href="javascript:void(0)" onclick="event.stopPropagation();showSpkByPageId('${_treeEsc(id)}')">Detail ↗</a>
     </div>`;

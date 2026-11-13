@@ -720,6 +720,43 @@ def _date_start(props, key):
     d = props.get(key, {}).get('date') or {}
     return (d.get('start') or '')[:10]
 
+def compute_rekon_progress(raw_monthly):
+    """Progres rekon berurutan per SPK dari baris Monthly Performance.
+
+    Periode diurutkan naik. Satu periode dianggap Done bila SEMUA barisnya
+    berstatus Rekon 'Done'. Dihitung dari periode paling awal selama
+    berurutan Done tanpa celah; berhenti di periode pertama yang belum Done.
+    Bulan yang tidak punya baris (mis. tagihan triwulanan) BUKAN celah.
+
+    Return {spk_page_id: {'last_done': 'YYYY-MM'|None, 'first_gap': 'YYYY-MM'|None,
+                          'done_count': int, 'total': int, 'done_after_gap': int}}
+    """
+    per_spk = {}
+    for r in raw_monthly:
+        props = r.get('properties', {})
+        start = ((props.get('Periode', {}).get('date') or {}).get('start') or '')[:7]
+        if not start:
+            continue
+        done = _sel_name(props, 'Status Rekon') == 'Done'
+        for rel in props.get('📋 SPK', {}).get('relation', []):
+            per_spk.setdefault(rel['id'], {}).setdefault(start, []).append(done)
+    out = {}
+    for sid, periods in per_spk.items():
+        order = sorted(periods)
+        last_done = first_gap = None
+        done_count = 0
+        for per in order:
+            if first_gap is None and all(periods[per]):
+                last_done = per
+                done_count += 1
+            elif first_gap is None:
+                first_gap = per
+        after = sum(1 for per in order if first_gap and per > first_gap and all(periods[per]))
+        out[sid] = {'last_done': last_done, 'first_gap': first_gap,
+                    'done_count': done_count, 'total': len(order), 'done_after_gap': after}
+    return out
+
+
 def extract_monthly(r, spk_no_map):
     props = r['properties']
 
@@ -1516,7 +1553,10 @@ def api_data():
                 'page_id':     s['_id'],
             })
 
+    rekon_prog = compute_rekon_progress(cached_query(MONTHLY_DB))
+
     for s in spk:
+        s['rekon'] = rekon_prog.get(s.get('page_id'))
         s['perpanjangan'] = [
             {
                 'title':  proj_map.get(pid, '?'),
