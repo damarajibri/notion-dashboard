@@ -5674,7 +5674,7 @@ function runFullSync() {
         showToast('Full sync selesai. ' + parts.join(', '), '✅');
         loadData();  // muat ulang dashboard dari cache yang sudah segar
       } else if (status === 403) {
-        showToast('Akses ditolak: Full Sync hanya untuk root.', '🚫');
+        showToast('Akses ditolak: Full Sync hanya untuk root & engineer.', '🚫');
       } else {
         showToast('Full sync gagal: ' + (d.error || 'unknown'), '❌');
       }
