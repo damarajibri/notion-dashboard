@@ -1027,7 +1027,7 @@ span.file-chip { cursor: default; opacity: .7; }
 .tree-spk { border-color: var(--accent); background: var(--surface2); }
 .tree-box.hl { border-color: var(--yellow); box-shadow: 0 0 0 3px var(--yellow-bg); }
 .tree-row { display: flex; gap: 8px; font-size: 13px; line-height: 1.45; }
-.tree-k { flex: 0 0 74px; color: var(--text2); }
+.tree-k { flex: 0 0 96px; color: var(--text2); }
 .tree-k::after { content: ' :'; }
 .tree-v { flex: 1; min-width: 0; word-break: break-word; font-weight: 600; color: var(--text); }
 .tree-link { display: block; text-align: right; font-size: 11px; margin-top: 4px; color: var(--accent); text-decoration: none; }
@@ -1048,6 +1048,7 @@ span.file-chip { cursor: default; opacity: .7; }
 .tg-arrow { fill: var(--text2); }
 .tg-arrow.on { fill: var(--accent); }
 .tree-type { font-size: 10px; letter-spacing: .08em; color: var(--text2); margin-bottom: 4px; }
+.tree-box.tree-cancel { background: rgba(239, 68, 68, 0.18); border-color: var(--red, #ef4444); }
 .tree-box.sel { box-shadow: 0 0 0 3px var(--accent); }
 .tree-pick { cursor: pointer; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 13px; background: var(--surface); transition: var(--transition); }
 .tree-pick:hover { border-color: var(--accent); background: var(--surface2); }
@@ -5480,14 +5481,18 @@ function _treeNodeHtml(k, uid, i, idx, hl) {
       <div class="tree-type">SPK</div>
       <div class="tree-row"><span class="tree-k">Nama SPK</span><span class="tree-v">${_treeEsc(s.project || '-')}</span></div>
       <div class="tree-row"><span class="tree-k">No. SPK</span><span class="tree-v">${_treeEsc(s.no_spk || '-')}</span></div>
+      <div class="tree-row"><span class="tree-k">Total Anggaran (Rp)</span><span class="tree-v">${s.total_anggaran == null ? '-' : _treeEsc(fmtRp(s.total_anggaran))}</span></div>
+      <div class="tree-row"><span class="tree-k">Sisa Anggaran (Rp)</span><span class="tree-v">${s.sisa_anggaran == null ? '-' : _treeEsc(fmtRp(s.sisa_anggaran))}</span></div>
       <a class="tree-link" href="javascript:void(0)" onclick="event.stopPropagation();showSpkByPageId('${_treeEsc(id)}')">Detail ↗</a>
     </div>`;
   }
   const p = idx.projById[id];
-  return `<div class="tree-box tree-proj${cls}" id="${uid}_${i}" data-key="${_treeEsc(k)}" onclick="treeSelect(this)" title="Klik untuk menyorot jalur relasi">
-      <div class="tree-type">PROJECT</div>
+  const cancelled = /^cancel/i.test(String(p.status || '').trim());
+  return `<div class="tree-box tree-proj${cls}${cancelled ? ' tree-cancel' : ''}" id="${uid}_${i}" data-key="${_treeEsc(k)}" onclick="treeSelect(this)" title="Klik untuk menyorot jalur relasi">
+      <div class="tree-type">PROJECT${cancelled ? ' · CANCELED' : ''}</div>
       <div class="tree-row"><span class="tree-k">Proyek</span><span class="tree-v">${_treeEsc(p.title || '-')}</span></div>
       <div class="tree-row"><span class="tree-k">No. IP</span><span class="tree-v">${_treeEsc((p.no_izin_prinsip || '').trim() || '-')}</span></div>
+      <div class="tree-row"><span class="tree-k">Nominal IP (Rp)</span><span class="tree-v">${p.nominal_ip == null ? '-' : _treeEsc(fmtRp(p.nominal_ip))}</span></div>
       <a class="tree-link" href="javascript:void(0)" onclick="event.stopPropagation();openProjByPageId('${_treeEsc(id)}')">Detail ↗</a>
     </div>`;
 }
