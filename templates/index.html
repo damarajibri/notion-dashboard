@@ -3653,6 +3653,9 @@ function showProjDetail(idx) {
       <label class="filter-label" for="pe_no_ip" style="display:block;margin:12px 0 6px">No. Izin Prinsip</label>
       <input type="text" id="pe_no_ip" class="form-input" style="width:100%;padding:8px" value="${esc(p.no_izin_prinsip || '')}">
 
+      <label class="filter-label" for="pe_description" style="display:block;margin:12px 0 6px">Description / Note</label>
+      <textarea id="pe_description" class="form-input" rows="4" style="width:100%;padding:8px;resize:vertical" placeholder="Deskripsi / catatan project (sama dengan field Description di Notion)">${String(p.description || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</textarea>
+
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
         <div style="flex:1;min-width:200px">
           <label class="filter-label" for="pe_spk_prev_input" style="display:block;margin-bottom:6px">SPK Sebelumnya</label>
@@ -4040,6 +4043,7 @@ function saveProjDetail() {
     due:      $('pe_due').value,
     nilai_project: parseThousands($('pe_nilai').value),
     no_izin_prinsip: ($('pe_no_ip') ? $('pe_no_ip').value : ''),
+    description: ($('pe_description') ? $('pe_description').value : ''),
     spk_sebelumnya: spkPrevCsv,
     spk_baru: spkBaruCsv,
     pic: picCsv,
@@ -4337,14 +4341,21 @@ function showSpkDetail(idx) {
     `</div>` +
     `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari & klik vendor untuk menambah. Kosongkan semua chip untuk menghapus vendor.</div>`;
 
-  // Project Asal (read-only): daftar project asal dari SPK ini, sebagai hyperlink.
-  const asalList = s.projects_asal || [];
-  const asalHtml = asalList.length
-    ? asalList.map(a => {
-        const click = a.page_id ? `onclick="openProjByPageId('${esc(a.page_id)}')" style="cursor:pointer"` : '';
-        return `<div class="spk-card-perp-item" ${click} title="Klik untuk buka Project">🏁 <span class="spk-card-perp-title">${esc(a.title || '-')}</span></div>`;
-      }).join('')
-    : '<span style="color:var(--text2);font-size:13px">Tidak ada Project Asal terkait</span>';
+  // Project Asal — MULTI via autocomplete kustom (chip + dropdown), sama seperti
+  // Project Perpanjangan. State: window._spkAsalSel (array page_id).
+  window._spkAsalSel = (s.asal_project_ids || (s.projects_asal || []).map(a => a.page_id))
+    .filter(id => id && window._spkPerpById[id]);
+  const asalHtml =
+    `<div id="se_asal_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px"></div>` +
+    `<div style="position:relative">` +
+      `<input type="text" id="se_asal_input" class="form-input" autocomplete="off"` +
+      ` placeholder="🔎 Ketik nama project..." style="width:100%;padding:8px"` +
+      ` oninput="onSpkAsalInput()" onfocus="onSpkAsalInput()"` +
+      ` onkeydown="onSpkAsalKeydown(event)" onblur="setTimeout(hideSpkAsalSuggest, 150)">` +
+      `<div id="se_asal_suggest" style="display:none;position:absolute;z-index:50;left:0;right:0;top:100%;margin-top:2px;max-height:240px;overflow:auto;background:var(--surface1,#fff);border:1px solid var(--border,#d1d5db);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18)"></div>` +
+    `</div>` +
+    `<div class="hint" style="font-size:11px;color:var(--text2);margin-top:4px">Cari & klik project untuk menambah. Bisa lebih dari satu.</div>` +
+    `<button type="button" class="btn btn-outline btn-sm" style="margin-top:8px" onclick="openProjCreateForSpkAsal()">➕ Tambah Project Asal (buat baru)</button>`;
 
   document.getElementById('spkModalBody').innerHTML = `
     <input type="hidden" id="se_page_id" value="${esc(s.page_id || '')}">
@@ -4398,7 +4409,7 @@ function showSpkDetail(idx) {
 
     <div class="modal-section">
       <div class="modal-section-title">Project Asal</div>
-      <div style="font-size:11px;color:var(--text2);margin:-4px 0 8px">Project submission asal dari SPK ini (relasi otomatis, baca saja). Klik untuk membuka detail Project.</div>
+      <div style="font-size:11px;color:var(--text2);margin:-4px 0 8px">Project submission asal dari SPK ini. Cari & pilih project yang sudah ada, atau buat baru. Klik nama untuk membuka detail Project.</div>
       ${asalHtml}
     </div>
 
@@ -4436,6 +4447,7 @@ function showSpkDetail(idx) {
   document.getElementById('spkModal').classList.add('active');
   attachThousandFormat('se_total_anggaran');
   renderSpkPerpChips();
+  renderSpkAsalChips();
   renderSpkVendorChips();
   loadVendorList();
   // Audit trail lazy: data diambil dari Notion saat tombol diklik (toggleAuditTrail).
@@ -4588,6 +4600,133 @@ function pickSpkPerp(id) {
   hideSpkPerpSuggest();
   renderSpkPerpChips();
   if (inp) inp.focus();
+}
+
+// ===== PROJECT ASAL (MULTI-SELECT, autocomplete kustom) =====
+// State: window._spkAsalSel (array page_id). Peta judul memakai window._spkPerpById.
+function renderSpkAsalChips() {
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const box = document.getElementById('se_asal_chips');
+  if (!box) return;
+  const sel = window._spkAsalSel || [];
+  const byId = window._spkPerpById || {};
+  if (!sel.length) {
+    box.innerHTML = '<span style="color:var(--text2);font-size:12px">Belum ada project asal dipilih.</span>';
+    return;
+  }
+  box.innerHTML = sel.map(id => {
+    const label = (byId[id] || {}).title || id;
+    return `<span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);color:var(--text1);border:1px solid var(--border,#d1d5db);border-radius:16px;padding:4px 10px;font-size:12px">
+      🏁 <a href="javascript:void(0)" onclick="openProjFromSpk('${esc(id)}')" title="Lihat detail Project Submission" style="color:var(--accent,#7c6af7);text-decoration:underline;text-underline-offset:2px">${esc(label)}</a>
+      <a href="javascript:void(0)" onclick="removeSpkAsal('${esc(id)}')" title="Hapus" style="color:var(--red,#ef4444);text-decoration:none;font-weight:700">✕</a>
+    </span>`;
+  }).join('');
+}
+
+function removeSpkAsal(id) {
+  window._spkAsalSel = (window._spkAsalSel || []).filter(x => x !== id);
+  renderSpkAsalChips();
+  onSpkAsalInput();
+}
+
+function hideSpkAsalSuggest() {
+  const box = document.getElementById('se_asal_suggest');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  window._spkAsalActiveIdx = -1;
+}
+
+function onSpkAsalInput() {
+  const inp = document.getElementById('se_asal_input');
+  const box = document.getElementById('se_asal_suggest');
+  if (!inp || !box) return;
+  const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
+  const hasData = (typeof DATA !== 'undefined' && DATA && Array.isArray(DATA.projects) && DATA.projects.length);
+  if (!hasData) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Data project belum termuat. Klik 🔄 Refresh di pojok kanan atas, lalu coba lagi.</div>';
+    return;
+  }
+  const byId = buildSpkPerpMap();
+  const chosen = new Set(window._spkAsalSel || []);
+  const needle = inp.value.trim().toLowerCase();
+  let items = Object.keys(byId).filter(id => !chosen.has(id)).map(id => ({ id, ...byId[id] }));
+  if (needle) items = items.filter(it => (it.title || '').toLowerCase().includes(needle));
+  items.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+  items = items.slice(0, 50);
+  window._spkAsalActiveIdx = -1;
+  window._spkAsalSuggestItems = items;
+  if (!items.length) {
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;color:var(--text2);font-size:12px">Tidak ada project cocok. Coba kata kunci lain.</div>';
+    return;
+  }
+  box.innerHTML = items.map((it, i) => `<div class="spk-asal-opt" data-idx="${i}" onmousedown="event.preventDefault()"
+         onclick="pickSpkAsal('${esc(it.id)}')"
+         style="cursor:pointer;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border,#eee)">🏁 ${esc(it.title)}</div>`).join('');
+  box.style.display = 'block';
+}
+
+function onSpkAsalKeydown(e) {
+  const box = document.getElementById('se_asal_suggest');
+  const items = window._spkAsalSuggestItems || [];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!items.length) return;
+    let idx = window._spkAsalActiveIdx ?? -1;
+    idx = e.key === 'ArrowDown' ? Math.min(items.length - 1, idx + 1) : Math.max(0, idx - 1);
+    window._spkAsalActiveIdx = idx;
+    if (box) Array.from(box.querySelectorAll('.spk-asal-opt')).forEach((el, i) => {
+      el.style.background = (i === idx) ? 'var(--surface2,#eef2ff)' : '';
+    });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const idx = window._spkAsalActiveIdx ?? -1;
+    const pick = (idx >= 0 && idx < items.length) ? items[idx] : items[0];
+    if (pick) pickSpkAsal(pick.id);
+  } else if (e.key === 'Escape') {
+    hideSpkAsalSuggest();
+  }
+}
+
+function pickSpkAsal(id) {
+  if (!id) return;
+  const arr = window._spkAsalSel || (window._spkAsalSel = []);
+  if (!arr.includes(id)) arr.push(id);
+  const inp = document.getElementById('se_asal_input');
+  if (inp) inp.value = '';
+  hideSpkAsalSuggest();
+  renderSpkAsalChips();
+  if (inp) inp.focus();
+}
+
+// Tombol "Tambah Project Asal (buat baru)": buka form Project Submission dengan
+// relasi "SPK baru" otomatis menunjuk ke SPK ini. Setelah dibuat, detail SPK
+// dibuka lagi dengan project baru ditambahkan ke Project Asal.
+function openProjCreateForSpkAsal() {
+  const spk = window._editingSpk;
+  if (!spk || !spk.page_id) { showToast('Buka detail SPK dulu.', '⚠️'); return; }
+  const spkPageId = spk.page_id;
+  const prevAsal = [...(window._spkAsalSel || [])];
+  const prevPerp = [...(window._spkPerpSel || [])];
+  openProjCreate({
+    subtitle: 'Project baru akan ditambahkan sebagai Project Asal untuk SPK ' + (spk.no_spk || ''),
+    prefillSpkBaru: spkPageId,
+    prefillSpkLabel: (spk.no_spk || spkPageId),
+    onCreated: (newProjId) => {
+      const list = (DATA && DATA.spk) || [];
+      const i = list.findIndex(s => s.page_id === spkPageId);
+      if (i < 0) { showToast('SPK tidak ditemukan setelah refresh.', '⚠️'); return; }
+      window._filteredSpk = list;
+      showSpkDetail(i);
+      // Project baru sudah menunjuk SPK ini lewat "SPK baru"; pulihkan pilihan yang belum tersimpan.
+      const byId = window._spkPerpById || {};
+      window._spkAsalSel = Array.from(new Set([...prevAsal, newProjId])).filter(id => byId[id]);
+      window._spkPerpSel = prevPerp.filter(id => byId[id]);
+      renderSpkAsalChips();
+      renderSpkPerpChips();
+      showToast('Project Asal baru ditambahkan. Klik Simpan untuk menyimpan perubahan lain di SPK.', 'ℹ️');
+    }
+  });
 }
 
 // ===== VENDOR (MULTI-SELECT, autocomplete kustom) =====
@@ -4757,6 +4896,7 @@ function saveSpkDetail() {
     spk_selesai:     $('se_selesai').value,
     notes:           $('se_notes').value,
     perp_projects:   perpCsv,
+    asal_projects:   (window._spkAsalSel || []).filter(Boolean).join(','),
     vendor_ids:      (window._spkVendorSel || []).filter(Boolean).join(','),
   };
 
@@ -4882,13 +5022,14 @@ function openProjCreate(opts) {
   //   "SPK sebelumnya" project baru (opsional); opts.prefillSpkLabel: label tampil.
   window._projCreateOnCreated = (opts && typeof opts.onCreated === 'function') ? opts.onCreated : null;
   window._projCreateSpkPrefill = (opts && opts.prefillSpkSebelumnya) ? opts.prefillSpkSebelumnya : '';
+  window._projCreateSpkBaruPrefill = (opts && opts.prefillSpkBaru) ? opts.prefillSpkBaru : '';
   const _sub = document.querySelector('#projCreateModal .modal-subtitle');
   if (_sub) _sub.textContent = (opts && opts.subtitle) ? opts.subtitle : 'Buat Project Submission baru di Notion';
   const esc = v => (v == null ? '' : String(v)).replace(/"/g, '&quot;');
-  const spkPrefillRow = (opts && opts.prefillSpkSebelumnya)
-    ? `<label class="filter-label" style="display:block;margin:12px 0 6px">SPK Sebelumnya</label>
+  const spkPrefillRow = (opts && (opts.prefillSpkSebelumnya || opts.prefillSpkBaru))
+    ? `<label class="filter-label" style="display:block;margin:12px 0 6px">${opts.prefillSpkBaru ? 'SPK Baru' : 'SPK Sebelumnya'}</label>
        <div style="display:flex;align-items:center;gap:6px;background:var(--surface2,#eef2ff);border:1px solid var(--border,#d1d5db);border-radius:8px;padding:8px 10px;font-size:13px">
-         📄 <b>${esc(opts.prefillSpkLabel || opts.prefillSpkSebelumnya)}</b>
+         📄 <b>${esc(opts.prefillSpkLabel || opts.prefillSpkSebelumnya || opts.prefillSpkBaru)}</b>
          <span style="color:var(--text2);font-size:11px;margin-left:auto">otomatis terisi dari SPK ini</span>
        </div>`
     : '';
@@ -4933,6 +5074,7 @@ function saveProjCreate() {
   };
   // Prefill relasi "SPK sebelumnya" bila form dibuka dari detail SPK.
   if (window._projCreateSpkPrefill) payload.spk_sebelumnya = window._projCreateSpkPrefill;
+  if (window._projCreateSpkBaruPrefill) payload.spk_baru = window._projCreateSpkBaruPrefill;
   if (!payload.title.trim()) { res.style.color = 'var(--red)'; res.textContent = 'Nama Project wajib diisi.'; return; }
   btn.disabled = true; icon.textContent = '⏳'; res.textContent = '';
   showProcessing('Membuat project...');
@@ -4945,6 +5087,7 @@ function saveProjCreate() {
         const cb = window._projCreateOnCreated;
         window._projCreateOnCreated = null;
         window._projCreateSpkPrefill = '';
+        window._projCreateSpkBaruPrefill = '';
         closeProjCreate();
         if (cb) {
           // Muat ulang data agar project baru ada di DATA.projects, lalu callback.

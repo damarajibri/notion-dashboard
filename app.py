@@ -496,6 +496,9 @@ def extract_project(r, personel):
     # SPK baru (relation page_ids) — SPK yang dibuat dari project ini
     spk_baru_ids = [x['id'] for x in props.get('SPK baru', {}).get('relation', [])]
 
+    # Description (rich_text, bisa multi-segmen) — gabungkan semua segmen.
+    description = ''.join(t.get('plain_text', '') for t in props.get('Description', {}).get('rich_text', []))
+
     # Progress dari formula (0.0–1.0)
     prog_formula = props.get('Progress', {}).get('formula') or {}
     comp_val     = None
@@ -545,6 +548,7 @@ def extract_project(r, personel):
         'priority_raw': priority_obj.get('name', '') or '',
         'nominal_ip': props.get('Nominal IP', {}).get('number'),
         'no_izin_prinsip': no_izin_prinsip,
+        'description': description,
         'spk_sebelumnya_ids': spk_sebelumnya_ids,
         'spk_baru_ids': spk_baru_ids,
         'assignee_ids': assignee_ids,
@@ -1850,7 +1854,7 @@ def api_monthly_update():
         if ftype == 'title':
             props[notion_name] = {'title': [{'text': {'content': val}}] if val else []}
         elif ftype == 'rich_text':
-            props[notion_name] = {'rich_text': [{'text': {'content': val}}] if val else []}
+            props[notion_name] = {'rich_text': [{'text': {'content': val[i:i + 2000]}} for i in range(0, len(val), 2000)]}  # batas Notion 2000 char/elemen
         elif ftype == 'number':
             if val == '':
                 props[notion_name] = {'number': None}
@@ -1933,7 +1937,7 @@ def _build_props_from_map(editable_map, payload, only_present=True):
         if ftype == 'title':
             props[notion_name] = {'title': [{'text': {'content': val}}] if val else []}
         elif ftype == 'rich_text':
-            props[notion_name] = {'rich_text': [{'text': {'content': val}}] if val else []}
+            props[notion_name] = {'rich_text': [{'text': {'content': val[i:i + 2000]}} for i in range(0, len(val), 2000)]}  # batas Notion 2000 char/elemen
         elif ftype == 'select':
             if val:
                 props[notion_name] = {'select': {'name': val}}
@@ -2029,6 +2033,7 @@ _PROJECT_EDITABLE = {
     'due':      ('Dates', 'date'),
     'nilai_project': ('Nominal IP', 'number'),
     'no_izin_prinsip': ('No. Izin Prinsip', 'rich_text'),
+    'description':     ('Description', 'rich_text'),
     'spk_sebelumnya':  ('SPK sebelumnya', 'relation_multi'),
     'spk_baru':        ('SPK baru', 'relation_multi'),
     'pic':             ('Assignee', 'relation_multi'),
@@ -2311,6 +2316,7 @@ _SPK_EDITABLE = {
     'spk_selesai':     ('SPK Selesai', 'date'),
     'notes':           ('Notes', 'rich_text'),
     'perp_projects':   ('Projects Perpanjangan', 'relation_multi'),
+    'asal_projects':   ('Projects Asal', 'relation_multi'),
     'vendor_ids':      ('Vendor', 'relation_multi'),
 }
 
