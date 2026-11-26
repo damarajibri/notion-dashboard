@@ -943,6 +943,18 @@ def inject_user():
     return {'user': current_user()}
 
 
+@app.context_processor
+def inject_static_version():
+    """Cache-busting token for static assets: changes whenever a file in
+    static/ is modified, so browsers never keep a stale copy of export.js."""
+    try:
+        folder = os.path.join(app.root_path, 'static')
+        v = max(int(os.path.getmtime(os.path.join(folder, f))) for f in os.listdir(folder))
+    except (OSError, ValueError):
+        v = 0
+    return {'static_v': v}
+
+
 # ─── ACTIVITY LOG ─────────────────────────────────────────────────────────────
 # One helper to record any user action, pulling identity from the session and
 # network metadata from the request. Logging is best-effort and must never

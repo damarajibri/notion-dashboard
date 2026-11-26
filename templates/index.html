@@ -151,6 +151,18 @@ body {
   white-space: nowrap;
 }
 
+.export-menu {
+  position: fixed; z-index: 1000; min-width: 180px; padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+}
+.export-menu button {
+  background: transparent; border: none; color: var(--text); text-align: left;
+  padding: 9px 12px; border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.export-menu button:hover { background: var(--surface2); }
+
 .btn-primary {
   background: linear-gradient(135deg, var(--accent), var(--accent2));
   color: #fff;
@@ -1244,6 +1256,7 @@ span.file-chip { cursor: default; opacity: .7; }
           <span>📋</span> Active Tasks
         </div>
         <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-sm btn-outline" onclick="openExportMenu(event, 'tasks')" title="Export tabel Active Tasks sesuai filter">⬇ Export</button>
           <button class="btn btn-sm btn-primary" onclick="openTaskCreate()">➕ Tambah Task</button>
           <span class="section-count" id="taskCount">0 tasks</span>
         </div>
@@ -1299,6 +1312,7 @@ span.file-chip { cursor: default; opacity: .7; }
           <span>🏗️</span> All Projects Submission
         </div>
         <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-sm btn-outline" onclick="openExportMenu(event, 'projects')" title="Export tabel Projects sesuai filter">⬇ Export</button>
           <button class="btn btn-sm btn-primary" onclick="openProjCreate()">➕ Tambah Project</button>
           <span class="section-count" id="projCount">0 projects</span>
         </div>
@@ -1417,6 +1431,7 @@ span.file-chip { cursor: default; opacity: .7; }
       <div class="section-header">
         <div class="section-title"><span>📄</span> All SPK</div>
         <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-sm btn-outline" onclick="openExportMenu(event, 'spk')" title="Export tabel SPK sesuai filter">⬇ Export</button>
           <button class="btn btn-sm btn-primary" onclick="openSpkCreate()">➕ Tambah SPK</button>
           <span class="section-count" id="spkCount">0 SPK</span>
         </div>
@@ -1460,7 +1475,10 @@ span.file-chip { cursor: default; opacity: .7; }
             <option value="empty">⚠️ Belum Ada PIC</option>
           </select>
         </div>
-        <span class="section-count" id="spkGroupCount">0 SPK</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-sm btn-outline" onclick="openExportMenu(event, 'spkGroup')" title="Export SPK Grouping sesuai filter">⬇ Export</button>
+          <span class="section-count" id="spkGroupCount">0 SPK</span>
+        </div>
       </div>
       <div id="spkBoard" class="spk-board"></div>
     </div><!-- /spk-sub-group -->
@@ -1523,7 +1541,10 @@ span.file-chip { cursor: default; opacity: .7; }
     <div class="card full">
       <div class="section-header">
         <div class="section-title"><span>💵</span> Monthly Performance</div>
-        <span class="section-count" id="monthlyCount">Belum dimuat</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn btn-sm btn-outline" onclick="openExportMenu(event, 'monthly')" title="Export baris yang sedang ditampilkan">⬇ Export</button>
+          <span class="section-count" id="monthlyCount">Belum dimuat</span>
+        </div>
       </div>
       <div class="table-wrapper">
         <div class="scroll-table">
@@ -1872,6 +1893,7 @@ span.file-chip { cursor: default; opacity: .7; }
 </footer>
 
 <!-- ===== JAVASCRIPT ===== -->
+<script src="{{ url_for('static', filename='export.js', v=static_v) }}"></script>
 <script>
 'use strict';
 
@@ -2360,6 +2382,225 @@ function makeSortable(table) {
   });
 }
 
+// ===== EXPORT (Excel / CSV) =====
+// Mengekspor persis apa yang tampil: baris yang lolos filter, dalam urutan tabel
+// di layar (termasuk urutan hasil klik header), kolom sesuai tabel. Nilai diambil
+// dari data asli (angka tetap angka), bukan dari teks badge. Setiap <tr> membawa
+// data-ri = indeks baris di array sumber.
+const _exNum = v => (v === null || v === undefined || v === '' ? null : v);
+const _exJoin = a => (a || []).join('; ');
+const _exPerp = s => (s.perpanjangan || []).map(p => p.title + (p.status ? ' (' + p.status + ')' : '')).join('; ');
+const _exVendor = s => (s.vendor && s.vendor !== '-' && s.vendor !== '?') ? s.vendor : '';
+
+function _exSelText(id) {
+  const el = document.getElementById(id);
+  if (!el) return '';
+  if (el.tagName === 'SELECT') {
+    const v = el.value;
+    if (v === 'all' || v === '') return 'Semua';
+    return (el.options[el.selectedIndex] || {}).textContent.trim();
+  }
+  return (el.value || '').trim() || 'Semua';
+}
+const _exFilters = pairs => pairs.map(([label, id]) => [label, _exSelText(id)]);
+
+const EXPORT_SPECS = {
+  tasks: {
+    title: 'Tasks', file: 'Tasks', tableId: 'tasksTable', source: () => window._filteredTasks,
+    columns: [
+      { label: '#', type: 'int', get: (x, n) => n + 1 },
+      { label: 'Task', get: x => x.name },
+      { label: 'Status', get: x => x.status },
+      { label: 'Priority', get: x => x.priority },
+      { label: 'Assignee', get: x => _exJoin(x.assignees) },
+      { label: 'Tags', get: x => _exJoin(x.tags) },
+      { label: 'Due', get: x => x.due },
+      { label: 'Progress (%)', type: 'number', get: x => _exNum(x.progress) },
+      { label: 'Last Edit', get: x => x.edited },
+    ],
+    filters: () => [..._exFilters([['Search', 'search'], ['Status', 'filterStatus'], ['Assignee', 'filterAssignee'],
+                                   ['Tag', 'filterTag'], ['Due Date', 'filterDue']]),
+                    ['Catatan', 'Hanya task aktif (status bukan Done), sama dengan tabel Active Tasks']],
+  },
+  projects: {
+    title: 'Projects', file: 'Projects', tableId: 'projTable', source: () => window._filteredProjects,
+    columns: [
+      { label: '#', type: 'int', get: (x, n) => n + 1 },
+      { label: 'Project', get: x => x.title },
+      { label: 'Status', get: x => x.status },
+      { label: 'Assignee', get: x => _exJoin(x.assignees) },
+      { label: 'Due', get: x => x.due },
+      { label: 'Sisa (hari)', type: 'int', get: x => _exNum(x.remaining_days) },
+      { label: 'Completion (%)', type: 'number', get: x => _exNum(x.completion) },
+      { label: 'Docs Selesai', type: 'int', get: x => _exNum(x.doc_done) },
+      { label: 'Docs Total', type: 'int', get: x => _exNum(x.doc_total) },
+      { label: 'Priority', get: x => x.priority },
+      { label: 'No. Izin Prinsip', get: x => (x.no_izin_prinsip || '').trim() },
+      { label: 'SPK Baru', get: x => _exJoin(x.spk_baru) },
+      { label: 'Last Edit', get: x => x.edited },
+    ],
+    filters: () => _exFilters([['Search', 'searchProj'], ['Status', 'filterProjStatus'], ['Assignee', 'filterProjAssignee'],
+                               ['Priority', 'filterProjPriority'], ['Due Date', 'filterProjDue']]),
+  },
+  spk: {
+    title: 'SPK', file: 'SPK', tableId: 'spkTable', source: () => window._filteredSpk,
+    columns: [
+      { label: '#', type: 'int', get: (x, n) => n + 1 },
+      { label: 'ID', get: x => x.spk_id },
+      { label: 'No SPK', get: x => x.no_spk },
+      { label: 'Project', get: x => x.project },
+      { label: 'Vendor', get: x => x.vendor },
+      { label: 'Status', get: x => x.status },
+      { label: 'Tipe', get: x => (x.tipe && x.tipe !== '-') ? x.tipe : '' },
+      { label: 'Mulai', get: x => x.spk_mulai },
+      { label: 'Selesai', get: x => x.spk_selesai },
+      { label: 'Sisa Hari', type: 'int', get: x => _exNum(x.sisa_hari) },
+      { label: 'Total Anggaran', type: 'money', get: x => _exNum(x.total_anggaran) },
+      { label: 'Terbayar', type: 'money', get: x => _exNum(x.total_terbayar) },
+      { label: 'Sisa Anggaran', type: 'money', get: x => _exNum(x.sisa_anggaran) },
+      { label: 'Perpanjangan', get: x => _exPerp(x) || ((x.sisa_hari !== null && x.sisa_hari !== undefined && x.sisa_hari <= 90) ? 'Belum Ada' : '') },
+      { label: 'PIC', get: x => _exJoin(x.pic) },
+      { label: 'Notes', get: x => x.notes },
+    ],
+    filters: () => _exFilters([['Search', 'searchSpk'], ['Status', 'filterSpkStatus'], ['Vendor', 'filterSpkVendor'],
+                               ['Jatuh Tempo', 'filterSpkDue'], ['PIC', 'filterSpkPic'], ['Tipe', 'filterSpkTipe']]),
+  },
+  spkGroup: {
+    title: 'SPK Grouping', file: 'SPK-Grouping',
+    // Urutan = urutan kolom board (kiri ke kanan), lalu urutan kartu dalam kolom.
+    build: () => {
+      const cols = window._spkBoardCols || [];
+      const rows = [];
+      cols.forEach(col => col.items.forEach(s => rows.push([
+        col.label, s.no_spk, s.project, _exPerp(s),
+        (s.projects_asal || []).map(a => a.title).join('; '),
+        s.status, _exNum(s.sisa_hari), _exVendor(s), _exNum(s.total_anggaran),
+        rekonSummary(s).text, _exJoin(s.pic),
+      ])));
+      return {
+        header: ['Kelompok', 'No SPK', 'Project', 'Project Perpanjangan', 'Project Asal', 'Status',
+                 'Sisa Hari', 'Vendor', 'Total Anggaran', 'Rekon Done s/d', 'PIC'],
+        types: ['text', 'text', 'text', 'text', 'text', 'text', 'int', 'text', 'money', 'text', 'text'],
+        rows,
+      };
+    },
+    filters: () => _exFilters([['Search', 'searchSpkGroup'], ['Status', 'filterSpkGroupStatus'], ['Vendor', 'filterSpkGroupVendor'],
+                               ['Tipe', 'filterSpkGroupTipe'], ['Jatuh Tempo', 'filterSpkGroupDue'], ['PIC', 'filterSpkGroupPic']]),
+  },
+  monthly: {
+    title: 'Monthly Performance', file: 'Monthly-Performance', tableId: 'monthlyTable', source: () => window._monthlyRows,
+    ready: () => (MONTHLY_DATA ? null : 'Muat data Monthly Performance dulu (klik Load) sebelum export'),
+    // Kolom mengikuti urutan <th> yang sedang tampil (bisa diseret user).
+    columns: () => {
+      const cat = {
+        num:           { label: '#', type: 'int', get: (x, n) => n + 1 },
+        id:            { label: 'ID', get: x => x.id },
+        name:          { label: 'Name', get: x => x.name },
+        periode:       { label: 'Periode', get: x => x.periode ? x.periode.slice(0, 7) : '' },
+        no_spk:        { label: 'No SPK', get: x => x.no_spk },
+        nilai_tagihan: { label: 'Nilai Tagihan', type: 'money', get: x => _exNum(x.nilai_tagihan) },
+        prognosa:      { label: 'Prognosa', type: 'money', get: x => _exNum(x.prognosa) },
+        status_invoice:{ label: 'Status Invoice', get: x => x.status_invoice },
+        status_bayar:  { label: 'Status Pembayaran', get: x => x.status_bayar },
+        status_ba:     { label: 'Status BA Performansi', get: x => x.status_ba },
+        status_rekon:  { label: 'Status Rekon', get: x => x.status_rekon },
+        no_invoice:    { label: 'No. Invoice', get: x => x.no_invoice },
+        dok_lp:        { label: 'No. Dokumen BA LP', get: x => x.dok_lp },
+        keterangan:    { label: 'Keterangan', get: x => x.keterangan },
+        tgl_serah_ba:  { label: 'Serah BA', get: x => x.tgl_serah_ba },
+        tgl_masuk_ba:  { label: 'Masuk BA', get: x => x.tgl_masuk_ba },
+        tgl_rekon:     { label: 'Rekon', get: x => x.tgl_rekon },
+        files_bast:    { label: 'File BAST', get: x => (x.files_bast || []).map(f => f.name).join('; ') },
+        files_balp:    { label: 'File BALP', get: x => (x.files_balp || []).map(f => f.name).join('; ') },
+      };
+      const keys = Array.from(document.querySelectorAll('#monthlyTable thead th[data-col-key]')).map(th => th.dataset.colKey);
+      return keys.map(k => cat[k]).filter(Boolean);
+    },
+    // Filter yang dipakai saat data DIMUAT (bukan isi kotak filter saat ini).
+    filters: () => {
+      const f = window._monthlyAppliedFilters || {};
+      const v = (x, all) => (!x || x === all) ? 'Semua' : x;
+      return [['Search', v(f.search)], ['Periode', v(f.periode, 'all')], ['Status Invoice', v(f.invoice, 'all')],
+              ['Status Pembayaran', v(f.bayar, 'all')], ['Status BA Performansi', v(f.ba, 'all')],
+              ['Status Rekon', v(f.rekon, 'all')], ['No. SPK', v(f.spk)]];
+    },
+  },
+};
+
+// Indeks sumber dalam urutan baris yang tampil di tabel saat ini.
+function _exDisplayedIndexes(tableId, srcLen) {
+  const trs = document.querySelectorAll('#' + tableId + ' tbody tr[data-ri]');
+  const idx = [];
+  trs.forEach(tr => { const i = parseInt(tr.dataset.ri, 10); if (i >= 0 && i < srcLen) idx.push(i); });
+  return idx;
+}
+
+function _exBuildSheet(spec) {
+  if (spec.build) return spec.build();
+  const src = spec.source() || [];
+  const cols = typeof spec.columns === 'function' ? spec.columns() : spec.columns;
+  const idx = _exDisplayedIndexes(spec.tableId, src.length);
+  return {
+    header: cols.map(c => c.label),
+    types: cols.map(c => c.type || 'text'),
+    rows: idx.map((ri, n) => cols.map(c => c.get(src[ri], n))),
+  };
+}
+
+function runExport(key, fmt) {
+  closeExportMenu();
+  const spec = EXPORT_SPECS[key];
+  if (!spec || !window.ExportKit) { showToast('Fitur export belum siap (export.js gagal dimuat)', '❌'); return; }
+  if (!DATA) { showToast('Data belum dimuat', '⚠'); return; }
+  const notReady = spec.ready && spec.ready();
+  if (notReady) { showToast(notReady, '⚠'); return; }
+
+  let sheet;
+  try { sheet = _exBuildSheet(spec); }
+  catch (e) { showToast('Export gagal: ' + e.message, '❌'); return; }
+  if (!sheet.rows.length) { showToast('Tidak ada data untuk diekspor (cek filter)', '⚠'); return; }
+  sheet.name = spec.title;
+
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;
+  const base = `${spec.file}_${stamp}`;
+
+  if (fmt === 'csv') {
+    ExportKit.download(ExportKit.buildCSV(sheet), base + '.csv', ExportKit.CSV_MIME);
+  } else {
+    const info = {
+      name: 'Info Export', plain: true, header: ['Keterangan', 'Nilai'],
+      rows: [['Halaman', spec.title], ['Diekspor pada', now.toLocaleString('id-ID')],
+             ['Jumlah baris', sheet.rows.length], ...spec.filters()],
+    };
+    ExportKit.download(ExportKit.buildXLSX([sheet, info]), base + '.xlsx', ExportKit.XLSX_MIME);
+  }
+  showToast(`${sheet.rows.length} baris diekspor (${fmt === 'csv' ? 'CSV' : 'Excel'})`, '✅');
+}
+
+function closeExportMenu() {
+  const m = document.getElementById('exportMenu');
+  if (m) m.remove();
+}
+
+function openExportMenu(ev, key) {
+  ev.stopPropagation();
+  const had = document.getElementById('exportMenu');
+  closeExportMenu();
+  if (had && had.dataset.key === key) return;  // klik kedua menutup
+  const r = ev.currentTarget.getBoundingClientRect();
+  const m = document.createElement('div');
+  m.id = 'exportMenu'; m.className = 'export-menu'; m.dataset.key = key;
+  m.innerHTML = `<button type="button" onclick="runExport('${key}','xlsx')">📗 Excel (.xlsx)</button>
+                 <button type="button" onclick="runExport('${key}','csv')">📄 CSV (.csv)</button>`;
+  document.body.appendChild(m);
+  m.style.top = (r.bottom + 6) + 'px';
+  m.style.left = Math.max(8, Math.min(r.right - m.offsetWidth, window.innerWidth - m.offsetWidth - 8)) + 'px';
+}
+document.addEventListener('click', closeExportMenu);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeExportMenu(); });
+
 // ===== EMPTY STATE =====
 function emptyState(colspan, msg = 'Tidak ada data yang cocok', sub = 'Coba ubah filter pencarian') {
   return `<tr><td colspan="${colspan}">
@@ -2616,7 +2857,7 @@ function applyAllTaskFilters() {
   table.querySelector('tbody').innerHTML = activeTasks.map((t, i) => {
     const tags = (t.tags || []).map(g => `<span class="tag">${g}</span>`).join('') || '-';
     const due = t.due ? (t.due < new Date().toISOString().slice(0, 10) ? `<span style="color:var(--red);font-weight:600">⚠️ ${t.due}</span>` : `<span style="color:var(--text2)">${t.due}</span>`) : '<span style="color:var(--text2)">-</span>';
-    return `<tr>
+    return `<tr data-ri="${i}">
       <td class="col-num">${i + 1}</td>
       <td class="col-name"><a href="javascript:void(0)" onclick="showTaskDetailFresh(${i})" class="col-name-text" style="color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${t.name}</a></td>
       <td>${statusBadge(t.status)}</td>
@@ -2688,9 +2929,9 @@ function applyProjFilters() {
     const due = p.due ? `<span style="color:var(--text2);font-size:12px">${p.due}</span>` : '-';
     const nip = (p.no_izin_prinsip && String(p.no_izin_prinsip).trim())
       ? `<span style="font-size:12px">${esc(p.no_izin_prinsip)}</span>` : '-';
-    return `<tr>
+    return `<tr data-ri="${i}">
       <td class="col-num">${i + 1}</td>
-      <td class="col-name"><a href="javascript:void(0)" onclick="openProjDetailFresh(${i})" class="col-name-text" style="font-weight:600;color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk detail/edit">${p.title}</a></td>
+      <td class="col-name"><a href="javascript:void(0)" onclick="openProjDetailFresh(${i})" class="col-name-text" style="font-weight:600;color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="${esc(p.title)} (klik untuk detail/edit)">${p.title}</a></td>
       <td>${statusBadge(p.status)}</td>
       <td>${renderAssignees(p.assignees)}</td>
       <td>${due}</td>
@@ -2927,7 +3168,7 @@ function applySpkFilters() {
     const mulai   = s.spk_mulai   ? `<span style="color:var(--text2);font-size:12px">${s.spk_mulai}</span>`   : '-';
     const selesai = s.spk_selesai ? `<span style="color:var(--text2);font-size:12px">${s.spk_selesai}</span>` : '-';
 
-    return `<tr>
+    return `<tr data-ri="${i}">
       <td class="col-num">${i + 1}</td>
       <td><span class="tag">${s.spk_id}</span></td>
       <td style="font-weight:600;white-space:nowrap;font-size:12px"><a href="javascript:void(0)" onclick="showSpkDetailFresh(${i})" style="color:var(--accent,#3b82f6);text-decoration:none;cursor:pointer" title="Klik untuk edit">${s.no_spk || '-'}</a></td>
@@ -3032,6 +3273,8 @@ function renderSpkGrouping() {
   });
 
   const cols = Object.values(groups).sort((a, b) => a.order - b.order);
+  cols.forEach(col => col.items.sort((a, b) => (a.sisa_hari ?? 99999) - (b.sisa_hari ?? 99999)));
+  window._spkBoardCols = cols;  // dipakai export
   if (!cols.length) { board.innerHTML = '<div class="spk-board-empty">Tidak ada SPK yang cocok.</div>'; return; }
 
   board.innerHTML = cols.map(col => {
@@ -3241,6 +3484,7 @@ function loadMonthly() {
         return;
       }
       MONTHLY_DATA = d;
+      window._monthlyAppliedFilters = f;  // filter yang dipakai data ini (untuk export)
       btn.innerHTML = `<span id="loadMonthlyIcon">🔄</span> Reload`;
 
       if (!d.monthly || d.monthly.length === 0) {
@@ -3410,7 +3654,7 @@ function renderMonthly() {
     .join('');
 
   table.querySelector('tbody').innerHTML = rows
-    .map((x, i) => `<tr>${ordered.map(c => c.cell(x, i)).join('')}</tr>`)
+    .map((x, i) => `<tr data-ri="${i}">${ordered.map(c => c.cell(x, i)).join('')}</tr>`)
     .join('') || emptyState(ordered.length);
 
   makeSortable(table);
