@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from flask import (
     Flask, jsonify, render_template, request, send_from_directory,
-    session, redirect, url_for, abort,
+    session, redirect, url_for, abort, g,
 )
 
 import db
@@ -840,22 +840,80 @@ def check_captcha(answer):
     return answer.strip().upper() == expected.upper()
 
 
+def _bearer_token():
+    """Return the raw token from 'Authorization: Bearer <token>', or None."""
+    header = request.headers.get('Authorization', '')
+    if header[:7].lower() == 'bearer ':
+        return header[7:].strip()
+    return None
+
+
+def get_auth():
+    """Identify the caller of this request (cached per request).
+
+    Returns {'uid', 'username', 'role', 'via'} or None. 'via' is 'token' for an
+    API token and 'session' for a browser login. When an Authorization: Bearer
+    header is present it is authoritative: an invalid, expired or revoked token
+    yields None even if a session cookie is also sent. Token callers get their
+    CURRENT role from the database on every request.
+    """
+    if 'auth' in g:
+        return g.auth
+    auth = None
+    raw = _bearer_token()
+    if raw is not None:
+        found = db.authenticate_token(raw)
+        if found:
+            u = found['user']
+            auth = {'uid': u['id'], 'username': u['username'],
+                    'role': u['role'], 'via': 'token'}
+    elif session.get('uid') is not None:
+        auth = {'uid': session.get('uid'), 'username': session.get('username'),
+                'role': session.get('role'), 'via': 'session'}
+    g.auth = auth
+    return auth
+
+
+def _unauthorized(message):
+    resp = jsonify({'ok': False, 'error': message})
+    resp.status_code = 401
+    if _bearer_token() is not None:
+        resp.headers['WWW-Authenticate'] = 'Bearer error="invalid_token"'
+    return resp
+
+
 def current_user():
-    """Return the logged-in user dict from session, or None."""
-    uid = session.get('uid')
-    if uid is None:
+    """Return the authenticated user dict (session or token), or None."""
+    auth = get_auth()
+    if auth is None:
         return None
-    return db.get_user(uid)
+    return db.get_user(auth['uid'])
 
 
 def login_required(view):
     """Redirect to /login for pages, or return 401 JSON for /api/* endpoints."""
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if session.get('uid') is None:
+        if get_auth() is None:
             if request.path.startswith('/api/'):
-                return jsonify({'ok': False, 'error': 'Unauthorized. Silakan login.'}), 401
+                return _unauthorized('Unauthorized. Silakan login atau sertakan token.')
             return redirect(url_for('login', next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def session_required(view):
+    """Like login_required, but a browser session is mandatory (API tokens are
+    rejected). Used for credential management so a leaked token cannot mint
+    new tokens or change the account password."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        auth = get_auth()
+        if auth is None:
+            return _unauthorized('Unauthorized. Silakan login.')
+        if auth['via'] != 'session':
+            return jsonify({'ok': False,
+                            'error': 'Endpoint ini hanya bisa diakses dengan login (bukan token).'}), 403
         return view(*args, **kwargs)
     return wrapped
 
@@ -865,11 +923,12 @@ def roles_required(*roles):
     def decorator(view):
         @wraps(view)
         def wrapped(*args, **kwargs):
-            if session.get('uid') is None:
+            auth = get_auth()
+            if auth is None:
                 if request.path.startswith('/api/'):
-                    return jsonify({'ok': False, 'error': 'Unauthorized.'}), 401
+                    return _unauthorized('Unauthorized.')
                 return redirect(url_for('login', next=request.path))
-            if session.get('role') not in roles:
+            if auth['role'] not in roles:
                 if request.path.startswith('/api/'):
                     return jsonify({'ok': False, 'error': 'Akses ditolak (role tidak cukup).'}), 403
                 return abort(403)
@@ -937,8 +996,9 @@ def record_activity(action, target=None, detail=None, changes=None, user=None):
         uid = user.get('id')
         uname = user.get('username')
     else:
-        uid = session.get('uid')
-        uname = session.get('username')
+        auth = get_auth() or {}
+        uid = auth.get('uid')
+        uname = auth.get('username')
     db.log_activity(
         action=action,
         user_id=uid,
@@ -958,7 +1018,7 @@ _VIEW_LOG_SKIP_EXACT = {'/captcha/refresh'}
 
 # Mutating API paths that already record their own domain-specific activity
 # (user CRUD), so the generic mutation logger skips them to avoid duplicates.
-_MUTATION_LOG_SKIP = ('/api/users', '/api/account')
+_MUTATION_LOG_SKIP = ('/api/users', '/api/account', '/api/tokens')
 
 # Auto-purge of old 'view' activity (retention handled in db.purge_old_views).
 # Runs opportunistically from the request path, throttled to at most once per
@@ -1001,7 +1061,8 @@ def _log_page_view(response):
 
         # ── Data mutations on the API ────────────────────────────────────────
         if method in ('POST', 'PUT', 'PATCH', 'DELETE') and path.startswith('/api/'):
-            if session.get('uid') is None:
+            auth = get_auth()
+            if auth is None:
                 return response
             if any(path == p or path.startswith(p) for p in _MUTATION_LOG_SKIP):
                 return response  # already logged with domain detail
@@ -1009,7 +1070,8 @@ def _log_page_view(response):
             record_activity(
                 f'api.{method.lower()}',
                 target=path,
-                detail={'status': response.status_code, 'ok': ok},
+                detail={'status': response.status_code, 'ok': ok,
+                        **({'via': 'token'} if auth['via'] == 'token' else {})},
                 changes=_extract_change_fields(method),
             )
             return response
@@ -1017,7 +1079,7 @@ def _log_page_view(response):
         # ── Page views ───────────────────────────────────────────────────────
         if method != 'GET':
             return response
-        if session.get('uid') is None:
+        if get_auth() is None:
             return response
         if path in _VIEW_LOG_SKIP_EXACT:
             return response
@@ -1101,7 +1163,7 @@ def logout():
 # reset other users' passwords without the old one.
 
 @app.route('/api/account/password', methods=['POST'])
-@login_required
+@session_required
 def api_account_password():
     user = current_user()
     if not user:
@@ -1206,7 +1268,7 @@ def api_users_update(user_id):
 @roles_required('root', 'admin')
 def api_users_delete(user_id):
     # Prevent deleting yourself to avoid lockout confusion.
-    if session.get('uid') == user_id:
+    if (get_auth() or {}).get('uid') == user_id:
         return jsonify({'ok': False, 'error': 'Tidak dapat menghapus akun yang sedang login.'}), 400
     try:
         victim = db.get_user(user_id)
@@ -1218,6 +1280,122 @@ def api_users_delete(user_id):
         return jsonify({'ok': True})
     except db.UserError as e:
         return jsonify({'ok': False, 'error': str(e)}), 400
+
+
+# ─── API TOKENS + API DOCS ────────────────────────────────────────────────────
+# Tokens authenticate API calls via `Authorization: Bearer <token>` and act with
+# the owner's role. Management endpoints require a browser session on purpose
+# (see session_required). Docs (Swagger UI) are served behind login.
+
+_TOKEN_MAX_DAYS = 3650
+_OPENAPI_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'openapi.json')
+
+
+def _parse_token_expiry(payload):
+    """Return (expires_at_iso_or_None, error_or_None) from a create payload.
+
+    Exactly one of: expires_in_days (int 1..3650), expires_at (YYYY-MM-DD, valid
+    through the END of that day UTC, or a full UTC 'YYYY-MM-DDTHH:MM:SSZ'), or
+    no_expiry=true (token never expires until revoked).
+    """
+    days = payload.get('expires_in_days')
+    at = payload.get('expires_at')
+    if at is not None and not isinstance(at, str):
+        return None, 'expires_at harus berupa string.'
+    at = (at or '').strip()
+    never = payload.get('no_expiry') in (True, 'true', '1', 1)
+    given = [x for x in (days not in (None, ''), bool(at), never) if x]
+    if len(given) != 1:
+        return None, ('Pilih tepat satu: expires_in_days, expires_at, atau no_expiry=true.')
+    if never:
+        return None, None
+    if days not in (None, ''):
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            return None, 'expires_in_days harus angka bulat.'
+        if not 1 <= days <= _TOKEN_MAX_DAYS:
+            return None, f'expires_in_days harus antara 1 dan {_TOKEN_MAX_DAYS}.'
+        exp = datetime.now(timezone.utc) + timedelta(days=days)
+        return exp.strftime('%Y-%m-%dT%H:%M:%SZ'), None
+    try:
+        if len(at) == 10:
+            exp = datetime.strptime(at, '%Y-%m-%d').replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc)
+        else:
+            exp = datetime.strptime(at, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None, "expires_at harus 'YYYY-MM-DD' atau 'YYYY-MM-DDTHH:MM:SSZ' (UTC)."
+    if exp > datetime.now(timezone.utc) + timedelta(days=_TOKEN_MAX_DAYS):
+        return None, f'expires_at maksimal {_TOKEN_MAX_DAYS} hari dari sekarang.'
+    return exp.strftime('%Y-%m-%dT%H:%M:%SZ'), None
+
+
+@app.route('/tokens')
+@login_required
+def tokens_page():
+    return render_template('tokens.html')
+
+
+@app.route('/api/tokens', methods=['GET'])
+@session_required
+def api_tokens_list():
+    auth = get_auth()
+    if request.args.get('all') in ('1', 'true'):
+        if auth['role'] not in ('root', 'admin'):
+            return jsonify({'ok': False, 'error': 'Akses ditolak (role tidak cukup).'}), 403
+        items = db.list_api_tokens()
+    else:
+        items = db.list_api_tokens(auth['uid'])
+    return jsonify({'ok': True, 'tokens': items})
+
+
+@app.route('/api/tokens', methods=['POST'])
+@session_required
+def api_tokens_create():
+    auth = get_auth()
+    payload = request.get_json(silent=True) or {}
+    expires_at, err = _parse_token_expiry(payload)
+    if err:
+        return jsonify({'ok': False, 'error': err}), 400
+    try:
+        raw, item = db.create_api_token(auth['uid'], payload.get('name'), expires_at)
+    except db.TokenError as e:
+        return jsonify({'ok': False, 'error': str(e)}), 400
+    record_activity('token.create', target=str(item['id']),
+                    detail={'name': item['name'], 'expires_at': item['expires_at']})
+    resp = jsonify({'ok': True, 'token': raw, 'item': item})
+    resp.status_code = 201
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
+@app.route('/api/tokens/<int:token_id>', methods=['DELETE'])
+@session_required
+def api_tokens_revoke(token_id):
+    auth = get_auth()
+    tok = db.get_api_token(token_id)
+    if not tok or (tok['user_id'] != auth['uid'] and auth['role'] not in ('root', 'admin')):
+        return jsonify({'ok': False, 'error': 'Token tidak ditemukan.'}), 404
+    if not db.revoke_api_token(token_id):
+        return jsonify({'ok': False, 'error': 'Token sudah dicabut.'}), 400
+    record_activity('token.revoke', target=str(token_id),
+                    detail={'name': tok['name'], 'owner_id': tok['user_id']})
+    return jsonify({'ok': True})
+
+
+@app.route('/docs')
+@login_required
+def api_docs_page():
+    return render_template('docs.html')
+
+
+@app.route('/api/openapi.json')
+@login_required
+def api_openapi_spec():
+    with open(_OPENAPI_PATH, encoding='utf-8') as f:
+        spec = json.load(f)
+    return jsonify(spec)
 
 
 # ─── ACTIVITY LOG API ─────────────────────────────────────────────────────────

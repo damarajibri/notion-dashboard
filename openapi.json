@@ -1,0 +1,3682 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "EXO Dashboard API",
+    "version": "1.0.0",
+    "description": "API dashboard Notion (Project, SPK, Task, Monthly Performance).\n\n**Autentikasi**\n- *Token*: buat di halaman **/tokens**, kirim sebagai `Authorization: Bearer nds_...`. Token bertindak dengan role pemilik dan berhenti berlaku saat kedaluwarsa, dicabut, atau user dinonaktifkan.\n- *Session*: cookie hasil login di browser (dipakai tombol *Try it out* di halaman ini).\n- Endpoint pengelolaan token dan ganti password hanya menerima session, bukan token.\n\n**Respons**: JSON dengan `ok` (boolean). Galat: `{\"ok\": false, \"error\": \"...\"}`.\n\n**Sumber data**: Notion adalah sumber utama; baca dilayani dari cache SQLite (segar ±5 menit), tulis diteruskan ke Notion lalu cache disegarkan.\n\n**Tidak tercakup**: halaman HTML (`/`, `/login`, `/logout`, `/users`, `/tokens`, `/docs`) dan `/captcha/refresh`, yang hanya untuk browser."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    },
+    {
+      "cookieAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Token"
+    },
+    {
+      "name": "Akun"
+    },
+    {
+      "name": "User"
+    },
+    {
+      "name": "Data"
+    },
+    {
+      "name": "Monthly Performance"
+    },
+    {
+      "name": "Project"
+    },
+    {
+      "name": "SPK"
+    },
+    {
+      "name": "Task"
+    },
+    {
+      "name": "File"
+    },
+    {
+      "name": "Audit Trail"
+    },
+    {
+      "name": "Sinkronisasi"
+    },
+    {
+      "name": "Dokumentasi"
+    }
+  ],
+  "paths": {
+    "/api/tokens": {
+      "get": {
+        "tags": [
+          "Token"
+        ],
+        "summary": "Daftar token milik saya",
+        "description": "Hanya login browser (session). Token tidak pernah menampilkan nilai penuh, hanya `prefix`. `all=1` menampilkan token semua user (root/admin).",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "all",
+            "in": "query",
+            "required": false,
+            "description": "Tampilkan token semua user (root/admin).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "tokens": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApiToken"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Token"
+        ],
+        "summary": "Buat token baru",
+        "description": "Hanya login browser (session). Wajib menentukan **tepat satu** dari `expires_in_days`, `expires_at`, atau `no_expiry=true`. Nilai token (`token`) hanya dikembalikan sekali di respons ini. Maksimal 20 token aktif per user.",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenCreate"
+              },
+              "example": {
+                "name": "Script laporan",
+                "expires_in_days": 30
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Token dibuat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "token": {
+                      "type": "string",
+                      "example": "nds_xxxxxxxx"
+                    },
+                    "item": {
+                      "$ref": "#/components/schemas/ApiToken"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/api/tokens/{token_id}": {
+      "delete": {
+        "tags": [
+          "Token"
+        ],
+        "summary": "Cabut token",
+        "description": "Hanya login browser (session). Pemilik token, atau root/admin, boleh mencabut.",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dicabut",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/account/password": {
+      "post": {
+        "tags": [
+          "Akun"
+        ],
+        "summary": "Ganti password sendiri",
+        "description": "Hanya login browser (session); token ditolak (403).",
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "current_password": {
+                    "type": "string"
+                  },
+                  "new_password": {
+                    "type": "string"
+                  },
+                  "confirm_password": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "current_password",
+                  "new_password",
+                  "confirm_password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Daftar user",
+        "description": "Role: root, admin.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/User"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Buat user",
+        "description": "Role: root, admin.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "root",
+                      "admin",
+                      "engineer",
+                      "user"
+                    ],
+                    "default": "user"
+                  },
+                  "is_active": {
+                    "type": "boolean",
+                    "default": true
+                  }
+                },
+                "required": [
+                  "username",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User dibuat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/users/{user_id}": {
+      "put": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Ubah user",
+        "description": "Role: root, admin. Hanya field yang dikirim yang diubah. Method `POST` pada path yang sama berperilaku identik.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "full_name": {
+                    "type": "string"
+                  },
+                  "role": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "Kosong = tidak diubah."
+                  },
+                  "is_active": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User terbaru",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Hapus user",
+        "description": "Role: root, admin. Tidak bisa menghapus diri sendiri atau akun root bawaan. Token milik user ikut terhapus.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dihapus",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/activity": {
+      "get": {
+        "tags": [
+          "User"
+        ],
+        "summary": "Log aktivitas",
+        "description": "Role: root, admin.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "description": "Filter user id.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "username",
+            "in": "query",
+            "required": false,
+            "description": "Filter username.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "description": "Filter aksi, mis. `auth.login`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Tanggal awal (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Tanggal akhir (YYYY-MM-DD).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Halaman.",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "description": "Ukuran halaman.",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Log aktivitas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ActivityItem"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "page_size": {
+                      "type": "integer"
+                    },
+                    "pages": {
+                      "type": "integer"
+                    },
+                    "actions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "username": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/data": {
+      "get": {
+        "tags": [
+          "Data"
+        ],
+        "summary": "Semua data dashboard",
+        "description": "Task, Project, SPK, Personel beserta statistik agregat. Dilayani dari cache SQLite; bila cache lebih tua dari TTL, sinkronisasi inkremental dari Notion dijalankan lebih dulu (request bisa lebih lambat).",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Data dashboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/monthly": {
+      "get": {
+        "tags": [
+          "Monthly Performance"
+        ],
+        "summary": "Baris Monthly Performance (filter server-side)",
+        "description": "Dengan `options=1` hanya mengembalikan opsi filter. Tanpa itu, mengembalikan baris yang cocok filter beserta agregat. Nilai `all` (default) berarti tanpa filter.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "options",
+            "in": "query",
+            "required": false,
+            "description": "Kembalikan hanya opsi filter.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true",
+                "yes"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Cari di Name, No SPK, No. Dokumen BA LP, No. Invoice, Keterangan.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "periode",
+            "in": "query",
+            "required": false,
+            "description": "Prefix periode `YYYY-MM` atau `all`.",
+            "schema": {
+              "type": "string",
+              "default": "all"
+            }
+          },
+          {
+            "name": "invoice",
+            "in": "query",
+            "required": false,
+            "description": "Status Invoice.",
+            "schema": {
+              "type": "string",
+              "default": "all"
+            }
+          },
+          {
+            "name": "bayar",
+            "in": "query",
+            "required": false,
+            "description": "Status Pembayaran.",
+            "schema": {
+              "type": "string",
+              "default": "all"
+            }
+          },
+          {
+            "name": "ba",
+            "in": "query",
+            "required": false,
+            "description": "Status BA Performansi.",
+            "schema": {
+              "type": "string",
+              "default": "all"
+            }
+          },
+          {
+            "name": "rekon",
+            "in": "query",
+            "required": false,
+            "description": "Status Rekon.",
+            "schema": {
+              "type": "string",
+              "default": "all"
+            }
+          },
+          {
+            "name": "no_spk",
+            "in": "query",
+            "required": false,
+            "description": "No SPK persis (tidak peka huruf besar/kecil).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Baris atau opsi filter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/MonthlyResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/MonthlyOptionsResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/monthly/update": {
+      "post": {
+        "tags": [
+          "Monthly Performance"
+        ],
+        "summary": "Ubah satu baris Monthly Performance",
+        "description": "Hanya field yang dikirim yang diubah. Angka menerima format Indonesia (`1.234.567,89`) atau desimal titik. Tanggal `DD-MM-YYYY` atau `YYYY-MM-DD`. `periode` disimpan sebagai rentang satu bulan penuh. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonthlyUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/import-csv": {
+      "post": {
+        "tags": [
+          "Monthly Performance"
+        ],
+        "summary": "Import CSV ke database Notion",
+        "description": "All-or-nothing: bila satu baris tidak valid, tidak ada baris yang dibuat (400, `stage`=`validate`). Kolom: Name, Periode DD-MM-YYYY, No SPK (wajib), Nilai Tagihan, Prognosa, Status *, tanggal, No. Dokumen BA LP. Delimiter `,` atau `;`. Template: `/download/template-csv`. Status 207 bila sebagian gagal saat upload.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "database_id": {
+                    "type": "string",
+                    "description": "ID database Notion tujuan (32 karakter)."
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "delimiter": {
+                    "type": "string",
+                    "enum": [
+                      "auto",
+                      ",",
+                      ";"
+                    ],
+                    "default": "auto"
+                  }
+                },
+                "required": [
+                  "database_id",
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Semua baris diimpor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "207": {
+            "description": "Sebagian gagal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validasi gagal / database tidak valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/verify-db": {
+      "post": {
+        "tags": [
+          "Monthly Performance"
+        ],
+        "summary": "Verifikasi Database ID Notion",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "database_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "database_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Database valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyDbResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Database tidak valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/download/template-csv": {
+      "get": {
+        "tags": [
+          "Monthly Performance"
+        ],
+        "summary": "Unduh template CSV import",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File CSV",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "302": {
+            "description": "Belum login: redirect ke /login."
+          }
+        }
+      }
+    },
+    "/api/project/create": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Buat Project baru",
+        "description": "Wajib: `title`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectFields"
+              },
+              "example": {
+                "title": "Project Baru",
+                "status": "Not started",
+                "nominal_ip": 150000000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dibuat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/project/update": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Ubah Project",
+        "description": "Wajib: `page_id`. Hanya field yang dikirim yang diubah. Setiap perubahan mencatat versi baru di audit trail. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "page_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "page_id"
+                    ]
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProjectFields"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/project/audit": {
+      "get": {
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Riwayat versi audit satu halaman",
+        "description": "Riwayat versi tersimpan di body halaman Notion. Alias path: `/api/audit`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "ID halaman Notion.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar versi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "page_id": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AuditVersion"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/audit": {
+      "get": {
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Riwayat versi audit satu halaman",
+        "description": "Riwayat versi tersimpan di body halaman Notion. Alias path: `/api/project/audit`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "ID halaman Notion.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar versi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "page_id": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AuditVersion"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/project/audit/compare": {
+      "get": {
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Bandingkan dua versi audit",
+        "description": "Alias path: `/api/audit/compare`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "ID halaman Notion.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "a",
+            "in": "query",
+            "required": true,
+            "description": "Nomor versi pertama.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "b",
+            "in": "query",
+            "required": true,
+            "description": "Nomor versi kedua.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Selisih",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "page_id": {
+                      "type": "string"
+                    },
+                    "a": {
+                      "type": "integer"
+                    },
+                    "b": {
+                      "type": "integer"
+                    },
+                    "diff": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/audit/compare": {
+      "get": {
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Bandingkan dua versi audit",
+        "description": "Alias path: `/api/project/audit/compare`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "ID halaman Notion.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "a",
+            "in": "query",
+            "required": true,
+            "description": "Nomor versi pertama.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "b",
+            "in": "query",
+            "required": true,
+            "description": "Nomor versi kedua.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Selisih",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "page_id": {
+                      "type": "string"
+                    },
+                    "a": {
+                      "type": "integer"
+                    },
+                    "b": {
+                      "type": "integer"
+                    },
+                    "diff": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/project/audit/rollback": {
+      "post": {
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Rollback ke versi tertentu",
+        "description": "Menerapkan kembali properti writable dari versi lama dan mencatat versi baru (`rollback`); riwayat tidak dihapus. Alias path: `/api/audit/rollback`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "page_id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "page_id",
+                  "version"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "rolled_back_to": {
+                      "type": "integer"
+                    },
+                    "applied": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "skipped": {
+                      "description": "Properti yang dilewati (read-only)."
+                    },
+                    "new_audit_version": {
+                      "type": "integer",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/audit/rollback": {
+      "post": {
+        "tags": [
+          "Audit Trail"
+        ],
+        "summary": "Rollback ke versi tertentu",
+        "description": "Menerapkan kembali properti writable dari versi lama dan mencatat versi baru (`rollback`); riwayat tidak dihapus. Alias path: `/api/project/audit/rollback`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "page_id": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "page_id",
+                  "version"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "rolled_back_to": {
+                      "type": "integer"
+                    },
+                    "applied": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "skipped": {
+                      "description": "Properti yang dilewati (read-only)."
+                    },
+                    "new_audit_version": {
+                      "type": "integer",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/spk/create": {
+      "post": {
+        "tags": [
+          "SPK"
+        ],
+        "summary": "Buat SPK baru",
+        "description": "Wajib: `no_spk`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpkFields"
+              },
+              "example": {
+                "no_spk": "B.4300007591.P-INF/OSP/08/2026",
+                "total_anggaran": 144000000
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dibuat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/spk/update": {
+      "post": {
+        "tags": [
+          "SPK"
+        ],
+        "summary": "Ubah SPK",
+        "description": "Wajib: `page_id`. Hanya field yang dikirim yang diubah. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "page_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "page_id"
+                    ]
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpkFields"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/vendors": {
+      "get": {
+        "tags": [
+          "SPK"
+        ],
+        "summary": "Daftar Vendor (autocomplete)",
+        "description": "Dibaca dari Notion dan di-cache di memori 10 menit. Bila Notion gagal dan ada cache lama, dikembalikan dengan `stale: true`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "description": "`1` = abaikan cache.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daftar vendor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "vendors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "page_id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    },
+                    "stale": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/task/create": {
+      "post": {
+        "tags": [
+          "Task"
+        ],
+        "summary": "Buat Task baru",
+        "description": "Wajib: `name`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskFields"
+              },
+              "example": {
+                "name": "Review TOR",
+                "status": "Not started",
+                "priority": "High",
+                "progress": 0
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dibuat",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/task/update": {
+      "post": {
+        "tags": [
+          "Task"
+        ],
+        "summary": "Ubah Task",
+        "description": "Wajib: `page_id`. Hanya field yang dikirim yang diubah. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "page_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "page_id"
+                    ]
+                  },
+                  {
+                    "$ref": "#/components/schemas/TaskFields"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/task/delete": {
+      "post": {
+        "tags": [
+          "Task"
+        ],
+        "summary": "Hapus (archive) Task",
+        "description": "Notion tidak punya hard delete; halaman di-archive lalu dilakukan full sync. **Tidak bisa dibatalkan lewat API ini.** Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "page_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "page_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dihapus",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/file": {
+      "get": {
+        "tags": [
+          "File"
+        ],
+        "summary": "Buka file Notion (redirect ke URL segar)",
+        "description": "Mengambil halaman terbaru dari Notion lalu me-redirect (302) ke URL file. URL file Notion kedaluwarsa ~1 jam, jadi selalu lewat endpoint ini. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "query",
+            "required": true,
+            "description": "ID halaman Notion.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "field",
+            "in": "query",
+            "required": true,
+            "description": "Nama properti bertipe files.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idx",
+            "in": "query",
+            "required": false,
+            "description": "Indeks file.",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect ke URL file",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          },
+          "503": {
+            "description": "NOTION_TOKEN tidak diset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/file/upload": {
+      "post": {
+        "tags": [
+          "File"
+        ],
+        "summary": "Unggah file ke properti files",
+        "description": "File lama dipertahankan, file baru ditambahkan di akhir. Maks 20 MB. `field` harus salah satu properti yang diizinkan (file Project, `SPK File`, `File & media`, `Files BAST`, `Files BALP`). Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "page_id": {
+                    "type": "string"
+                  },
+                  "field": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "page_id",
+                  "field",
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/file/delete": {
+      "post": {
+        "tags": [
+          "File"
+        ],
+        "summary": "Hapus satu file dari properti files",
+        "description": "Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "page_id": {
+                    "type": "string"
+                  },
+                  "field": {
+                    "type": "string"
+                  },
+                  "idx": {
+                    "type": "integer",
+                    "description": "Indeks file (0-based)."
+                  }
+                },
+                "required": [
+                  "page_id",
+                  "field",
+                  "idx"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Berhasil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/refresh": {
+      "post": {
+        "tags": [
+          "Sinkronisasi"
+        ],
+        "summary": "Tarik data terbaru dari Notion",
+        "description": "`mode` dari body atau query: `incremental` (default) atau `full`. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "description": "Mode sinkronisasi.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "incremental",
+                "full"
+              ],
+              "default": "incremental"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "incremental",
+                      "full"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ringkasan sync",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/refresh/full": {
+      "post": {
+        "tags": [
+          "Sinkronisasi"
+        ],
+        "summary": "Full sync + rekonsiliasi penghapusan",
+        "description": "Role: root, engineer. Dicatat di log aktivitas. Memerlukan `NOTION_TOKEN` terkonfigurasi di server; bila kosong server membalas 400.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ringkasan sync",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "summary": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "tags": [
+          "Dokumentasi"
+        ],
+        "summary": "Spesifikasi OpenAPI (dokumen ini)",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dokumen OpenAPI 3.0",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token API dari halaman **/tokens** (format `nds_...`). Bertindak dengan role pemilik token."
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session",
+        "description": "Cookie session hasil login browser. Dipakai otomatis oleh tombol *Try it out* bila Anda sudah login."
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Belum login, token tidak valid, kedaluwarsa, atau dicabut.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Permintaan tidak valid.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Role tidak cukup, atau endpoint hanya untuk login browser.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Tidak ditemukan.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "BadGateway": {
+        "description": "Notion API gagal.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Ok": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "ok",
+          "error"
+        ]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "username": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "root",
+              "admin",
+              "engineer",
+              "user"
+            ]
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "last_login": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "ApiToken": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "user_id": {
+            "type": "integer"
+          },
+          "owner": {
+            "type": "string",
+            "description": "Hanya pada daftar `all=1`."
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string",
+            "example": "nds_AbCd"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "UTC. null = tanpa kedaluwarsa.",
+            "nullable": true
+          },
+          "last_used_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "revoked_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "expired",
+              "revoked"
+            ]
+          }
+        }
+      },
+      "TokenCreate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "expires_in_days": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3650,
+            "description": "Berlaku N hari dari sekarang."
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "`YYYY-MM-DD` (berlaku sampai akhir hari itu, UTC) atau `YYYY-MM-DDTHH:MM:SSZ`."
+          },
+          "no_expiry": {
+            "type": "boolean",
+            "description": "`true` = tidak pernah kedaluwarsa sampai dicabut."
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "description": "Isi tepat satu dari `expires_in_days`, `expires_at`, `no_expiry`."
+      },
+      "ActivityItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "ts": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "nullable": true
+          },
+          "username": {
+            "type": "string",
+            "nullable": true
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "description": "JSON string.",
+            "nullable": true
+          },
+          "changes": {
+            "type": "string",
+            "description": "JSON string.",
+            "nullable": true
+          },
+          "ip": {
+            "type": "string"
+          },
+          "user_agent": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "updated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Nama properti Notion yang diubah."
+          },
+          "audit_version": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "CreateResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "page_id": {
+            "type": "string"
+          },
+          "created": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "FileResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Nama file terkini."
+          }
+        }
+      },
+      "ImportResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "verify",
+              "validate",
+              "upload"
+            ]
+          },
+          "imported": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string"
+          },
+          "db_title": {
+            "type": "string"
+          },
+          "converted": {
+            "type": "boolean",
+            "description": "true bila CSV titik-koma dikonversi."
+          }
+        }
+      },
+      "VerifyDbResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "relation_prop": {
+            "type": "string",
+            "nullable": true
+          },
+          "has_title": {
+            "type": "boolean"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "properties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AuditVersion": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Satu versi: nomor, user, waktu, aksi (`update`/`rollback`), dan snapshot properti."
+      },
+      "MonthlyUpdate": {
+        "type": "object",
+        "properties": {
+          "page_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "nilai_tagihan": {
+            "description": "Angka atau string format Indonesia.",
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "prognosa": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "status_invoice": {
+            "type": "string"
+          },
+          "status_bayar": {
+            "type": "string"
+          },
+          "status_ba": {
+            "type": "string"
+          },
+          "status_rekon": {
+            "type": "string"
+          },
+          "no_invoice": {
+            "type": "string"
+          },
+          "dok_lp": {
+            "type": "string"
+          },
+          "keterangan": {
+            "type": "string"
+          },
+          "periode": {
+            "type": "string",
+            "description": "Tanggal mana pun di bulan tsb; disimpan sebagai rentang bulan penuh."
+          },
+          "tgl_serah_ba": {
+            "type": "string"
+          },
+          "tgl_masuk_ba": {
+            "type": "string"
+          },
+          "tgl_rekon": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "page_id"
+        ]
+      },
+      "MonthlyRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "page_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "periode": {
+            "type": "string"
+          },
+          "no_spk": {
+            "type": "string"
+          },
+          "nilai_tagihan": {
+            "type": "number",
+            "nullable": true
+          },
+          "prognosa": {
+            "type": "number",
+            "nullable": true
+          },
+          "status_invoice": {
+            "type": "string"
+          },
+          "status_bayar": {
+            "type": "string"
+          },
+          "status_ba": {
+            "type": "string"
+          },
+          "status_rekon": {
+            "type": "string"
+          },
+          "no_invoice": {
+            "type": "string"
+          },
+          "dok_lp": {
+            "type": "string"
+          },
+          "keterangan": {
+            "type": "string"
+          },
+          "tgl_serah_ba": {
+            "type": "string"
+          },
+          "tgl_masuk_ba": {
+            "type": "string"
+          },
+          "tgl_rekon": {
+            "type": "string"
+          },
+          "files_bast": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileMeta"
+            }
+          },
+          "files_balp": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileMeta"
+            }
+          }
+        }
+      },
+      "FileMeta": {
+        "type": "object",
+        "properties": {
+          "page_id": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "idx": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "external_url": {
+            "type": "string"
+          }
+        },
+        "description": "Buka lewat `/api/file?page_id=&field=&idx=`."
+      },
+      "MonthlyResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "monthly": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MonthlyRow"
+            }
+          },
+          "count": {
+            "type": "integer"
+          },
+          "total_available": {
+            "type": "integer"
+          },
+          "total_tagihan": {
+            "type": "number"
+          },
+          "total_prognosa": {
+            "type": "number"
+          },
+          "periodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "no_spk": {
+            "type": "string"
+          },
+          "spk_info": {
+            "type": "object",
+            "properties": {
+              "no_spk": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "jatuh_tempo": {
+                "type": "string"
+              }
+            },
+            "nullable": true
+          }
+        }
+      },
+      "MonthlyOptionsResponse": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "total_available": {
+            "type": "integer"
+          },
+          "periodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "invoices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bayars": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bas": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rekons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "spks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "spk_detail": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "no_spk": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "jatuh_tempo": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "TaskFields": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Nilai status mengikuti opsi di Notion (mis. `Not started`, `In progress`, `Done`)."
+          },
+          "due": {
+            "type": "string",
+            "description": "Tanggal `YYYY-MM-DD` / `DD-MM-YYYY`."
+          },
+          "priority": {
+            "type": "string"
+          },
+          "progress": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Persen 0 sampai 100."
+          },
+          "assignee": {
+            "type": "string",
+            "description": "page_id Personel dipisah koma. Peta nama ke page_id ada di `/api/data` → `personel_map`."
+          },
+          "tags": {
+            "type": "string",
+            "description": "Nama tag dipisah koma."
+          }
+        }
+      },
+      "ProjectFields": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Nilai status mengikuti opsi di Notion (mis. `Not started`, `In progress`, `Done`)."
+          },
+          "priority": {
+            "type": "string"
+          },
+          "due": {
+            "type": "string"
+          },
+          "nilai_project": {
+            "type": "number",
+            "description": "Nominal IP. Titik/koma/spasi dibuang sebagai pemisah ribuan; tidak ada desimal."
+          },
+          "no_izin_prinsip": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "spk_sebelumnya": {
+            "type": "string",
+            "description": "page_id SPK dipisah koma."
+          },
+          "spk_baru": {
+            "type": "string",
+            "description": "page_id SPK dipisah koma."
+          },
+          "pic": {
+            "type": "string",
+            "description": "page_id Personel dipisah koma."
+          },
+          "TOR": {
+            "type": "string",
+            "description": "Status dokumen."
+          },
+          "FS (Feasibility Study)": {
+            "type": "string",
+            "description": "Status dokumen."
+          },
+          "Izin Prinsip": {
+            "type": "string",
+            "description": "Status dokumen."
+          },
+          "Izin Anggaran": {
+            "type": "string",
+            "description": "Status dokumen."
+          },
+          "Penilaian Teknis": {
+            "type": "string",
+            "description": "Status dokumen."
+          },
+          "PI (Pakta Integritas)": {
+            "type": "string",
+            "description": "Status dokumen."
+          },
+          "TPRA (Third Party Risk Assesment)": {
+            "type": "string",
+            "description": "Status dokumen."
+          },
+          "BenchMark": {
+            "type": "string",
+            "description": "Status dokumen."
+          },
+          "Aanwidjzing": {
+            "type": "string",
+            "description": "Status dokumen."
+          },
+          "Risk Assessment": {
+            "type": "string",
+            "description": "Status dokumen."
+          }
+        }
+      },
+      "SpkFields": {
+        "type": "object",
+        "properties": {
+          "no_spk": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string",
+            "description": "Project Name (teks)."
+          },
+          "status": {
+            "type": "string",
+            "description": "Nilai status mengikuti opsi di Notion (mis. `Not started`, `In progress`, `Done`)."
+          },
+          "jenis_anggaran": {
+            "type": "string"
+          },
+          "klasifikasi": {
+            "type": "string"
+          },
+          "tipe": {
+            "type": "string",
+            "description": "Baru / Sisa Bayar / Perpanjangan."
+          },
+          "total_anggaran": {
+            "type": "string",
+            "description": "Angka; titik/koma/spasi dibuang sebagai pemisah ribuan."
+          },
+          "spk_mulai": {
+            "type": "string"
+          },
+          "spk_selesai": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "perp_projects": {
+            "type": "string",
+            "description": "page_id Project dipisah koma."
+          },
+          "asal_projects": {
+            "type": "string",
+            "description": "page_id Project dipisah koma."
+          },
+          "vendor_ids": {
+            "type": "string",
+            "description": "page_id Vendor dipisah koma (lihat `/api/vendors`)."
+          }
+        }
+      },
+      "DataResponse": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "due": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "string"
+                },
+                "assignees": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "created": {
+                  "type": "string"
+                },
+                "edited": {
+                  "type": "string"
+                },
+                "done_date": {
+                  "type": "string"
+                },
+                "progress": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "priority_raw": {
+                  "type": "string"
+                },
+                "assignee_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "page_id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "priority": {
+                  "type": "string"
+                },
+                "priority_raw": {
+                  "type": "string"
+                },
+                "nominal_ip": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "no_izin_prinsip": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "spk_sebelumnya_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "spk_baru_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "assignee_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "assignees": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "completion": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "doc_done": {
+                  "type": "integer"
+                },
+                "doc_total": {
+                  "type": "integer"
+                },
+                "doc_detail": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "doc_status": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "created": {
+                  "type": "string"
+                },
+                "edited": {
+                  "type": "string"
+                },
+                "due": {
+                  "type": "string"
+                },
+                "remaining_days": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileMeta"
+                  }
+                },
+                "spk_perpanjangan": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "no_spk": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "spk_selesai": {
+                        "type": "string"
+                      },
+                      "page_id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "page_id": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "spk": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "spk_id": {
+                  "type": "string"
+                },
+                "no_spk": {
+                  "type": "string"
+                },
+                "project": {
+                  "type": "string"
+                },
+                "vendor": {
+                  "type": "string"
+                },
+                "vendors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "status": {
+                  "type": "string"
+                },
+                "spk_mulai": {
+                  "type": "string"
+                },
+                "spk_selesai": {
+                  "type": "string"
+                },
+                "sisa_hari": {
+                  "type": "integer",
+                  "nullable": true
+                },
+                "total_anggaran": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "sisa_anggaran": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "total_terbayar": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "jenis_anggaran": {
+                  "type": "string"
+                },
+                "klasifikasi": {
+                  "type": "string"
+                },
+                "tipe": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                },
+                "pic": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "perpanjangan": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "perp_project_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "projects_asal": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": {
+                        "type": "string"
+                      },
+                      "page_id": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "asal_project_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FileMeta"
+                  }
+                },
+                "rekon": {
+                  "type": "object",
+                  "properties": {
+                    "last_done": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "first_gap": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "done_count": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "done_after_gap": {
+                      "type": "integer"
+                    }
+                  },
+                  "nullable": true
+                },
+                "page_id": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "personel": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "personel_map": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Nama → page_id."
+          },
+          "task_status": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "monthly": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "month": {
+                  "type": "string"
+                },
+                "created": {
+                  "type": "integer"
+                },
+                "done": {
+                  "type": "integer"
+                },
+                "backlog": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string"
+                },
+                "active": {
+                  "type": "integer"
+                },
+                "done_cumul": {
+                  "type": "integer"
+                },
+                "done_day": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "person_done": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "person_total": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "overdue": {
+            "type": "integer"
+          },
+          "on_track": {
+            "type": "integer"
+          },
+          "no_due": {
+            "type": "integer"
+          },
+          "proj_status": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "proj_person": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer"
+              }
+            }
+          },
+          "spk_status": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "spk_jenis": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "spk_klasifikasi": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "spk_tipe": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "total_anggaran_all": {
+            "type": "number"
+          },
+          "total_terbayar_all": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  }
+}

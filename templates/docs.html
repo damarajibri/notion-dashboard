@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Docs — EXO Dashboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css"
+      integrity="sha384-wxLW6kwyHktdDGr6Pv1zgm/VGJh99lfUbzSn6HNHBENZlCN7W602k9VkGdxuFvPn" crossorigin="anonymous">
+<style>
+  body { margin: 0; background: #fafafa; font-family: -apple-system, 'Inter', sans-serif; }
+  .topbar-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 24px; background: #161628; color: #e8e8f0; font-size: 14px; }
+  .topbar-nav b span { color: #a78bfa; }
+  .topbar-nav a { color: #e8e8f0; text-decoration: none; margin-left: 16px; font-weight: 600; }
+  .topbar-nav a:hover { color: #a78bfa; }
+</style>
+</head>
+<body>
+<div class="topbar-nav">
+  <b>EXO <span>Dashboard</span> · API Docs</b>
+  <span>
+    <a href="{{ url_for('tokens_page') }}">🔑 API Token</a>
+    <a href="{{ url_for('index') }}">← Dashboard</a>
+  </span>
+</div>
+<div id="swagger-ui"></div>
+<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"
+        integrity="sha384-wmyclcVGX/WhUkdkATwhaK1X1JtiNrr2EoYJ+diV3vj4v6OC5yCeSu+yW13SYJep" crossorigin="anonymous"></script>
+<script>
+  window.ui = SwaggerUIBundle({
+    url: "{{ url_for('api_openapi_spec') }}",
+    dom_id: '#swagger-ui',
+    deepLinking: true,
+    persistAuthorization: false,
+    tryItOutEnabled: false,
+    docExpansion: 'list',
+    filter: true
+  });
+</script>
+</body>
+</html>

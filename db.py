@@ -10,6 +10,7 @@ Design:
 - WAL mode is enabled so the web app can read while sync writes.
 """
 
+import calendar
 import hashlib
 import hmac
 import json
@@ -115,6 +116,26 @@ def init_db():
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_activity_action ON activity_log(action);"
+        )
+        # API tokens (Bearer auth). Only the SHA-256 hash of a token is stored;
+        # the plaintext is shown once at creation. expires_at NULL = no expiry.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS api_tokens (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id      INTEGER NOT NULL,
+                name         TEXT NOT NULL,
+                token_hash   TEXT UNIQUE NOT NULL,
+                token_prefix TEXT NOT NULL,
+                created_at   TEXT NOT NULL,
+                expires_at   TEXT,
+                last_used_at TEXT,
+                revoked_at   TEXT
+            );
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);"
         )
         conn.commit()
     finally:
@@ -532,9 +553,180 @@ def delete_user(user_id):
             raise UserError("User tidak ditemukan.")
         if row["username"] == ROOT_USERNAME:
             raise UserError("Akun root tidak dapat dihapus.")
+        conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
         return True
+    finally:
+        conn.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API TOKEN LAYER
+# ─────────────────────────────────────────────────────────────────────────────
+# Tokens look like  nds_<43 url-safe chars>  (256 bits of randomness). Because
+# they are high-entropy random values, a plain SHA-256 digest is sufficient for
+# storage (no salt/stretching needed, unlike human-chosen passwords). Lookup is
+# by hash, so no timing-sensitive comparison of secrets is performed in Python.
+
+TOKEN_PREFIX = "nds_"
+MAX_TOKENS_PER_USER = 20
+_LAST_USED_THROTTLE_SECONDS = 60
+
+
+class TokenError(Exception):
+    """Validation error for token operations (message is user-facing)."""
+
+
+def _hash_token(raw):
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _row_to_token(row):
+    """Token row -> safe dict (never includes the hash)."""
+    return {
+        "id": row["id"],
+        "user_id": row["user_id"],
+        "name": row["name"],
+        "prefix": row["token_prefix"],
+        "created_at": row["created_at"],
+        "expires_at": row["expires_at"],
+        "last_used_at": row["last_used_at"],
+        "revoked_at": row["revoked_at"],
+        "status": _token_status(row),
+    }
+
+
+def _token_status(row):
+    if row["revoked_at"]:
+        return "revoked"
+    if row["expires_at"] and row["expires_at"] <= _now_iso():
+        return "expired"
+    return "active"
+
+
+def create_api_token(user_id, name, expires_at=None):
+    """Create a token for user_id. expires_at: ISO 'YYYY-MM-DDTHH:MM:SSZ' or None.
+
+    Returns (plaintext_token, token_dict). The plaintext is not recoverable
+    afterwards.
+    """
+    name = (name or "").strip()
+    if not name:
+        raise TokenError("Nama token wajib diisi.")
+    if len(name) > 100:
+        raise TokenError("Nama token maksimal 100 karakter.")
+    if expires_at is not None and expires_at <= _now_iso():
+        raise TokenError("Waktu kedaluwarsa harus di masa depan.")
+
+    raw = TOKEN_PREFIX + secrets.token_urlsafe(32)
+    conn = get_conn()
+    try:
+        active = conn.execute(
+            """SELECT COUNT(*) FROM api_tokens
+               WHERE user_id = ? AND revoked_at IS NULL
+                 AND (expires_at IS NULL OR expires_at > ?)""",
+            (user_id, _now_iso()),
+        ).fetchone()[0]
+        if active >= MAX_TOKENS_PER_USER:
+            raise TokenError(
+                f"Batas {MAX_TOKENS_PER_USER} token aktif tercapai. Cabut token lama dulu."
+            )
+        cur = conn.execute(
+            """INSERT INTO api_tokens
+               (user_id, name, token_hash, token_prefix, created_at, expires_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (user_id, name, _hash_token(raw), raw[:len(TOKEN_PREFIX) + 4],
+             _now_iso(), expires_at),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM api_tokens WHERE id = ?", (cur.lastrowid,)
+        ).fetchone()
+        return raw, _row_to_token(row)
+    finally:
+        conn.close()
+
+
+def list_api_tokens(user_id=None):
+    """List tokens (newest first). user_id=None lists all users' tokens,
+    each with the owner's username."""
+    conn = get_conn()
+    try:
+        sql = ("SELECT t.*, u.username AS owner FROM api_tokens t "
+               "LEFT JOIN users u ON u.id = t.user_id")
+        params = ()
+        if user_id is not None:
+            sql += " WHERE t.user_id = ?"
+            params = (user_id,)
+        sql += " ORDER BY t.id DESC"
+        out = []
+        for r in conn.execute(sql, params).fetchall():
+            d = _row_to_token(r)
+            d["owner"] = r["owner"]
+            out.append(d)
+        return out
+    finally:
+        conn.close()
+
+
+def get_api_token(token_id):
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM api_tokens WHERE id = ?", (token_id,)
+        ).fetchone()
+        return _row_to_token(row) if row else None
+    finally:
+        conn.close()
+
+
+def revoke_api_token(token_id):
+    """Mark a token revoked. Returns True if a live token was revoked."""
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE api_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+            (_now_iso(), token_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def authenticate_token(raw):
+    """Validate a raw bearer token.
+
+    Returns {"user": <user dict>, "token_id": int} when the token exists, is not
+    revoked or expired, and its owner is an active user. Otherwise None. The
+    user's CURRENT role is read from the database on every call, so role
+    changes and deactivation take effect immediately.
+    """
+    if not raw or not raw.startswith(TOKEN_PREFIX) or len(raw) > 200:
+        return None
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM api_tokens WHERE token_hash = ?", (_hash_token(raw),)
+        ).fetchone()
+        if not row or _token_status(row) != "active":
+            return None
+        urow = conn.execute(
+            "SELECT * FROM users WHERE id = ?", (row["user_id"],)
+        ).fetchone()
+        if not urow or not urow["is_active"]:
+            return None
+        now = _now_iso()
+        last = row["last_used_at"]
+        # Throttle writes: at most one last_used_at update per minute per token.
+        if not last or calendar.timegm(time.strptime(last, "%Y-%m-%dT%H:%M:%SZ")) \
+                < time.time() - _LAST_USED_THROTTLE_SECONDS:
+            conn.execute(
+                "UPDATE api_tokens SET last_used_at = ? WHERE id = ?", (now, row["id"])
+            )
+            conn.commit()
+        return {"user": _row_to_user(urow), "token_id": row["id"]}
     finally:
         conn.close()
 

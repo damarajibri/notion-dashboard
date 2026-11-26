@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Token — EXO Dashboard</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d0d1a; --surface: #161628; --surface2: #1c1c35; --border: #2a2a4a;
+  --text: #e8e8f0; --text2: #8888aa; --accent: #7c6af7; --accent2: #5b4fd4;
+  --green: #22d4a0; --green-bg: rgba(34,212,160,.12);
+  --red: #f05673; --red-bg: rgba(240,86,115,.12);
+  --amber: #f5b942; --amber-bg: rgba(245,185,66,.12);
+}
+body { font-family: -apple-system, 'Inter', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+.header { background: linear-gradient(135deg, var(--surface), var(--surface2)); border-bottom: 1px solid var(--border); }
+.header-inner { max-width: 960px; margin: 0 auto; padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand-title { font-size: 16px; font-weight: 700; } .brand-title span { color: var(--accent); }
+.nav a { color: var(--text2); text-decoration: none; font-weight: 600; margin-left: 16px; }
+.nav a:hover { color: var(--text); }
+.main { max-width: 960px; margin: 0 auto; padding: 28px; }
+.page-title { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+.sub { color: var(--text2); margin-bottom: 20px; line-height: 1.5; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 20px; }
+.card h2 { font-size: 16px; margin-bottom: 16px; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 680px) { .row { grid-template-columns: 1fr; } }
+.field { margin-bottom: 14px; }
+label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
+input, select { width: 100%; padding: 10px 12px; font-size: 14px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 12px; font-family: inherit; }
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+.hint { font-size: 11px; color: var(--text2); margin-top: 4px; }
+.btn { padding: 9px 15px; font-size: 13px; font-weight: 600; border-radius: 12px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-family: inherit; }
+.btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); border: none; color: #fff; }
+.btn-danger { color: var(--red); border-color: var(--red); background: transparent; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+th { color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+.badge { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.b-active { background: var(--green-bg); color: var(--green); }
+.b-expired { background: var(--amber-bg); color: var(--amber); }
+.b-revoked { background: var(--red-bg); color: var(--red); }
+.reveal { display: none; border: 1px solid var(--amber); background: var(--amber-bg); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+.reveal.show { display: block; }
+.reveal .tok { display: flex; gap: 8px; margin: 10px 0; }
+.reveal .tok input { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+.empty { color: var(--text2); padding: 16px 0; }
+.toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 18px; border-radius: 12px; font-size: 13px; font-weight: 600; z-index: 200; opacity: 0; transition: opacity .25s; }
+.toast.show { opacity: 1; }
+.toast-ok { background: var(--green-bg); border: 1px solid var(--green); color: var(--green); }
+.toast-err { background: var(--red-bg); border: 1px solid var(--red); color: var(--red); }
+pre { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px; overflow-x: auto; font-size: 12px; }
+</style>
+</head>
+<body>
+<header class="header"><div class="header-inner">
+  <div class="brand-title">EXO <span>Dashboard</span> · API Token</div>
+  <div class="nav">
+    <a href="{{ url_for('api_docs_page') }}">📘 API Docs</a>
+    <a href="{{ url_for('index') }}">← Dashboard</a>
+  </div>
+</div></header>
+
+<div class="main">
+  <div class="page-title">🔑 API Token</div>
+  <p class="sub">Token dipakai untuk memanggil API tanpa login browser, lewat header
+    <code>Authorization: Bearer &lt;token&gt;</code>. Token bertindak dengan role akun Anda
+    (<b>{{ user.role if user else '' }}</b>). Perlakukan seperti password.</p>
+
+  <div id="reveal" class="reveal">
+    <b>Token berhasil dibuat. Salin sekarang, nilainya tidak akan ditampilkan lagi.</b>
+    <div class="tok">
+      <input id="newToken" type="text" readonly>
+      <button class="btn" id="copyBtn" type="button">Salin</button>
+    </div>
+    <div class="hint">Contoh pemakaian:</div>
+    <pre id="curlExample"></pre>
+  </div>
+
+  <div class="card">
+    <h2>Buat token baru</h2>
+    <form id="createForm">
+      <div class="row">
+        <div class="field">
+          <label for="name">Nama token</label>
+          <input id="name" maxlength="100" placeholder="mis. Script laporan bulanan" required>
+        </div>
+        <div class="field">
+          <label for="mode">Masa berlaku</label>
+          <select id="mode">
+            <option value="days">Durasi (hari)</option>
+            <option value="date">Sampai tanggal</option>
+            <option value="never">Tanpa kedaluwarsa (sampai dicabut)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" id="daysWrap">
+        <label for="days">Jumlah hari (1–3650)</label>
+        <input id="days" type="number" min="1" max="3650" value="30">
+        <div class="hint">Pilihan cepat:
+          <a href="#" data-d="7">7</a> ·
+          <a href="#" data-d="30">30</a> ·
+          <a href="#" data-d="90">90</a> ·
+          <a href="#" data-d="365">365</a>
+        </div>
+      </div>
+      <div class="field" id="dateWrap" style="display:none">
+        <label for="date">Berlaku sampai (akhir hari tsb, UTC)</label>
+        <input id="date" type="date">
+      </div>
+      <div class="hint" id="neverWarn" style="display:none;color:var(--amber)">
+        Token tanpa kedaluwarsa berisiko jika bocor. Cabut manual bila tidak dipakai lagi.
+      </div>
+      <div style="text-align:right;margin-top:10px">
+        <button class="btn btn-primary" type="submit" id="createBtn">Buat token</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Token saya</h2>
+    <div id="list"><div class="empty">Memuat…</div></div>
+  </div>
+
+  {% if user and user.role in ['root', 'admin'] %}
+  <div class="card">
+    <h2>Semua token (admin)</h2>
+    <button class="btn" id="loadAll" type="button">Tampilkan semua token pengguna</button>
+    <div id="allList" style="margin-top:12px"></div>
+  </div>
+  {% endif %}
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg, ok) {
+  const t = $('toast'); t.textContent = msg;
+  t.className = 'toast show ' + (ok ? 'toast-ok' : 'toast-err');
+  setTimeout(() => t.className = 'toast', 3500);
+}
+async function api(url, opts) {
+  const r = await fetch(url, Object.assign({credentials: 'same-origin', headers: {'Content-Type': 'application/json'}}, opts));
+  let d = {}; try { d = await r.json(); } catch (e) {}
+  if (!r.ok || d.ok === false) throw new Error(d.error || ('HTTP ' + r.status));
+  return d;
+}
+function fmt(ts) { return ts ? ts.replace('T', ' ').replace('Z', ' UTC') : '—'; }
+function table(items, showOwner) {
+  if (!items.length) return '<div class="empty">Belum ada token.</div>';
+  let h = '<table><thead><tr><th>Nama</th>' + (showOwner ? '<th>Pemilik</th>' : '') +
+    '<th>Token</th><th>Status</th><th>Berlaku sampai</th><th>Terakhir dipakai</th><th></th></tr></thead><tbody>';
+  for (const t of items) {
+    h += '<tr><td>' + esc(t.name) + '</td>' + (showOwner ? '<td>' + esc(t.owner) + '</td>' : '') +
+      '<td><code>' + esc(t.prefix) + '…</code></td>' +
+      '<td><span class="badge b-' + esc(t.status) + '">' + esc(t.status) + '</span></td>' +
+      '<td>' + (t.expires_at ? fmt(t.expires_at) : 'Tanpa batas') + '</td>' +
+      '<td>' + fmt(t.last_used_at) + '</td><td>' +
+      (t.status === 'revoked' ? '' : '<button class="btn btn-danger" data-revoke="' + t.id + '">Cabut</button>') +
+      '</td></tr>';
+  }
+  return h + '</tbody></table>';
+}
+async function load() {
+  try { $('list').innerHTML = table((await api('/api/tokens')).tokens, false); }
+  catch (e) { $('list').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function loadAll() {
+  try { $('allList').innerHTML = table((await api('/api/tokens?all=1')).tokens, true); }
+  catch (e) { toast(e.message, false); }
+}
+document.addEventListener('click', async ev => {
+  const rv = ev.target.closest('[data-revoke]');
+  if (rv) {
+    if (!confirm('Cabut token ini? Aplikasi yang memakainya akan langsung ditolak.')) return;
+    try { await api('/api/tokens/' + rv.dataset.revoke, {method: 'DELETE'}); toast('Token dicabut.', true); load(); if ($('allList') && $('allList').innerHTML) loadAll(); }
+    catch (e) { toast(e.message, false); }
+  }
+  const q = ev.target.closest('[data-d]');
+  if (q) { ev.preventDefault(); $('days').value = q.dataset.d; }
+});
+$('mode').addEventListener('change', () => {
+  const m = $('mode').value;
+  $('daysWrap').style.display = m === 'days' ? '' : 'none';
+  $('dateWrap').style.display = m === 'date' ? '' : 'none';
+  $('neverWarn').style.display = m === 'never' ? '' : 'none';
+});
+$('createForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const body = {name: $('name').value.trim()};
+  const m = $('mode').value;
+  if (m === 'days') body.expires_in_days = parseInt($('days').value, 10);
+  else if (m === 'date') body.expires_at = $('date').value;
+  else body.no_expiry = true;
+  $('createBtn').disabled = true;
+  try {
+    const d = await api('/api/tokens', {method: 'POST', body: JSON.stringify(body)});
+    $('newToken').value = d.token;
+    $('curlExample').textContent = 'curl -H "Authorization: Bearer ' + d.token + '" \\\n  ' + location.origin + '/api/data';
+    $('reveal').classList.add('show');
+    $('reveal').scrollIntoView({behavior: 'smooth'});
+    $('name').value = '';
+    load();
+  } catch (e) { toast(e.message, false); }
+  finally { $('createBtn').disabled = false; }
+});
+$('copyBtn').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText($('newToken').value); toast('Token disalin.', true); }
+  catch (e) { $('newToken').select(); toast('Salin manual dengan Ctrl/Cmd+C.', false); }
+});
+if ($('loadAll')) $('loadAll').addEventListener('click', loadAll);
+load();
+</script>
+</body>
+</html>

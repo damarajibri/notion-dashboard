@@ -1098,6 +1098,12 @@ span.file-chip { cursor: default; opacity: .7; }
         <span>👥</span> Master User
       </a>
       {% endif %}
+      <a class="btn btn-ghost" href="{{ url_for('tokens_page') }}" title="Buat dan kelola API token">
+        <span>🔌</span> API Token
+      </a>
+      <a class="btn btn-ghost" href="{{ url_for('api_docs_page') }}" title="Dokumentasi API (Swagger)">
+        <span>📘</span> API Docs
+      </a>
       <button class="btn btn-ghost" onclick="openPasswordModal()" title="Ganti password akun Anda">
         <span>🔑</span> Ganti Password
       </button>
